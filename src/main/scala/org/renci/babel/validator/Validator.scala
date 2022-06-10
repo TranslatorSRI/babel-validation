@@ -9,9 +9,7 @@ import zio.console._
 import java.io.File
 
 object Validator extends zio.App with LazyLogging {
-  class Conf(args: Seq[String]) extends ScallopConf(args) {
-    val instruction: ScallopOption[String] = trailArg[String]()
-
+  class ValidateSubcommand extends Subcommand("validate") {
     val babelOutput: ScallopOption[File] = trailArg[File](
       descr = "The current Babel output directory",
       required = true
@@ -31,12 +29,12 @@ object Validator extends zio.App with LazyLogging {
 
     val nCores: ScallopOption[Int] = opt[Int](descr = "Number of cores to use")
 
-    val output: ScallopOption[File] = opt[File](
-      descr = "Directory to write outputs to",
-      default = Some(new File("."))
-    )
-    validateFileIsDirectory(output)
+    val output: ScallopOption[File] = opt[File](descr = "Output file")
+  }
 
+  class Conf(args: Seq[String]) extends ScallopConf(args) {
+    addSubcommand(new ValidateSubcommand())
+    requireSubcommand()
     verify()
   }
 
@@ -52,6 +50,11 @@ object Validator extends zio.App with LazyLogging {
   def run(
       args: List[String]
   ): URIO[Blocking with Console with Console, ExitCode] = {
-    Reporter.diffResults(new Conf(args)).exitCode
+    val conf = new Conf(args)
+    conf.subcommand match {
+      case Some(validate: ValidateSubcommand) => Reporter.diffResults(validate).exitCode
+      case a => ZIO.fail(s"Error: no subcommand provided or invalid (${a})")
+          .exitCode
+    }
   }
 }
