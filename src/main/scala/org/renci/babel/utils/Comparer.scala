@@ -13,18 +13,12 @@ import java.io.Writer
   */
 object Comparer extends LazyLogging {
 
-  /** Helper method for displaying the percent change between two counts.
-    */
-  def relativePercentChange(count: Long, countPrev: Long): String = {
-    val percentChange = (count - countPrev).toDouble / countPrev * 100
-    f"${count - countPrev}%+d\t$percentChange%+2.2f%%"
-  }
-
-  case class LengthComparison(filename: String, count: Long, prevCount: Long) {
-    val relativePercentChange: String =
-      Comparer.relativePercentChange(count, prevCount)
-    override val toString: String =
-      s"${filename}\t${count}\t${prevCount}\t${relativePercentChange}"
+  case class LengthComparison(
+      filename: String,
+      count: Long,
+      prevCount: Long) {
+    val relativePercentChange: String = Utils.relativePercentChange(count, prevCount)
+    override val toString = s"${filename}\t${count}\t${prevCount}\t${relativePercentChange}"
   }
 
   def compareLengths(
