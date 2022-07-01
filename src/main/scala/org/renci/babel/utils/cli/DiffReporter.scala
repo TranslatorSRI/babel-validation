@@ -1,7 +1,6 @@
 package org.renci.babel.utils.cli
 
 import com.typesafe.scalalogging.LazyLogging
-import Utils.SupportsFilenameFiltering
 import org.renci.babel.utils.model.{BabelOutput, Compendium}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
