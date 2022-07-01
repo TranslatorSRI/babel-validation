@@ -31,7 +31,8 @@ object Converter extends LazyLogging {
       default = Some("sssom")
     )
 
-    val nCores: ScallopOption[Int] = opt[Int](descr = "Number of cores to use", default=Some(4))
+    val nCores: ScallopOption[Int] =
+      opt[Int](descr = "Number of cores to use", default = Some(4))
 
     val output: ScallopOption[File] = opt[File](descr = "Output directory", required = true)
     validateFileIsDirectory(output)
