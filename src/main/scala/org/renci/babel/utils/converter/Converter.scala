@@ -2,6 +2,7 @@ package org.renci.babel.utils.converter
 
 import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.utils.model.BabelOutput
+import org.renci.babel.utils.cli.CLI
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
@@ -16,7 +17,7 @@ import java.io.File
  */
 object Converter extends LazyLogging {
   /** The subcommand that controlling converting. */
-  class ConvertSubcommand extends Subcommand("convert") with SupportsFilenameFiltering {
+  class ConvertSubcommand extends Subcommand("convert") with CLI.SupportsFilenameFiltering {
     val babelOutput: ScallopOption[File] = trailArg[File](
       descr = "The current Babel output directory",
       required = true
@@ -89,26 +90,26 @@ object Converter extends LazyLogging {
             // TODO: remove tabs from other.toJson
             if (otherIdentifiers.isEmpty) {
               val other = Other(
-                cliqueId = s"${compendium.filename}#${cliqueIndex}",
+                cliqueId = s"${compendium.filename}#$cliqueIndex",
                 subject_information_content = record.ic
               )
 
               ZStream.fromIterable(Seq(
                 // s"${subjectString}\t\t\t${matchType}\t${other.toJson}"
-                s"${subjectString}\t${predicateId}\t${subjectString}\t${matchType}\t${other.toJson}"
+                s"$subjectString\t$predicateId\t$subjectString\t$matchType\t${other.toJson}"
               ))
             } else {
               ZStream.fromIterable(otherIdentifiers)
                 .zipWithIndex
                 .map({ case (obj, identifierIndex) =>
                   val other = Other(
-                    cliqueId = s"${compendium.filename}#${cliqueIndex}",
+                    cliqueId = s"${compendium.filename}#$cliqueIndex",
                     subject_information_content = record.ic,
                     identifierIndex = Some(identifierIndex)
                   )
 
                   val objectString = s"${obj.i.getOrElse("")}\t${obj.l.getOrElse("")}\t${record.`type`}"
-                  s"${subjectString}\t${predicateId}\t${objectString}\t${matchType}\t${other.toJson}"
+                  s"$subjectString\t$predicateId\t$objectString\t$matchType\t${other.toJson}"
                 })
             }
           }
@@ -118,7 +119,7 @@ object Converter extends LazyLogging {
         )) concat results)
           .intersperse("\n")
           .run({
-            logger.info(s"Writing to ${outputFile}")
+            logger.info(s"Writing to $outputFile")
             ZSink.fromFile(outputFile.toPath)
               .contramapChunks[String](_.flatMap(_.getBytes))
           })
