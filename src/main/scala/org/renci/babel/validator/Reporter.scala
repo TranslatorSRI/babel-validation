@@ -91,7 +91,7 @@ object Reporter extends LazyLogging {
           for {
             // lengthComparison <- Comparer.compareLengths(filename, summary, prevSummary)
             // typeComparison <- Comparer.compareTypes(filename, summary, prevSummary)
-            clusterComparison <- Comparer.compareClusters(
+            clusterComparison <- Comparer.diffClustersByIDs(
               filename,
               summary,
               prevSummary,

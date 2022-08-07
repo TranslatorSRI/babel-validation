@@ -98,7 +98,14 @@ object Comparer extends LazyLogging {
     override val toString: String = if (unchanged) {
       s"${id}\t${status}\t${records.size}\t${prevRecords.size}"
     } else {
-      s"${id}\t${status}\t${records} (${records.size})\t${prevRecords} (${prevRecords.size})"
+      def multilineRecords(s: Set[Compendium.Record], indent: Int = 3): String = if (s.isEmpty) "Set()" else {
+        val indentedStr = " " * indent
+
+        "Set(\n" +
+          s.map(indentedStr + "  " + _.toString).mkString(", \n") +
+          "\n" + indentedStr + ")"
+      }
+      s"${id}\t${status}\t${multilineRecords(prevRecords)} [${prevRecords.size}]\t->\t${multilineRecords(records)} [${records.size}]"
     }
   }
 
@@ -124,20 +131,43 @@ object Comparer extends LazyLogging {
 
       s"== ${filename} ==\n" +
         by_status.mkString("\n") + "\n" +
-        changed.map(c => s" - ${c.toString}").mkString("\n")
+        changed
+          .groupBy(_.status)
+          .map({ case (status, clusterComparisons) =>
+            s"  === ${status} [${clusterComparisons.size}] ===\n" +
+              clusterComparisons.map(c => s" - ${c.toString}").mkString("\n")
+          })
+          .mkString("\n")
     }
   }
 
-  def compareClusters(
-      filename: String,
-      summary: Compendium,
-      prevSummary: Compendium,
-      nCores: Int
+  /**
+   * Given two compendia, generate the "diff" between clusters in the two compendia based on the individual
+   * identifiers. For every identifier mentioned in either compendium, we identify the clusters it is included
+   * in in both the current compendium and the previous compendium. For most identifiers, we would expect these
+   * clusters to be unchanged, so this approach allows us to focus on the clusters that _have_ changed.
+   *
+   * The downside to this approach is that we generate more "diffs" than have actually taken place: for instance,
+   * if identifier 1 is added to cluster 1 containing a single identifier 2, this results in two diffs: identifier 1
+   * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it might be worth summarizing these
+   * diffs further by
+   *
+   * @param filename The name of the compendium begin compare.
+   * @param compendium The current compendium.
+   * @param prevCompendium The previous compendium.
+   * @param nCores The number of cores available for this task.
+   * @return
+   */
+  def diffClustersByIDs(
+                         filename: String,
+                         compendium: Compendium,
+                         prevCompendium: Compendium,
+                         nCores: Int
   ): ZIO[Blocking, Throwable, ClusterComparisonReport] = {
     for {
-      identifiers: Set[String] <- (summary.records.map(
+      identifiers: Set[String] <- (compendium.records.map(
         _.ids
-      ) ++ prevSummary.records.map(_.ids)).runCollect
+      ) ++ prevCompendium.records.map(_.ids)).runCollect
         .map(_.foldLeft(Set[String]())(_ ++ _))
 
       summaryByCluster: ZStream.GroupBy[
@@ -145,7 +175,7 @@ object Comparer extends LazyLogging {
         Throwable,
         String,
         Compendium.Record
-      ] = summary.records
+      ] = compendium.records
         .flatMap(record =>
           ZStream.fromIterable(record.ids).map(id => (id, record))
         )
@@ -157,7 +187,7 @@ object Comparer extends LazyLogging {
         Throwable,
         String,
         Compendium.Record
-      ] = prevSummary.records
+      ] = prevCompendium.records
         .flatMap(record =>
           ZStream.fromIterable(record.ids).map(id => (id, record))
         )
