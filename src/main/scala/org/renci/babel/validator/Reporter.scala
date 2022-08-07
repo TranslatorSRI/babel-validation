@@ -78,7 +78,7 @@ object Reporter extends LazyLogging {
 
     val pairedSummaries =
       retrievePairedCompendiaSummaries(babelOutput, babelPrevOutput)
-    output.println("Filename\tCount\tPrevCount\tDiff\tPercentageChange")
+    // output.println("Filename\tCount\tPrevCount\tDiff\tPercentageChange")
     ZStream
       .fromIterable(pairedSummaries)
       .mapMPar(conf.nCores()) {
