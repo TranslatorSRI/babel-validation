@@ -143,7 +143,7 @@ object Comparer extends LazyLogging {
           .groupBy(_.status)
           .map({ case (status, clusterComparisons) =>
             s"  === ${status} [${clusterComparisons.size}] ===\n" +
-              clusterComparisons.map(c => s" - ${c.toString}").mkString("\n")
+              clusterComparisons.map(c => s"   - ${c.toString}").mkString("\n")
           })
           .mkString("\n")
     }
