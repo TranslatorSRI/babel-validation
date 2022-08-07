@@ -93,7 +93,15 @@ object Comparer extends LazyLogging {
       else if (unchanged) "UNCHANGED"
       else if (records.isEmpty && prevRecords.nonEmpty) "DELETED"
       else if (records.nonEmpty && prevRecords.isEmpty) "ADDED"
-      else "CHANGED"
+      else {
+        // The records have changed, but how? Changes in which only the labels have changed are less "severe"
+        // than ones in which identifiers have changed, so let's try to separate those.
+        val identifiers = records.flatMap(_.identifiers).map(_.i).toSeq.sorted
+        val prevIdentifiers = prevRecords.flatMap(_.identifiers).map(_.i).toSeq.sorted
+
+        if (identifiers == prevIdentifiers) "CHANGED_BUT_IDENTIFIERS_IDENTICAL"
+        else "CHANGED"
+      }
     }
     override val toString: String = if (unchanged) {
       s"${id}\t${status}\t${records.size}\t${prevRecords.size}"
