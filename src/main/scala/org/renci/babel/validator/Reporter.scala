@@ -101,13 +101,18 @@ object Reporter extends LazyLogging {
             // output.println(typeComparison.toString)
             val basename = filename
 
-            val osw = new OutputStreamWriter(new FileOutputStream(new File(outputDir, basename)))
+            val osw = new OutputStreamWriter(
+              new FileOutputStream(new File(outputDir, basename))
+            )
             clusterComparison.writeToFile(osw)
             osw.close()
 
-            logger.info(f"Wrote ${clusterComparison.comparisons.size}%,d comparisons to ${filename}.")
+            logger.info(
+              f"Wrote ${clusterComparison.comparisons.size}%,d comparisons to ${filename}."
+            )
 
-            val summary = s"== ${filename} ==\n" + clusterComparison.countsByStatus + "\n\n"
+            val summary =
+              s"== ${filename} ==\n" + clusterComparison.countsByStatus + "\n\n"
             logger.info(summary)
 
             summary
@@ -120,8 +125,11 @@ object Reporter extends LazyLogging {
         case abc =>
           ZIO.fail(new RuntimeException(s"Invalid paired summary: ${abc}"))
       }
-      .run(ZSink.fromFile(summaryFile.toPath)
-        .contramapChunks[String](_.flatMap(_.getBytes))) // Returns the number of written bytes as a Long
+      .run(
+        ZSink
+          .fromFile(summaryFile.toPath)
+          .contramapChunks[String](_.flatMap(_.getBytes))
+      ) // Returns the number of written bytes as a Long
       .unit // Discard the number of written bytes
   }
 }

@@ -100,8 +100,10 @@ object Comparer extends LazyLogging {
         // The records have changed, but how? Changes in which only the labels have changed are less "severe"
         // than ones in which identifiers have changed, so let's try to separate those.
         val identifiers = records.flatMap(_.identifiers).map(_.i).toSeq.sorted
-        val prevIdentifiers = prevRecords.flatMap(_.identifiers).map(_.i).toSeq.sorted
-        val overlapIdentifiers = identifiers.flatten.intersect(prevIdentifiers.flatten)
+        val prevIdentifiers =
+          prevRecords.flatMap(_.identifiers).map(_.i).toSeq.sorted
+        val overlapIdentifiers =
+          identifiers.flatten.intersect(prevIdentifiers.flatten)
 
         if (identifiers == prevIdentifiers) "CHANGED_BUT_IDENTIFIERS_IDENTICAL"
         else if (overlapIdentifiers.nonEmpty) "CHANGED_BUT_SHARED_IDENTIFIERS"
@@ -111,13 +113,15 @@ object Comparer extends LazyLogging {
     override val toString: String = if (unchanged) {
       s"${id}\t${status}\t${records.size}\t${prevRecords.size}"
     } else {
-      def multilineRecords(s: Set[Compendium.Record], indent: Int = 2): String = if (s.isEmpty) "Set()" else {
-        val indentedStr = " " * indent
+      def multilineRecords(s: Set[Compendium.Record], indent: Int = 2): String =
+        if (s.isEmpty) "Set()"
+        else {
+          val indentedStr = " " * indent
 
-        "Set(\n" +
-          s.map(indentedStr + "  " + _.toString).mkString(", \n") +
-          "\n" + indentedStr + ")"
-      }
+          "Set(\n" +
+            s.map(indentedStr + "  " + _.toString).mkString(", \n") +
+            "\n" + indentedStr + ")"
+        }
       s"${id}\t${status}\t${multilineRecords(prevRecords)} [${prevRecords.size}]\t->\t${multilineRecords(records)} [${records.size}]"
     }
   }
@@ -160,28 +164,35 @@ object Comparer extends LazyLogging {
     }
   }
 
-  /**
-   * Given two compendia, generate the "diff" between clusters in the two compendia based on the individual
-   * identifiers. For every identifier mentioned in either compendium, we identify the clusters it is included
-   * in in both the current compendium and the previous compendium. For most identifiers, we would expect these
-   * clusters to be unchanged, so this approach allows us to focus on the clusters that _have_ changed.
-   *
-   * The downside to this approach is that we generate more "diffs" than have actually taken place: for instance,
-   * if identifier 1 is added to cluster 1 containing a single identifier 2, this results in two diffs: identifier 1
-   * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it might be worth summarizing these
-   * diffs further.
-   *
-   * @param filename The name of the compendium begin compare.
-   * @param compendium The current compendium.
-   * @param prevCompendium The previous compendium.
-   * @param nCores The number of cores available for this task.
-   * @return A ZIO that evaluates to a ClusterComparisonReport or a Throwable.
-   */
+  /** Given two compendia, generate the "diff" between clusters in the two
+    * compendia based on the individual identifiers. For every identifier
+    * mentioned in either compendium, we identify the clusters it is included in
+    * in both the current compendium and the previous compendium. For most
+    * identifiers, we would expect these clusters to be unchanged, so this
+    * approach allows us to focus on the clusters that _have_ changed.
+    *
+    * The downside to this approach is that we generate more "diffs" than have
+    * actually taken place: for instance, if identifier 1 is added to cluster 1
+    * containing a single identifier 2, this results in two diffs: identifier 1
+    * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it
+    * might be worth summarizing these diffs further.
+    *
+    * @param filename
+    *   The name of the compendium begin compare.
+    * @param compendium
+    *   The current compendium.
+    * @param prevCompendium
+    *   The previous compendium.
+    * @param nCores
+    *   The number of cores available for this task.
+    * @return
+    *   A ZIO that evaluates to a ClusterComparisonReport or a Throwable.
+    */
   def diffClustersByIDs(
-                         filename: String,
-                         compendium: Compendium,
-                         prevCompendium: Compendium,
-                         nCores: Int
+      filename: String,
+      compendium: Compendium,
+      prevCompendium: Compendium,
+      nCores: Int
   ): ZIO[Blocking, Throwable, ClusterComparisonReport] = {
     // Not sure what a good limit should be for this, but so far we haven't hit a memory limit on HashSet.
     val IDENTIFIER_ZSTREAM_LIMIT = 999_999_999
@@ -194,26 +205,39 @@ object Comparer extends LazyLogging {
 
     val identifiers = runtime.unsafeRun(identifiersZIO)
 
-    logger.info(f"Found ${identifiers.size}%,d identifiers for filename ${filename}")
+    logger.info(
+      f"Found ${identifiers.size}%,d identifiers for filename ${filename}"
+    )
 
     if (identifiers.size < IDENTIFIER_ZSTREAM_LIMIT) {
       // If the number of identifiers is small enough, then don't both to use the ZStream algorithm --
       // just use a HashSet and assume it'll fit in memory.
-      logger.info(f"Memory at start of identifier process: ${MemoryUtils.getMemorySummary}")
+      logger.info(
+        f"Memory at start of identifier process: ${MemoryUtils.getMemorySummary}"
+      )
       val records = runtime.unsafeRun(compendium.records.runCollect).toList
       logger.debug(f"  Loaded records: ${MemoryUtils.getMemorySummary}")
-      val prevRecords = runtime.unsafeRun(prevCompendium.records.runCollect).toList
+      val prevRecords =
+        runtime.unsafeRun(prevCompendium.records.runCollect).toList
       logger.debug(f"  Loaded prevRecords: ${MemoryUtils.getMemorySummary}")
-      val summary = records.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
+      val summary =
+        records.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
       logger.debug(f"  Generated summary: ${MemoryUtils.getMemorySummary}")
-      val prevSummary = prevRecords.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
+      val prevSummary =
+        prevRecords.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
       logger.debug(f"  Generated prevSummary: ${MemoryUtils.getMemorySummary}")
 
       val comparisons = identifiers.map(id => {
-        ClusterComparison(id, summary.getOrElse(id, List()).toSet, prevSummary.getOrElse(id, List()).toSet)
+        ClusterComparison(
+          id,
+          summary.getOrElse(id, List()).toSet,
+          prevSummary.getOrElse(id, List()).toSet
+        )
       })
 
-      logger.info(f"Memory at end of cluster comparison generation: ${MemoryUtils.getMemorySummary}")
+      logger.info(
+        f"Memory at end of cluster comparison generation: ${MemoryUtils.getMemorySummary}"
+      )
 
       return ZIO.succeed(ClusterComparisonReport(filename, comparisons))
     }
@@ -262,7 +286,9 @@ object Comparer extends LazyLogging {
       })
       comparison <- comparisons
     } yield {
-      logger.info(f"Memory at end of ZStream identifier process: ${MemoryUtils.getMemorySummary}")
+      logger.info(
+        f"Memory at end of ZStream identifier process: ${MemoryUtils.getMemorySummary}"
+      )
       ClusterComparisonReport(filename, comparison.toSet)
     }
   }
