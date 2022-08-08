@@ -130,7 +130,7 @@ object Comparer extends LazyLogging {
       s"${filename}: " + countsByStatus
     }
 
-    def countsByStatus = {
+    def countsByStatus: String = {
       comparisons.toSeq
         .map(_.status)
         .groupBy(identity)
@@ -146,7 +146,7 @@ object Comparer extends LazyLogging {
         .mkString("\n")
     }
 
-    def writeToFile(w: Writer) = {
+    def writeToFile(w: Writer): Unit = {
       w.write(s"== ${filename} ==\n")
       w.write(countsByStatus + "\n")
 
