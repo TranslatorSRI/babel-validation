@@ -10,6 +10,6 @@ object MemoryUtils {
 
     f"${bytesToGB(runtime.freeMemory())}%.2f GB free out of ${bytesToGB(
         runtime.totalMemory()
-      )}%.2f GB (${bytesToGB(runtime.maxMemory())}%.2f GB max, ${bytesToGB(memoryUsed)}%.2f GB used)"
+      )}%.2f GB (${bytesToGB(memoryUsed)}%.2f GB used out of ${bytesToGB(runtime.maxMemory())}%.2f GB max)"
   }
 }
