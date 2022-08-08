@@ -101,8 +101,10 @@ object Comparer extends LazyLogging {
         // than ones in which identifiers have changed, so let's try to separate those.
         val identifiers = records.flatMap(_.identifiers).map(_.i).toSeq.sorted
         val prevIdentifiers = prevRecords.flatMap(_.identifiers).map(_.i).toSeq.sorted
+        val overlapIdentifiers = identifiers.flatten.intersect(prevIdentifiers.flatten)
 
         if (identifiers == prevIdentifiers) "CHANGED_BUT_IDENTIFIERS_IDENTICAL"
+        else if (overlapIdentifiers.nonEmpty) "CHANGED_BUT_SHARED_IDENTIFIERS"
         else "CHANGED"
       }
     }
@@ -135,7 +137,7 @@ object Comparer extends LazyLogging {
         .map[(Int, String)]({ case (status, values) =>
           (
             values.size,
-            f"${status}: ${values.size} (${values.size.toDouble / comparisons.size * 100}%.2f%%)"
+            f"${status}: ${values.size} (${values.size.toDouble / comparisons.size * 100}%.4f%%)"
           )
         })
         .toSeq
@@ -146,13 +148,13 @@ object Comparer extends LazyLogging {
 
     def writeToFile(w: Writer) = {
       w.write(s"== ${filename} ==\n")
-      w.write(countsByStatus + "\n\n")
+      w.write(countsByStatus + "\n")
 
       comparisons
         .filterNot(_.unchanged)
         .groupBy(_.status)
         .foreach({ case (status, clusterComparisons) =>
-          w.write(s"=== ${status} [${clusterComparisons.size}] ===\n")
+          w.write(s"\n=== ${status} [${clusterComparisons.size}] ===\n")
           clusterComparisons.foreach(c => w.write(s" - ${c.toString}\n"))
         })
     }
