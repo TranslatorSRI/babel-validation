@@ -107,7 +107,7 @@ object Comparer extends LazyLogging {
     override val toString: String = if (unchanged) {
       s"${id}\t${status}\t${records.size}\t${prevRecords.size}"
     } else {
-      def multilineRecords(s: Set[Compendium.Record], indent: Int = 3): String = if (s.isEmpty) "Set()" else {
+      def multilineRecords(s: Set[Compendium.Record], indent: Int = 2): String = if (s.isEmpty) "Set()" else {
         val indentedStr = " " * indent
 
         "Set(\n" +
@@ -139,12 +139,12 @@ object Comparer extends LazyLogging {
         .map(_._2)
 
       s"== ${filename} ==\n" +
-        by_status.mkString("\n") + "\n" +
+        by_status.mkString("\n") + "\n\n" +
         changed
           .groupBy(_.status)
           .map({ case (status, clusterComparisons) =>
-            s"  === ${status} [${clusterComparisons.size}] ===\n" +
-              clusterComparisons.map(c => s"   - ${c.toString}").mkString("\n")
+            s"=== ${status} [${clusterComparisons.size}] ===\n" +
+              clusterComparisons.map(c => s" - ${c.toString}").mkString("\n")
           })
           .mkString("\n")
     }
@@ -173,7 +173,8 @@ object Comparer extends LazyLogging {
                          prevCompendium: Compendium,
                          nCores: Int
   ): ZIO[Blocking, Throwable, ClusterComparisonReport] = {
-    val IDENTIFIER_ZSTREAM_LIMIT = 500_000_000
+    // Not sure what a good limit should be for this, but so far we haven't hit a memory limit on HashSet.
+    val IDENTIFIER_ZSTREAM_LIMIT = 999_999_999
 
     val runtime = zio.Runtime.default
     val identifiersZIO = (compendium.records.map(
@@ -190,13 +191,13 @@ object Comparer extends LazyLogging {
       // just use a HashSet and assume it'll fit in memory.
       logger.info(f"Memory at start of identifier process: ${MemoryUtils.getMemorySummary}")
       val records = runtime.unsafeRun(compendium.records.runCollect).toList
-      logger.debug(f" - Loaded records: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Loaded records: ${MemoryUtils.getMemorySummary}")
       val prevRecords = runtime.unsafeRun(prevCompendium.records.runCollect).toList
-      logger.debug(f" - Loaded prevRecords: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Loaded prevRecords: ${MemoryUtils.getMemorySummary}")
       val summary = records.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
-      logger.debug(f" - Generated summary: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Generated summary: ${MemoryUtils.getMemorySummary}")
       val prevSummary = prevRecords.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
-      logger.debug(f" - Generated prevSummary: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Generated prevSummary: ${MemoryUtils.getMemorySummary}")
 
       val comparisons = identifiers.map(id => {
         ClusterComparison(id, summary.getOrElse(id, List()).toSet, prevSummary.getOrElse(id, List()).toSet)

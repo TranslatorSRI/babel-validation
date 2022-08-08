@@ -8,7 +8,7 @@ import zio.blocking.Blocking
 import zio.console.Console
 import zio.stream.ZStream
 
-import java.io.{FileOutputStream, PrintStream}
+import java.io.{File, FileOutputStream, PrintStream}
 
 /** Functions for reporting on the differences between two input files.
   */
@@ -71,10 +71,7 @@ object Reporter extends LazyLogging {
   def diffResults(conf: Conf): ZIO[Blocking with Console, Throwable, Unit] = {
     val babelOutput = new BabelOutput(conf.babelOutput())
     val babelPrevOutput = new BabelOutput(conf.babelPrevOutput())
-    val output = conf.output.toOption match {
-      case Some(file) => new PrintStream(new FileOutputStream(file))
-      case _          => System.out
-    }
+    val outputDir = conf.output.getOrElse(new File("."))
 
     val pairedSummaries =
       retrievePairedCompendiaSummaries(babelOutput, babelPrevOutput)
@@ -100,7 +97,11 @@ object Reporter extends LazyLogging {
           } yield {
             // output.println(lengthComparison.toString)
             // output.println(typeComparison.toString)
-            output.println(clusterComparison.toString)
+            val basename = filename
+
+            val ps = new PrintStream(new FileOutputStream(new File(outputDir, basename)))
+            ps.println(clusterComparison.toString)
+            ps.close()
           }
         }
         case (filename: String, _, _) if !filterFilename(conf, filename) => {

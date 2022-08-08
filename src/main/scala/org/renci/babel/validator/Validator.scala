@@ -31,7 +31,8 @@ object Validator extends zio.App with LazyLogging {
 
     val nCores: ScallopOption[Int] = opt[Int](descr = "Number of cores to use")
 
-    val output: ScallopOption[File] = opt[File](descr = "Output file")
+    val output: ScallopOption[File] = opt[File](descr = "Directory to write outputs to", default=Some(new File(".")))
+    validateFileIsDirectory(output)
 
     verify()
   }
