@@ -6,7 +6,7 @@ import org.renci.babel.validator.model.{BabelOutput, Compendium}
 import zio.ZIO
 import zio.blocking.Blocking
 import zio.console.Console
-import zio.stream.ZStream
+import zio.stream.{ZSink, ZStream}
 
 import java.io.{File, FileOutputStream, OutputStreamWriter}
 
@@ -73,6 +73,8 @@ object Reporter extends LazyLogging {
     val babelPrevOutput = new BabelOutput(conf.babelPrevOutput())
     val outputDir = conf.output.getOrElse(new File("."))
 
+    val summaryFile = new File(outputDir, "diff-summary.txt")
+
     val pairedSummaries =
       retrievePairedCompendiaSummaries(babelOutput, babelPrevOutput)
     // output.println("Filename\tCount\tPrevCount\tDiff\tPercentageChange")
@@ -104,15 +106,21 @@ object Reporter extends LazyLogging {
             osw.close()
 
             logger.info(f"Wrote ${clusterComparison.comparisons.size}%,d comparisons to ${filename}.")
+
+            logger.info(s"== ${filename} ==\n" + clusterComparison.countsByStatus + "\n")
+
+            s"== ${filename} ==\n" + clusterComparison.countsByStatus
           }
         }
         case (filename: String, _, _) if !filterFilename(conf, filename) => {
           logger.info(s"Skipping ${filename}")
-          ZIO.succeed(())
+          ZIO.succeed("")
         }
         case abc =>
           ZIO.fail(new RuntimeException(s"Invalid paired summary: ${abc}"))
       }
-      .runDrain
+      .map(_.toByte)
+      .run(ZSink.fromFile(summaryFile.toPath)) // Returns the number of written bytes as a Long
+      .unit // Discard the number of written bytes
   }
 }

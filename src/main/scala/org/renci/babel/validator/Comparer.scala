@@ -145,7 +145,7 @@ object Comparer extends LazyLogging {
     }
 
     def writeToFile(w: Writer) = {
-      w.write("== ${filename} ==\n")
+      w.write(s"== ${filename} ==\n")
       w.write(countsByStatus + "\n\n")
 
       comparisons
