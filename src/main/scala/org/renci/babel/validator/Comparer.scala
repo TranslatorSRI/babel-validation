@@ -1,6 +1,7 @@
 package org.renci.babel.validator
 
 import com.typesafe.scalalogging.LazyLogging
+import org.renci.babel.utils.MemoryUtils
 import org.renci.babel.validator.model.Compendium
 import zio.blocking.Blocking
 import zio.stream.ZStream
@@ -158,13 +159,13 @@ object Comparer extends LazyLogging {
    * The downside to this approach is that we generate more "diffs" than have actually taken place: for instance,
    * if identifier 1 is added to cluster 1 containing a single identifier 2, this results in two diffs: identifier 1
    * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it might be worth summarizing these
-   * diffs further by
+   * diffs further.
    *
    * @param filename The name of the compendium begin compare.
    * @param compendium The current compendium.
    * @param prevCompendium The previous compendium.
    * @param nCores The number of cores available for this task.
-   * @return
+   * @return A ZIO that evaluates to a ClusterComparisonReport or a Throwable.
    */
   def diffClustersByIDs(
                          filename: String,
@@ -172,12 +173,45 @@ object Comparer extends LazyLogging {
                          prevCompendium: Compendium,
                          nCores: Int
   ): ZIO[Blocking, Throwable, ClusterComparisonReport] = {
-    for {
-      identifiers: Set[String] <- (compendium.records.map(
-        _.ids
-      ) ++ prevCompendium.records.map(_.ids)).runCollect
-        .map(_.foldLeft(Set[String]())(_ ++ _))
+    val IDENTIFIER_ZSTREAM_LIMIT = 500_000_000
 
+    val runtime = zio.Runtime.default
+    val identifiersZIO = (compendium.records.map(
+      _.ids
+    ) ++ prevCompendium.records.map(_.ids)).runCollect
+      .map(_.foldLeft(Set[String]())(_ ++ _))
+
+    val identifiers = runtime.unsafeRun(identifiersZIO)
+
+    logger.info(f"Found ${identifiers.size}%,d identifiers for filename ${filename}")
+
+    if (identifiers.size < IDENTIFIER_ZSTREAM_LIMIT) {
+      // If the number of identifiers is small enough, then don't both to use the ZStream algorithm --
+      // just use a HashSet and assume it'll fit in memory.
+      logger.info(f"Memory at start of identifier process: ${MemoryUtils.getMemorySummary}")
+      val records = runtime.unsafeRun(compendium.records.runCollect).toList
+      logger.debug(f" - Loaded records: ${MemoryUtils.getMemorySummary}")
+      val prevRecords = runtime.unsafeRun(prevCompendium.records.runCollect).toList
+      logger.debug(f" - Loaded prevRecords: ${MemoryUtils.getMemorySummary}")
+      val summary = records.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
+      logger.debug(f" - Generated summary: ${MemoryUtils.getMemorySummary}")
+      val prevSummary = prevRecords.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
+      logger.debug(f" - Generated prevSummary: ${MemoryUtils.getMemorySummary}")
+
+      val comparisons = identifiers.map(id => {
+        ClusterComparison(id, summary.getOrElse(id, List()).toSet, prevSummary.getOrElse(id, List()).toSet)
+      })
+
+      logger.info(f"Memory at end of cluster comparison generation: ${MemoryUtils.getMemorySummary}")
+
+      return ZIO.succeed(ClusterComparisonReport(filename, comparisons))
+    }
+
+    for {
+      identifiers <- identifiersZIO
+
+      // If identifiers < IDENTIFIER_ZSTREAM_LIMIT, we'll opt to just use a Set()
+      // instead of the ZStream algorithm.
       summaryByCluster: ZStream.GroupBy[
         Blocking,
         Throwable,
