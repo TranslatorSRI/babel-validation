@@ -102,6 +102,8 @@ object Reporter extends LazyLogging {
             val ps = new PrintStream(new FileOutputStream(new File(outputDir, basename)))
             ps.println(clusterComparison.toString)
             ps.close()
+
+            logger.info(s"Wrote ${clusterComparison.comparisons.size} comparisons to ${filename}.")
           }
         }
         case (filename: String, _, _) if !filterFilename(conf, filename) => {
