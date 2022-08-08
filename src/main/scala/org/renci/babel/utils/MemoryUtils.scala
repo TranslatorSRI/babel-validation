@@ -6,8 +6,10 @@ object MemoryUtils {
 
     def bytesToGB(b: Long): Double = b.toDouble / (1e+9)
 
+    val memoryUsed = runtime.totalMemory() - runtime.freeMemory()
+
     f"${bytesToGB(runtime.freeMemory())}%.2f GB free out of ${bytesToGB(
         runtime.totalMemory()
-      )}%.2f GB (${bytesToGB(runtime.maxMemory())}%.2f max GB)"
+      )}%.2f GB (${bytesToGB(runtime.maxMemory())}%.2f GB max, ${bytesToGB(memoryUsed)}%.2f GB used)"
   }
 }
