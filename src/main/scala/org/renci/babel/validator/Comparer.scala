@@ -7,6 +7,8 @@ import zio.blocking.Blocking
 import zio.stream.ZStream
 import zio.{Chunk, ZIO}
 
+import java.io.Writer
+
 /** Methods in this class can be used to compare results between two compendia.
   */
 object Comparer extends LazyLogging {
@@ -123,9 +125,11 @@ object Comparer extends LazyLogging {
       comparisons: Set[ClusterComparison]
   ) {
     override val toString: String = {
-      val changed = comparisons.filterNot(_.unchanged)
+      s"${filename}: " + countsByStatus
+    }
 
-      val by_status = comparisons.toSeq
+    def countsByStatus = {
+      comparisons.toSeq
         .map(_.status)
         .groupBy(identity)
         .map[(Int, String)]({ case (status, values) =>
@@ -137,16 +141,20 @@ object Comparer extends LazyLogging {
         .toSeq
         .sortBy(-_._1)
         .map(_._2)
+        .mkString("\n")
+    }
 
-      s"== ${filename} ==\n" +
-        by_status.mkString("\n") + "\n\n" +
-        changed
-          .groupBy(_.status)
-          .map({ case (status, clusterComparisons) =>
-            s"=== ${status} [${clusterComparisons.size}] ===\n" +
-              clusterComparisons.map(c => s" - ${c.toString}").mkString("\n")
-          })
-          .mkString("\n")
+    def writeToFile(w: Writer) = {
+      w.write("== ${filename} ==\n")
+      w.write(countsByStatus + "\n\n")
+
+      comparisons
+        .filterNot(_.unchanged)
+        .groupBy(_.status)
+        .foreach({ case (status, clusterComparisons) =>
+          w.write(s"=== ${status} [${clusterComparisons.size}] ===\n")
+          clusterComparisons.foreach(c => w.write(s" - ${c.toString}\n"))
+        })
     }
   }
 
@@ -252,6 +260,7 @@ object Comparer extends LazyLogging {
       })
       comparison <- comparisons
     } yield {
+      logger.info(f"Memory at end of ZStream identifier process: ${MemoryUtils.getMemorySummary}")
       ClusterComparisonReport(filename, comparison.toSet)
     }
   }
