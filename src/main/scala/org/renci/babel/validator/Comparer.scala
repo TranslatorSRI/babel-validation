@@ -105,8 +105,8 @@ object Comparer extends LazyLogging {
         val overlapIdentifiers =
           identifiers.flatten.intersect(prevIdentifiers.flatten)
 
-        if (identifiers == prevIdentifiers) "CHANGED_BUT_IDENTIFIERS_IDENTICAL"
-        else if (overlapIdentifiers.nonEmpty) "CHANGED_BUT_SHARED_IDENTIFIERS"
+        if (identifiers == prevIdentifiers) "CHANGED_WITH_IDENTICAL_IDENTIFIERS"
+        else if (overlapIdentifiers.nonEmpty) "CHANGED_WITH_SOME_SHARED_IDENTIFIERS"
         else "CHANGED"
       }
     }
@@ -135,6 +135,7 @@ object Comparer extends LazyLogging {
     }
 
     def countsByStatus: String = {
+      f"TOTAL: ${comparisons.size} (100.0000%)\n" +
       comparisons.toSeq
         .map(_.status)
         .groupBy(identity)
