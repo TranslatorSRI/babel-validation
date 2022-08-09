@@ -106,7 +106,8 @@ object Comparer extends LazyLogging {
           identifiers.flatten.intersect(prevIdentifiers.flatten)
 
         if (identifiers == prevIdentifiers) "CHANGED_WITH_IDENTICAL_IDENTIFIERS"
-        else if (overlapIdentifiers.nonEmpty) "CHANGED_WITH_SOME_SHARED_IDENTIFIERS"
+        else if (overlapIdentifiers.nonEmpty)
+          "CHANGED_WITH_SOME_SHARED_IDENTIFIERS"
         else "CHANGED"
       }
     }
@@ -136,19 +137,19 @@ object Comparer extends LazyLogging {
 
     def countsByStatus: String = {
       f"TOTAL: ${comparisons.size} (100.0000%%)\n" +
-      comparisons.toSeq
-        .map(_.status)
-        .groupBy(identity)
-        .map[(Int, String)]({ case (status, values) =>
-          (
-            values.size,
-            f"${status}: ${values.size} (${values.size.toDouble / comparisons.size * 100}%.4f%%)"
-          )
-        })
-        .toSeq
-        .sortBy(-_._1)
-        .map(_._2)
-        .mkString("\n")
+        comparisons.toSeq
+          .map(_.status)
+          .groupBy(identity)
+          .map[(Int, String)]({ case (status, values) =>
+            (
+              values.size,
+              f"${status}: ${values.size} (${values.size.toDouble / comparisons.size * 100}%.4f%%)"
+            )
+          })
+          .toSeq
+          .sortBy(-_._1)
+          .map(_._2)
+          .mkString("\n")
     }
 
     def writeToFile(w: Writer): Unit = {

@@ -10,6 +10,7 @@ import zio.stream._
 import java.io.File
 
 object Compendium extends LazyLogging {
+
   /** An identifier in this compendium. */
   case class Identifier(
       i: Option[String],
