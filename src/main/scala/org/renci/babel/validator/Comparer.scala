@@ -69,14 +69,14 @@ object Comparer extends LazyLogging {
       typesChunk <- (for {
         row: Compendium.Record <- summary.records
       } yield (row.`type`)).runCollect
-      typesErrors <- summary.types.catchAll(err => {
+      _ <- summary.types.catchAll(err => {
         logger.error(s"Types error: ${err}")
         ZIO.fail(err)
       })
       prevTypesChunk <- (for {
         row: Compendium.Record <- prevSummary.records
       } yield (row.`type`)).runCollect
-      prevTypesErrors <- prevSummary.types.catchAll(err => {
+      _ <- prevSummary.types.catchAll(err => {
         logger.error(s"prevTypes error: ${err}")
         ZIO.fail(err)
       })
@@ -135,7 +135,7 @@ object Comparer extends LazyLogging {
     }
 
     def countsByStatus: String = {
-      f"TOTAL: ${comparisons.size} (100.0000%)\n" +
+      f"TOTAL: ${comparisons.size} (100.0000%%)\n" +
       comparisons.toSeq
         .map(_.status)
         .groupBy(identity)
@@ -246,33 +246,34 @@ object Comparer extends LazyLogging {
     for {
       identifiers <- identifiersZIO
 
-      // If identifiers < IDENTIFIER_ZSTREAM_LIMIT, we'll opt to just use a Set()
-      // instead of the ZStream algorithm.
-      summaryByCluster: ZStream.GroupBy[
-        Blocking,
-        Throwable,
-        String,
-        Compendium.Record
-      ] = compendium.records
-        .flatMap(record =>
-          ZStream.fromIterable(record.ids).map(id => (id, record))
-        )
-        .groupBy({ case (id: String, record: Compendium.Record) =>
-          ZIO.succeed((id, record))
-        })
-      prevSummaryByCluster: ZStream.GroupBy[
-        Blocking,
-        Throwable,
-        String,
-        Compendium.Record
-      ] = prevCompendium.records
-        .flatMap(record =>
-          ZStream.fromIterable(record.ids).map(id => (id, record))
-        )
-        .groupBy({ case (id: String, record: Compendium.Record) =>
-          ZIO.succeed((id, record))
-        })
       comparisons = ZIO.foreachParN(nCores)(identifiers.toSeq)(id => {
+        // If identifiers < IDENTIFIER_ZSTREAM_LIMIT, we'll opt to just use a Set()
+        // instead of the ZStream algorithm.
+        val summaryByCluster: ZStream.GroupBy[
+          Blocking,
+          Throwable,
+          String,
+          Compendium.Record
+        ] = compendium.records
+          .flatMap(record =>
+            ZStream.fromIterable(record.ids).map(id => (id, record))
+          )
+          .groupBy({ case (id: String, record: Compendium.Record) =>
+            ZIO.succeed((id, record))
+          })
+        val prevSummaryByCluster: ZStream.GroupBy[
+          Blocking,
+          Throwable,
+          String,
+          Compendium.Record
+        ] = prevCompendium.records
+          .flatMap(record =>
+            ZStream.fromIterable(record.ids).map(id => (id, record))
+          )
+          .groupBy({ case (id: String, record: Compendium.Record) =>
+            ZIO.succeed((id, record))
+          })
+
         for {
           records <- summaryByCluster
             .filter(_ == id) { case (_, records) => records }

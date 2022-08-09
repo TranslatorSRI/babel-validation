@@ -4,35 +4,12 @@ import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.validator.model.Compendium.{Identifier, Record}
 import zio.ZIO
 import zio.blocking.Blocking
-import zio.stream._
 import zio.json._
+import zio.stream._
 
 import java.io.File
-import scala.collection.mutable
 
 object Compendium extends LazyLogging {
-
-  /** Quick-and-dirty memoize() implementation from
-    * https://stackoverflow.com/a/36960228/27310 This should probably be
-    * replaced with ZIO Cache or ScalaCache at some point.
-    *
-    * @param f
-    *   The function to memoize.
-    * @tparam I
-    *   The input type
-    * @tparam O
-    *   The output type
-    * @return
-    *   A function that will either return the cached value or calculate and
-    *   cache it.
-    */
-  def memoize[I, O](f: I => O): I => O = new mutable.HashMap[I, O]() {
-    override def apply(key: I) = {
-      logger.debug(s"Caching ${f}(${key}), already cached: ${contains(key)}")
-      getOrElseUpdate(key, f(key))
-    }
-  }
-
   /** An identifier in this compendium. */
   case class Identifier(
       i: Option[String],
