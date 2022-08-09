@@ -103,7 +103,7 @@ object Comparer extends LazyLogging {
         val prevIdentifiers =
           prevRecords.flatMap(_.identifiers).map(_.i).toSeq.sorted
         val overlapIdentifiers =
-          identifiers.flatten.intersect(prevIdentifiers.flatten)
+          identifiers.flatten.intersect(prevIdentifiers.flatten).filterNot(_ != id)
 
         if (identifiers == prevIdentifiers) "CHANGED_WITH_IDENTICAL_IDENTIFIERS"
         else if (overlapIdentifiers.nonEmpty)
