@@ -33,6 +33,8 @@ while(<>) {
 	};
 }
 
+push @rows, {%current} if $current{'filename'};
+
 # Write out headers.
 use Data::Dumper;
 my @headers = (
@@ -46,7 +48,7 @@ delete $field_names_unsorted{'TOTAL'};
 delete $field_names_unsorted{'filename'};
 my @field_names = map { ($_, $_ . ' %') } sort keys %field_names_unsorted;
 
-say join "\t", (@headers, map { ucfirst lc } @field_names);
+say join "\t", (@headers, (map { ucfirst lc } @field_names));
 
 for my $row (@rows) {
 
