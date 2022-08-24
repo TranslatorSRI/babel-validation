@@ -9,6 +9,7 @@ import zio.console.Console
 import zio.stream.{ZSink, ZStream}
 
 import java.io.{File, FileOutputStream, OutputStreamWriter}
+import java.time.LocalDateTime
 
 /** Functions for reporting on the differences between two input files.
   */
@@ -130,6 +131,9 @@ object Reporter extends LazyLogging {
           .fromFile(summaryFile.toPath)
           .contramapChunks[String](_.flatMap(_.getBytes))
       ) // Returns the number of written bytes as a Long
-      .unit // Discard the number of written bytes
+      .andThen({
+        logger.info(s"Diff completed at ${LocalDateTime.now()}")
+        ZIO.succeed()
+      })
   }
 }
