@@ -131,9 +131,10 @@ object Reporter extends LazyLogging {
           .fromFile(summaryFile.toPath)
           .contramapChunks[String](_.flatMap(_.getBytes))
       ) // Returns the number of written bytes as a Long
-      .andThen({
+      .unit // Ignore the number of written bytes
+      .andThen(ZIO.effect({
+        // Report that the diff has completed.
         logger.info(s"Diff completed at ${LocalDateTime.now()}")
-        ZIO.succeed()
-      })
+      }))
   }
 }
