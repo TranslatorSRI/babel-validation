@@ -8,8 +8,9 @@ object MemoryUtils {
 
     val memoryUsed = runtime.totalMemory() - runtime.freeMemory()
 
-    val memoryUsedOfAvailPercent = memoryUsed.toDouble/runtime.totalMemory()*100
-    val memoryUsedOfMaxPercent = memoryUsed.toDouble/runtime.maxMemory()*100
+    val memoryUsedOfAvailPercent =
+      memoryUsed.toDouble / runtime.totalMemory() * 100
+    val memoryUsedOfMaxPercent = memoryUsed.toDouble / runtime.maxMemory() * 100
 
     f"${bytesToGB(runtime.freeMemory())}%.2f GB free out of ${bytesToGB(
         runtime.totalMemory()
