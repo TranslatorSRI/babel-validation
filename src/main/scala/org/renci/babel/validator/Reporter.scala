@@ -6,9 +6,10 @@ import org.renci.babel.validator.model.{BabelOutput, Compendium}
 import zio.ZIO
 import zio.blocking.Blocking
 import zio.console.Console
-import zio.stream.ZStream
+import zio.stream.{ZSink, ZStream}
 
-import java.io.{FileOutputStream, PrintStream}
+import java.io.{File, FileOutputStream, OutputStreamWriter}
+import java.time.LocalDateTime
 
 /** Functions for reporting on the differences between two input files.
   */
@@ -71,17 +72,16 @@ object Reporter extends LazyLogging {
   def diffResults(conf: Conf): ZIO[Blocking with Console, Throwable, Unit] = {
     val babelOutput = new BabelOutput(conf.babelOutput())
     val babelPrevOutput = new BabelOutput(conf.babelPrevOutput())
-    val output = conf.output.toOption match {
-      case Some(file) => new PrintStream(new FileOutputStream(file))
-      case _          => System.out
-    }
+    val outputDir = conf.output.getOrElse(new File("."))
+
+    val summaryFile = new File(outputDir, "diff-summary.txt")
 
     val pairedSummaries =
       retrievePairedCompendiaSummaries(babelOutput, babelPrevOutput)
-    output.println("Filename\tCount\tPrevCount\tDiff\tPercentageChange")
+    // output.println("Filename\tCount\tPrevCount\tDiff\tPercentageChange")
     ZStream
       .fromIterable(pairedSummaries)
-      .mapMParUnordered(conf.nCores()) {
+      .mapMPar(conf.nCores()) {
         case (
               filename: String,
               summary: Compendium,
@@ -89,28 +89,52 @@ object Reporter extends LazyLogging {
             ) if filterFilename(conf, filename) => {
 
           for {
-            lengthComparison <- Comparer.compareLengths(
+            // lengthComparison <- Comparer.compareLengths(filename, summary, prevSummary)
+            // typeComparison <- Comparer.compareTypes(filename, summary, prevSummary)
+            clusterComparison <- Comparer.diffClustersByIDs(
               filename,
               summary,
-              prevSummary
-            )
-            typeComparison <- Comparer.compareTypes(
-              filename,
-              summary,
-              prevSummary
+              prevSummary,
+              conf.nCores()
             )
           } yield {
-            output.println(lengthComparison.toString)
-            output.println(typeComparison.toString)
+            // output.println(lengthComparison.toString)
+            // output.println(typeComparison.toString)
+            val basename = filename
+
+            val osw = new OutputStreamWriter(
+              new FileOutputStream(new File(outputDir, basename))
+            )
+            clusterComparison.writeToFile(osw)
+            osw.close()
+
+            logger.info(
+              f"Wrote ${clusterComparison.comparisons.size}%,d comparisons to ${filename}."
+            )
+
+            val summary =
+              s"== ${filename} ==\n" + clusterComparison.countsByStatus + "\n\n"
+            logger.info(summary)
+
+            summary
           }
         }
         case (filename: String, _, _) if !filterFilename(conf, filename) => {
           logger.info(s"Skipping ${filename}")
-          ZIO.succeed(())
+          ZIO.succeed("")
         }
         case abc =>
           ZIO.fail(new RuntimeException(s"Invalid paired summary: ${abc}"))
       }
-      .runDrain
+      .run(
+        ZSink
+          .fromFile(summaryFile.toPath)
+          .contramapChunks[String](_.flatMap(_.getBytes))
+      ) // Returns the number of written bytes as a Long
+      .unit // Ignore the number of written bytes
+      .andThen(ZIO.effect({
+        // Report that the diff has completed.
+        logger.info(s"Diff completed at ${LocalDateTime.now()}")
+      }))
   }
 }

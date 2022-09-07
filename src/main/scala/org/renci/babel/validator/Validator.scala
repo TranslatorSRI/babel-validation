@@ -10,13 +10,16 @@ import java.io.File
 
 object Validator extends zio.App with LazyLogging {
   class Conf(args: Seq[String]) extends ScallopConf(args) {
+    val instruction: ScallopOption[String] = trailArg[String]()
+
     val babelOutput: ScallopOption[File] = trailArg[File](
       descr = "The current Babel output directory",
       required = true
     )
+    validateFileIsDirectory(babelOutput)
+
     val babelPrevOutput: ScallopOption[File] =
       trailArg[File](descr = "The previous Babel output", required = true)
-    validateFileIsDirectory(babelOutput)
     validateFileIsDirectory(babelPrevOutput)
 
     val filterIn: ScallopOption[List[String]] = opt[List[String]](descr =
@@ -28,7 +31,11 @@ object Validator extends zio.App with LazyLogging {
 
     val nCores: ScallopOption[Int] = opt[Int](descr = "Number of cores to use")
 
-    val output: ScallopOption[File] = opt[File](descr = "Output file")
+    val output: ScallopOption[File] = opt[File](
+      descr = "Directory to write outputs to",
+      default = Some(new File("."))
+    )
+    validateFileIsDirectory(output)
 
     verify()
   }

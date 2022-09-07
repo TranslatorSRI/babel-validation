@@ -4,47 +4,41 @@ import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.validator.model.Compendium.{Identifier, Record}
 import zio.ZIO
 import zio.blocking.Blocking
-import zio.stream._
 import zio.json._
+import zio.stream._
 
 import java.io.File
-import scala.collection.mutable
 
 object Compendium extends LazyLogging {
-
-  /** Quick-and-dirty memoize() implementation from
-    * https://stackoverflow.com/a/36960228/27310 This should probably be
-    * replaced with ZIO Cache or ScalaCache at some point.
-    *
-    * @param f
-    *   The function to memoize.
-    * @tparam I
-    *   The input type
-    * @tparam O
-    *   The output type
-    * @return
-    *   A function that will either return the cached value or calculate and
-    *   cache it.
-    */
-  def memoize[I, O](f: I => O): I => O = new mutable.HashMap[I, O]() {
-    override def apply(key: I) = {
-      logger.debug(s"Caching ${f}(${key}), already cached: ${contains(key)}")
-      getOrElseUpdate(key, f(key))
-    }
-  }
 
   /** An identifier in this compendium. */
   case class Identifier(
       i: Option[String],
       l: Option[String]
-  )
+  ) {
+    override val toString: String = (i, l) match {
+      case (None, None)       => s"None"
+      case (Some(i), None)    => i
+      case (None, Some(l))    => s"[${l}]"
+      case (Some(i), Some(l)) => s"${i} [${l}]"
+    }
+  }
 
   /** A single record in this compendium. */
   case class Record(
       `type`: String,
       ic: Option[Double],
       identifiers: Seq[Identifier]
-  )
+  ) {
+    val primaryId: Option[String] = identifiers.headOption.flatMap(_.i)
+    val ids: Set[String] = identifiers.flatMap(_.i).toSet
+    override val toString: String = ic match {
+      case None =>
+        s"Record(${`type`} with ${identifiers.size} IDs: ${identifiers.mkString(", ")})"
+      case Some(ic) =>
+        s"Record(${`type`} [${ic}] with ${identifiers.size} IDs: ${identifiers.mkString(", ")})"
+    }
+  }
 }
 
 /** A Compendium models a single compendium in a Babel output.
