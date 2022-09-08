@@ -8,8 +8,9 @@ import zio.stream.ZStream
 
 import java.io.Writer
 
-/** Methods in this class can be used to compare results between two compendia.
-  */
+/**
+ * Methods in this class can be used to compare results between two compendia.
+ */
 object Comparer extends LazyLogging {
   case class ClusterComparison(
       id: String,
@@ -94,30 +95,31 @@ object Comparer extends LazyLogging {
     }
   }
 
-  /** Given two compendia, generate the "diff" between clusters in the two
-    * compendia based on the individual identifiers. For every identifier
-    * mentioned in either compendium, we identify the clusters it is included in
-    * in both the current compendium and the previous compendium. For most
-    * identifiers, we would expect these clusters to be unchanged, so this
-    * approach allows us to focus on the clusters that _have_ changed.
-    *
-    * The downside to this approach is that we generate more "diffs" than have
-    * actually taken place: for instance, if identifier 1 is added to cluster 1
-    * containing a single identifier 2, this results in two diffs: identifier 1
-    * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it
-    * might be worth summarizing these diffs further.
-    *
-    * @param filename
-    *   The name of the compendium begin compare.
-    * @param compendium
-    *   The current compendium.
-    * @param prevCompendium
-    *   The previous compendium.
-    * @param nCores
-    *   The number of cores available for this task.
-    * @return
-    *   A ZIO that evaluates to a ClusterComparisonReport or a Throwable.
-    */
+  /**
+   * Given two compendia, generate the "diff" between clusters in the two
+   * compendia based on the individual identifiers. For every identifier
+   * mentioned in either compendium, we identify the clusters it is included in
+   * in both the current compendium and the previous compendium. For most
+   * identifiers, we would expect these clusters to be unchanged, so this
+   * approach allows us to focus on the clusters that _have_ changed.
+   *
+   * The downside to this approach is that we generate more "diffs" than have
+   * actually taken place: for instance, if identifier 1 is added to cluster 1
+   * containing a single identifier 2, this results in two diffs: identifier 1
+   * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it
+   * might be worth summarizing these diffs further.
+   *
+   * @param filename
+   *   The name of the compendium begin compare.
+   * @param compendium
+   *   The current compendium.
+   * @param prevCompendium
+   *   The previous compendium.
+   * @param nCores
+   *   The number of cores available for this task.
+   * @return
+   *   A ZIO that evaluates to a ClusterComparisonReport or a Throwable.
+   */
   def diffClustersByIDs(
       filename: String,
       compendium: Compendium,

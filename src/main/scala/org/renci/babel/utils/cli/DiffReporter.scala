@@ -16,8 +16,11 @@ import java.time.LocalDateTime
  * Functions for reporting on the differences between two input files.
  */
 object DiffReporter extends LazyLogging {
+
   /** The subcommand that controlling comparing. */
-  class DiffSubcommand extends Subcommand("diff") with SupportsFilenameFiltering {
+  class DiffSubcommand
+      extends Subcommand("diff")
+      with SupportsFilenameFiltering {
     val babelOutput: ScallopOption[File] = trailArg[File](
       descr = "The current Babel output directory",
       required = true
@@ -33,10 +36,11 @@ object DiffReporter extends LazyLogging {
   }
 
   /**
-   * Given two BabelOutputs, it returns a list of all compendia found in BOTH of the BabelOutputs
-   * paired together.
+   * Given two BabelOutputs, it returns a list of all compendia found in BOTH of
+   * the BabelOutputs paired together.
    *
-   * TODO: modify this so we return every compendium found in EITHER BabelOutput.
+   * TODO: modify this so we return every compendium found in EITHER
+   * BabelOutput.
    */
   def retrievePairedCompendiaSummaries(
       babelOutput: BabelOutput,
@@ -51,7 +55,9 @@ object DiffReporter extends LazyLogging {
     }
   }
 
-  def diffResults(conf: DiffSubcommand): ZIO[Blocking with Console, Throwable, Unit] = {
+  def diffResults(
+      conf: DiffSubcommand
+  ): ZIO[Blocking with Console, Throwable, Unit] = {
     val babelOutput = new BabelOutput(conf.babelOutput())
     val babelPrevOutput = new BabelOutput(conf.babelPrevOutput())
     val outputDir = conf.output.getOrElse(new File("."))
@@ -65,10 +71,10 @@ object DiffReporter extends LazyLogging {
       .fromIterable(pairedSummaries)
       .mapMPar(conf.nCores()) {
         case (
-          filename: String,
-          summary: Compendium,
-          prevSummary: Compendium
-          ) if Utils.filterFilename(conf, filename) => {
+              filename: String,
+              summary: Compendium,
+              prevSummary: Compendium
+            ) if Utils.filterFilename(conf, filename) => {
 
           for {
             // lengthComparison <- Comparer.compareLengths(filename, summary, prevSummary)
@@ -101,7 +107,8 @@ object DiffReporter extends LazyLogging {
             summary
           }
         }
-        case (filename: String, _, _) if !Utils.filterFilename(conf, filename) => {
+        case (filename: String, _, _)
+            if !Utils.filterFilename(conf, filename) => {
           logger.info(s"Skipping ${filename}")
           ZIO.succeed("")
         }
