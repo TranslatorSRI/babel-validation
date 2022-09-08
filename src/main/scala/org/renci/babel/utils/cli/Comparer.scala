@@ -211,19 +211,19 @@ object Comparer extends LazyLogging {
       // If the number of identifiers is small enough, then don't both to use the ZStream algorithm --
       // just use a HashSet and assume it'll fit in memory.
       logger.info(
-        f"Memory at start of identifier process: ${MemoryUtils.getMemorySummary}"
+        f"Memory at start of identifier process: ${Utils.getMemorySummary}"
       )
       val records = runtime.unsafeRun(compendium.records.runCollect).toList
-      logger.debug(f"  Loaded records: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Loaded records: ${Utils.getMemorySummary}")
       val prevRecords =
         runtime.unsafeRun(prevCompendium.records.runCollect).toList
-      logger.debug(f"  Loaded prevRecords: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Loaded prevRecords: ${Utils.getMemorySummary}")
       val summary =
         records.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
-      logger.debug(f"  Generated summary: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Generated summary: ${Utils.getMemorySummary}")
       val prevSummary =
         prevRecords.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
-      logger.debug(f"  Generated prevSummary: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Generated prevSummary: ${Utils.getMemorySummary}")
 
       val comparisons = identifiers.map(id => {
         ClusterComparison(
@@ -234,7 +234,7 @@ object Comparer extends LazyLogging {
       })
 
       logger.info(
-        f"Memory at end of cluster comparison generation: ${MemoryUtils.getMemorySummary}"
+        f"Memory at end of cluster comparison generation: ${Utils.getMemorySummary}"
       )
 
       return ZIO.succeed(ClusterComparisonReport(filename, comparisons))
@@ -286,7 +286,7 @@ object Comparer extends LazyLogging {
       comparison <- comparisons
     } yield {
       logger.info(
-        f"Memory at end of ZStream identifier process: ${MemoryUtils.getMemorySummary}"
+        f"Memory at end of ZStream identifier process: ${Utils.getMemorySummary}"
       )
       ClusterComparisonReport(filename, comparison.toSet)
     }
