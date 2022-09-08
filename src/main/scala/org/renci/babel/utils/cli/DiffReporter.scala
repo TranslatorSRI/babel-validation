@@ -1,6 +1,7 @@
 package org.renci.babel.utils.cli
 
 import com.typesafe.scalalogging.LazyLogging
+import org.renci.babel.utils.cli.Utils.SupportsFilenameFiltering
 import org.renci.babel.utils.model.{BabelOutput, Compendium}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
@@ -8,7 +9,6 @@ import zio.blocking.Blocking
 import zio.console.Console
 import zio.stream.{ZSink, ZStream}
 
-import java.io.{File, FileOutputStream, PrintStream}
 import java.io.{File, FileOutputStream, OutputStreamWriter}
 import java.time.LocalDateTime
 

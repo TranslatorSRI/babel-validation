@@ -3,6 +3,7 @@ package org.renci.babel.utils.converter
 import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.utils.model.BabelOutput
 import org.renci.babel.utils.cli.CLI
+import org.renci.babel.utils.cli.Utils.SupportsFilenameFiltering
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
@@ -17,7 +18,7 @@ import java.io.File
  */
 object Converter extends LazyLogging {
   /** The subcommand that controlling converting. */
-  class ConvertSubcommand extends Subcommand("convert") with CLI.SupportsFilenameFiltering {
+  class ConvertSubcommand extends Subcommand("convert") with SupportsFilenameFiltering {
     val babelOutput: ScallopOption[File] = trailArg[File](
       descr = "The current Babel output directory",
       required = true
