@@ -1,9 +1,8 @@
 package org.renci.babel.utils.converter
 
 import com.typesafe.scalalogging.LazyLogging
+import org.renci.babel.utils.cli.Utils.{SupportsFilenameFiltering, filterFilename}
 import org.renci.babel.utils.model.BabelOutput
-import org.renci.babel.utils.cli.CLI
-import org.renci.babel.utils.cli.Utils.SupportsFilenameFiltering
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
