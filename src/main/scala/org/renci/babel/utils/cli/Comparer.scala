@@ -1,11 +1,10 @@
 package org.renci.babel.utils.cli
 
 import com.typesafe.scalalogging.LazyLogging
-import org.renci.babel.utils.MemoryUtils
 import org.renci.babel.utils.model.Compendium
+import zio.ZIO
 import zio.blocking.Blocking
 import zio.stream.ZStream
-import zio.{Chunk, ZIO}
 
 import java.io.Writer
 
