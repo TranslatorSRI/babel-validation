@@ -64,7 +64,7 @@ object Converter extends LazyLogging {
     ZIO.foreachPar(babelOutput.compendia) { compendium =>
       if (!filterFilename(conf, compendium.filename)) {
         logger.warn(s"Skipping ${compendium.filename} because of filtering options.")
-        ZIO.succeed()
+        ZIO.succeed(())
       } else {
         val outputFilename = compendium.filename.replaceFirst("\\.\\w{1,3}$", extension)
         val outputFile = new File(outputCompendia, outputFilename)
@@ -124,6 +124,6 @@ object Converter extends LazyLogging {
               .contramapChunks[String](_.flatMap(_.getBytes))
           })
       }
-    }.andThen(ZIO.succeed())
+    }.andThen(ZIO.succeed(()))
   }
 }
