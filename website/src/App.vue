@@ -12,10 +12,18 @@
   <b-table striped hover :items="testResults" :fields="test_fields">
   </b-table>
 
+  <h3>Debug</h3>
+
+  <p>{{testDataIncomplete}}: {{testData}}</p>
+
+  <p>{{testDataErrors}}</p>
+
 </template>
 
 <script>
 import {BTable} from "bootstrap-vue-3";
+import Papa from 'papaparse';
+
 export default {
   components: {BTable},
   data () {
@@ -25,8 +33,23 @@ export default {
         "NodeNorm-RENCI-dev": "https://nodenormalization-sri.renci.org/1.3",
         "NodeNorm-ITRB-prod": "https://nodenorm.transltr.io/1.3/"
       },
-      tests: fetch("")
+      testData: [],
+      testDataErrors: [],
+      testDataIncomplete: true,
     }
+  },
+  created() {
+    Papa.parse('https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/gviz/tq?tqx=out:csv&sheet=Tests', {
+      download: true,
+      header: true,
+      complete: (results => {
+        this.testData = results.data
+        this.testDataIncomplete = false
+      }),
+      error: (err => {
+        this.testDataErrors.push(err);
+      })
+    })
   },
   computed: {
     test_fields() {
