@@ -52,7 +52,24 @@ export class Test {
 
         // Helper functions.
         function getURLForCURIE(curie) {
-            return 'https://google.com/search?q=' + encodeURIComponent(curie);
+            const iri_stems = {
+                'UMLS': 'https://uts.nlm.nih.gov/uts/umls/concept/',
+            }
+
+            const curie_split = (curie.toUpperCase().split(':') || [''])
+            const curie_prefix = curie_split[0];
+            if (new Set('HTTP', 'HTTPS', 'URN').has(curie_prefix)) {
+                // Looks like a URI! Leave it unchanged.
+                return curie;
+            }
+
+            if (iri_stems[curie_prefix] && curie_split.length > 1) {
+                return iri_stems[curie_prefix] + curie.substring(curie.indexOf(':') + 1);
+            }
+
+            // Default to bioregistry.io lookup
+            return 'http://bioregistry.io/' + encodeURIComponent(curie);
+            // return 'https://google.com/search?q=' + encodeURIComponent(curie);
         }
 
         function getEquivalentIDs(result) {
@@ -75,9 +92,19 @@ export class Test {
                     const equiv_ids = getEquivalentIDs(result);
                     // console.log("Equiv IDs:", equiv_ids);
                     if (!equiv_ids.has(id)) {
-                        return TestResult.failure(`${id} is NOT included in cluster`, 'NodeNorm', result);
+                        return TestResult.failure(`ID ${id} could not be found`, 'NodeNorm', result);
                     } else {
-                        return TestResult.success(`Found identifier ${id}`, "NodeNorm", result);
+                        let preferred_label_text = "";
+                        if (result['id']) {
+                            const preferred_id = result.id['identifier'];
+                            const preferred_label = result.id['label'];
+                            if (id == preferred_id) {
+                                preferred_label_text = ` (\"${preferred_label}\")`;
+                            } else {
+                                preferred_label_text = ` (${preferred_id} "${preferred_label}\")`;
+                            }
+                        }
+                        return TestResult.success(`Found ID ${id}${preferred_label_text}`, "NodeNorm", result);
                     }
                 });
             });
