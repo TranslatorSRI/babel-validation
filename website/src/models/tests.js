@@ -124,7 +124,26 @@ export class Test {
             return new Test(`Check ID ${id1} and ID ${id2} cluster together`, {
                 [id1]: getURLForCURIE(id1),
                 [id2]: getURLForCURIE(id2),
-            }, source, source_url);
+            }, source, source_url,function(nodeNormEndpoint) {
+                return getNormalizedNodes(nodeNormEndpoint, id1)
+                    .then(result => {
+                        // Continue propagating errors.
+                        if (!result.status) return result;
+
+                        // We have a success if id1 was found at all.
+                        // But to pass this test, we need to check that the
+                        // id2 is one of the equivalent identifiers.
+                        const json = result.result;
+                        const equiv_ids = getEquivalentIDs(json);
+                        const preferred_id = json.id.identifier;
+
+                        if (equiv_ids.has(id1) && equiv_ids.has(id2)) {
+                            return TestResult.success(`ID ${id1} and ID ${id2} are both equivalent to ${preferred_id}.`, 'NodeNorm', result);
+                        } else {
+                            return TestResult.failure(`ID ${id1} is equivalent to ${preferred_id} but ID ${id2} is not.`, 'NodeNorm', result);
+                        }
+                    });
+            });
         }
 
         // Look for tests in this row.
