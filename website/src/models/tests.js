@@ -6,7 +6,7 @@ export class Test {
     /**
      * Each test has a description, source, source_url and
      */
-    constructor(description, urls={}, source=null, source_url=null, test=function(endpoint) { return [false, `Not implemented (${endpoint})`] }) {
+    constructor(description, urls={}, source=null, source_url=null, test=function(nodeNormEndpoint) { return [false, `Not implemented (${nodeNormEndpoint})`] }) {
         this.description = description;
         this.urls = urls;
         this.source = source;
@@ -30,7 +30,29 @@ export class Test {
         function createCheckIDTest(id) {
             return new Test(`Check for ID ${id}`, {
                 [id]: getURLForCURIE(id)
-            }, source, source_url);
+            }, source, source_url, function(nodeNormEndpoint, callback) {
+                // Check to see if NodeNorm know about this ID.
+                const url = nodeNormEndpoint + "/get_normalized_nodes?curie=" + encodeURIComponent(id);
+                console.log("Querying", url);
+                return fetch(url).then(response => {
+                    if (!response.ok) return [false, "Could not get_normalized_nodes: " + response.statusText];
+                    return response.json().then(results => {
+                        console.log("Results:", results);
+                        if (!results) return [false, `get_normalized_nodes returned invalid response: ${response}`];
+                        const result = results[id];
+                        console.log("Result:", result);
+                        if (!result) return [false, `get_normalized_nodes returned no response for ${id}: ${results}`];
+                        const equiv_ids = new Set(result['equivalent_identifiers'].map(r => r.identifier));
+                        const equiv_ids_str = [...equiv_ids].join(", ");
+                        console.log("Equiv IDs:", equiv_ids);
+                        if (equiv_ids.has(id)) {
+                            return [true, `${id} is included in cluster ${result['id']['identifier']}: ${equiv_ids_str}`];
+                        } else {
+                            return [false, `${id} is NOT included in cluster ${result['id']['identifier']}: ${equiv_ids_str}`]
+                        }
+                    });
+                });
+            });
         }
 
         function createPreferredIdTest(query_id, preferred_id) {

@@ -23,13 +23,7 @@
       <tr v-for="test in tests">
         <td><TextWithURLs :text="test.description" :urls="test.urls"></TextWithURLs></td>
         <td><TextWithURLs :text="test.source" :urls="{'URL': test.source_url}"></TextWithURLs></td>
-        <td v-for="endpoint in Object.keys(nodeNormEndpoints)">
-          <template v-if="test.test(endpoint)[0]">
-            PASS: {{test.test(nodeNormEndpoints[endpoint])[1]}}
-          </template>
-          <template v-else>
-            FAIL: {{test.test(nodeNormEndpoints[endpoint])[1]}}
-          </template>
+        <td v-for="endpoint in Object.keys(nodeNormEndpoints)"><TestResult :test="test" :endpoint="nodeNormEndpoints[endpoint]"></TestResult>
         </td>
       </tr>
     </tbody>
@@ -48,15 +42,16 @@ import {BTable} from "bootstrap-vue-3";
 import Papa from 'papaparse';
 import TextWithURLs from "@/components/TextWithURLs.vue";
 import { Test } from './models/tests';
+import TestResult from "@/components/TestResult.vue";
 
 export default {
-  components: {BTable, TextWithURLs},
+  components: {TestResult, BTable, TextWithURLs},
   data () {
     return {
       nodeNormEndpoints: {
         "NodeNorm-RENCI-exp": "https://nodenormalization-dev.apps.renci.org/1.3",
         "NodeNorm-RENCI-dev": "https://nodenormalization-sri.renci.org/1.3",
-        "NodeNorm-ITRB-prod": "https://nodenorm.transltr.io/1.3/"
+        "NodeNorm-ITRB-prod": "https://nodenorm.transltr.io/1.3"
       },
       testData: [],
       testDataErrors: [],
