@@ -7,10 +7,25 @@
     a single place where tests can be executed against multiple versions of these tools.
   </p>
 
+  <b-button @click="loadGoogleSheet()">Reload</b-button>
+
   <h2>Tests</h2>
 
-  <b-table striped hover :items="testResults" :fields="test_fields">
-  </b-table>
+  <b-table-simple striped hover>
+    <thead>
+      <tr>
+        <th>Test</th>
+        <th>Source</th>
+        <th v-for="endpoint in Object.keys(nodeNormEndpoints)">{{endpoint}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr v-for="test in tests">
+        <td>{{test.description}}</td>
+        <td><TextWithURLs :text="test.source" :urls="{'URL': test.source_url}"></TextWithURLs></td>
+      </tr>
+    </tbody>
+  </b-table-simple>
 
   <h3>Debug</h3>
 
@@ -23,9 +38,11 @@
 <script>
 import {BTable} from "bootstrap-vue-3";
 import Papa from 'papaparse';
+import TextWithURLs from "@/components/TextWithURLs.vue";
+import { Test } from './models/tests';
 
 export default {
-  components: {BTable},
+  components: {BTable, TextWithURLs},
   data () {
     return {
       nodeNormEndpoints: {
@@ -39,23 +56,30 @@ export default {
     }
   },
   created() {
-    Papa.parse('https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/gviz/tq?tqx=out:csv&sheet=Tests', {
-      download: true,
-      header: true,
-      complete: (results => {
-        this.testData = results.data
-        this.testDataIncomplete = false
-      }),
-      error: (err => {
-        this.testDataErrors.push(err);
-      })
-    })
+    this.loadGoogleSheet();
   },
   computed: {
-    test_fields() {
-      /* Return a list of fields to display in the tests list */
-      return [ "Test", ...Object.keys(this.nodeNormEndpoints)]
+    tests() {
+      if (this.testDataIncomplete) return [];
+      return this.testData.flatMap(row => {
+        return Test.convertRowToTests(row)
+      });
     },
+  },
+  methods: {
+    loadGoogleSheet() {
+      Papa.parse('https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/gviz/tq?tqx=out:csv&sheet=Tests', {
+        download: true,
+        header: true,
+        complete: (results => {
+          this.testData = results.data
+          this.testDataIncomplete = false
+        }),
+        error: (err => {
+          this.testDataErrors.push(err);
+        })
+      })
+    }
   }
 }
 </script>
