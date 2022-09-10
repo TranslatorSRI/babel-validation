@@ -6,11 +6,12 @@ export class Test {
     /**
      * Each test has a description, source, source_url and
      */
-    constructor(description, urls={}, source=null, source_url=null) {
+    constructor(description, urls={}, source=null, source_url=null, test=function(endpoint) { return [false, `Not implemented (${endpoint})`] }) {
         this.description = description;
         this.urls = urls;
         this.source = source;
         this.source_url = source_url;
+        this.test = test;
     }
 
     /**
@@ -19,9 +20,6 @@ export class Test {
     static convertRowToTests(row) {
         // Helper functions.
         function getURLForCURIE(curie) {
-            const prefixes = {
-                'UMLS': ''
-            }
             return 'https://google.com/search?q=' + encodeURIComponent(curie);
         }
 
@@ -31,21 +29,21 @@ export class Test {
         // Define some standard test types.
         function createCheckIDTest(id) {
             return new Test(`Check for ID ${id}`, {
-                id: getURLForCURIE(id)
+                [id]: getURLForCURIE(id)
             }, source, source_url);
         }
 
         function createPreferredIdTest(query_id, preferred_id) {
             return new Test(`Check ID ${query_id} has preferred ID ${preferred_id}`, {
-                query_id: getURLForCURIE(query_id),
-                preferred_id: getURLForCURIE(preferred_id),
+                [query_id]: getURLForCURIE(query_id),
+                [preferred_id]: getURLForCURIE(preferred_id),
             }, source, source_url);
         }
 
         function createClusterTogetherTest(id1, id2) {
             return new Test(`Check ID ${id1} and ID ${id2} cluster together`, {
-                id1: getURLForCURIE(id1),
-                id2: getURLForCURIE(id2),
+                [id1]: getURLForCURIE(id1),
+                [id2]: getURLForCURIE(id2),
             }, source, source_url);
         }
 

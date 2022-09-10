@@ -11,7 +11,7 @@
 
   <h2>Tests</h2>
 
-  <b-table-simple striped hover>
+  <b-table-simple striped hover bordered>
     <thead>
       <tr>
         <th>Test</th>
@@ -21,8 +21,16 @@
     </thead>
     <tbody>
       <tr v-for="test in tests">
-        <td>{{test.description}}</td>
+        <td><TextWithURLs :text="test.description" :urls="test.urls"></TextWithURLs></td>
         <td><TextWithURLs :text="test.source" :urls="{'URL': test.source_url}"></TextWithURLs></td>
+        <td v-for="endpoint in Object.keys(nodeNormEndpoints)">
+          <template v-if="test.test(endpoint)[0]">
+            PASS: {{test.test(nodeNormEndpoints[endpoint])[1]}}
+          </template>
+          <template v-else>
+            FAIL: {{test.test(nodeNormEndpoints[endpoint])[1]}}
+          </template>
+        </td>
       </tr>
     </tbody>
   </b-table-simple>
