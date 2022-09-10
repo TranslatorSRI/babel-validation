@@ -2,11 +2,40 @@
  * This file collects several model classes that we need to process data.
  */
 
+/**
+ * A class representing the result of a test.
+ */
+export class TestResult {
+    /** Construct a TestResult based largely on a JSON result from . */
+    constructor(status, message, resultType= "null", result = {}) {
+        this.status = status;
+        this.message = message;
+        this.resultType = resultType;
+        this.result = result;
+    }
+
+    /** Create a TestResult for a success. */
+    static success(message, resultType = "unknown", result = null) {
+        return new TestResult(true, message, resultType, result);
+    }
+
+    /** Create a TestResult for a failure. */
+    static failure(message, resultType="unknown", result=null) {
+        return new TestResult(false, message, resultType, result);
+    }
+}
+
+
+/**
+ * Represents a single test in our test suite. This is constructed in some way (currently, from a row in a spreadsheet)
+ * and includes within it a closure that includes the test itself. The test can be executed by passing it an endpoint to
+ * test, and it returns a TestResult representing the result.
+ */
 export class Test {
     /**
      * Each test has a description, source, source_url and
      */
-    constructor(description, urls={}, source=null, source_url=null, test=function(nodeNormEndpoint) { return [false, `Not implemented (${nodeNormEndpoint})`] }) {
+    constructor(description, urls={}, source=null, source_url=null, test=function(nodeNormEndpoint) { return Promise.resolve(TestResult.failure(`Not implemented (${nodeNormEndpoint})`)); }) {
         this.description = description;
         this.urls = urls;
         this.source = source;
@@ -18,40 +47,50 @@ export class Test {
      * Convert a single row into zero or more tests.
      */
     static convertRowToTests(row) {
+        const source = row['Source'];
+        const source_url = row['Source URL'];
+
         // Helper functions.
         function getURLForCURIE(curie) {
             return 'https://google.com/search?q=' + encodeURIComponent(curie);
         }
 
-        const source = row['Source'];
-        const source_url = row['Source URL'];
+        function getEquivalentIDs(result) {
+            return new Set((result['equivalent_identifiers'] || []).map(r => r.identifier))
+        }
+
+        // A helper function that returns a Promise that evaluates to a JSON result object.
+        // TODO: cache this.
+        function getNormalizedNodes(nodeNormEndpoint, id) {
+            const url = nodeNormEndpoint + "/get_normalized_nodes?curie=" + encodeURIComponent(id);
+            // console.log("Querying", url);
+            return fetch(url).then(response => {
+                if (!response.ok) return TestResult.failure("Could not get_normalized_nodes: " + response.statusText);
+                return response.json().then(results => {
+                    // console.log("Results:", results);
+                    if (!results) return TestResult.failure(`get_normalized_nodes returned invalid response: ${response}`);
+                    const result = results[id];
+                    // console.log("Result:", result);
+                    if (!result) return TestResult.failure(`get_normalized_nodes returned no response for ${id}: ${results}`);
+                    const equiv_ids = getEquivalentIDs(result);
+                    // console.log("Equiv IDs:", equiv_ids);
+                    if (!equiv_ids.has(id)) {
+                        return TestResult.failure(`${id} is NOT included in cluster`, 'NodeNorm', result);
+                    } else {
+                        return TestResult.success(`Found identifier ${id}`, "NodeNorm", result);
+                    }
+                });
+            });
+        }
 
         // Define some standard test types.
         function createCheckIDTest(id) {
             return new Test(`Check for ID ${id}`, {
                 [id]: getURLForCURIE(id)
-            }, source, source_url, function(nodeNormEndpoint, callback) {
+            }, source, source_url, function(nodeNormEndpoint) {
                 // Check to see if NodeNorm know about this ID.
-                const url = nodeNormEndpoint + "/get_normalized_nodes?curie=" + encodeURIComponent(id);
-                console.log("Querying", url);
-                return fetch(url).then(response => {
-                    if (!response.ok) return [false, "Could not get_normalized_nodes: " + response.statusText];
-                    return response.json().then(results => {
-                        console.log("Results:", results);
-                        if (!results) return [false, `get_normalized_nodes returned invalid response: ${response}`];
-                        const result = results[id];
-                        console.log("Result:", result);
-                        if (!result) return [false, `get_normalized_nodes returned no response for ${id}: ${results}`];
-                        const equiv_ids = new Set(result['equivalent_identifiers'].map(r => r.identifier));
-                        const equiv_ids_str = [...equiv_ids].join(", ");
-                        console.log("Equiv IDs:", equiv_ids);
-                        if (equiv_ids.has(id)) {
-                            return [true, `${id} is included in cluster ${result['id']['identifier']}: ${equiv_ids_str}`];
-                        } else {
-                            return [false, `${id} is NOT included in cluster ${result['id']['identifier']}: ${equiv_ids_str}`]
-                        }
-                    });
-                });
+                // We have a success! Since the identifier was returned, this test is now passed.
+                return getNormalizedNodes(nodeNormEndpoint, id);
             });
         }
 
@@ -59,7 +98,26 @@ export class Test {
             return new Test(`Check ID ${query_id} has preferred ID ${preferred_id}`, {
                 [query_id]: getURLForCURIE(query_id),
                 [preferred_id]: getURLForCURIE(preferred_id),
-            }, source, source_url);
+            }, source, source_url, function(nodeNormEndpoint) {
+                return getNormalizedNodes(nodeNormEndpoint, query_id)
+                    .then(result => {
+                        // Continue propagating errors.
+                        if (!result.status) return result;
+
+                        // We have a success if query_id was found at all.
+                        // But to pass this test, we need to check that the
+                        // preferred_id is specifically the preferred ID in
+                        // the returned cluster.
+                        const json = result.result;
+                        const equiv_ids = getEquivalentIDs(json);
+
+                        if (json['id']['identifier'] === preferred_id && equiv_ids.has(query_id)) {
+                            return TestResult.success(`Query ID ${query_id} has preferred ID ${preferred_id}`, 'NodeNorm', result);
+                        } else {
+                            return TestResult.failure(`Query ID ${query_id} has preferred ID ${json['id']['identifier']}, not ${preferred_id}`, 'NodeNorm', result);
+                        }
+                    });
+            });
         }
 
         function createClusterTogetherTest(id1, id2) {

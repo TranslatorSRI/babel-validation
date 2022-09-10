@@ -11,29 +11,32 @@
 
   <h2>Tests</h2>
 
+  <template v-if="testDataErrors">
+    <ul>
+      <li v-for="error in testDataErrors">{{error}}</li>
+    </ul>
+  </template>
+
   <b-table-simple striped hover bordered>
     <thead>
       <tr>
         <th>Test</th>
         <th>Source</th>
-        <th v-for="endpoint in Object.keys(nodeNormEndpoints)">{{endpoint}}</th>
+        <th v-for="endpoint in Object.keys(nodeNormEndpoints)">
+          <a target="_blank" :href="nodeNormEndpoints[endpoint] + '/docs'">{{endpoint}}</a>
+        </th>
       </tr>
     </thead>
     <tbody>
       <tr v-for="test in tests">
         <td><TextWithURLs :text="test.description" :urls="test.urls"></TextWithURLs></td>
         <td><TextWithURLs :text="test.source" :urls="{'URL': test.source_url}"></TextWithURLs></td>
-        <td v-for="endpoint in Object.keys(nodeNormEndpoints)"><TestResult :test="test" :endpoint="nodeNormEndpoints[endpoint]"></TestResult>
+        <td v-for="endpoint in Object.keys(nodeNormEndpoints)">
+          <TestResult :test="test" :endpoint="nodeNormEndpoints[endpoint]" :description="test.description + ':' + test.source + ':' + nodeNormEndpoints[endpoint]"></TestResult>
         </td>
       </tr>
     </tbody>
   </b-table-simple>
-
-  <h3>Debug</h3>
-
-  <p>{{testDataIncomplete}}: {{testData}}</p>
-
-  <p>{{testDataErrors}}</p>
 
 </template>
 
@@ -75,8 +78,8 @@ export default {
         download: true,
         header: true,
         complete: (results => {
-          this.testData = results.data
-          this.testDataIncomplete = false
+          this.testData = results.data;
+          this.testDataIncomplete = false;
         }),
         error: (err => {
           this.testDataErrors.push(err);
