@@ -82,13 +82,13 @@ export class Test {
             const url = nodeNormEndpoint + "/get_normalized_nodes?curie=" + encodeURIComponent(id);
             // console.log("Querying", url);
             return fetch(url).then(response => {
-                if (!response.ok) return TestResult.failure("Could not get_normalized_nodes: " + response.statusText);
+                if (!response.ok) return TestResult.failure("Could not get_normalized_nodes", 'text', response.statusText);
                 return response.json().then(results => {
                     // console.log("Results:", results);
-                    if (!results) return TestResult.failure(`get_normalized_nodes returned invalid response: ${response}`);
+                    if (!results) return TestResult.failure(`get_normalized_nodes returned invalid response`, 'text', response);
                     const result = results[id];
                     // console.log("Result:", result);
-                    if (!result) return TestResult.failure(`get_normalized_nodes returned no response for ${id}: ${results}`);
+                    if (!result) return TestResult.failure(`get_normalized_nodes returned no response for ${id}`, 'json', results);
                     const equiv_ids = getEquivalentIDs(result);
                     // console.log("Equiv IDs:", equiv_ids);
                     if (!equiv_ids.has(id)) {
@@ -181,7 +181,7 @@ export class Test {
                         if (json['id']['identifier'] === preferred_id && equiv_ids.has(query_id)) {
                             return TestResult.success(`Query ID ${query_id} has preferred ID ${preferred_id}`, 'NodeNorm', json);
                         } else {
-                            return TestResult.failure(`Query ID ${query_id} has preferred ID ${json['id']['identifier']}, not ${preferred_id}`, 'NodeNorm', result);
+                            return TestResult.failure(`Query ID ${query_id} has preferred ID ${json['id']['identifier']}, not ${preferred_id}`, 'NodeNorm', json);
                         }
                     });
             });

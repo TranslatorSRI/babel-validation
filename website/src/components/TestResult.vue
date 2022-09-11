@@ -5,6 +5,10 @@
     </template>
     <template v-else-if="testStatus == 'FAIL'">
       <strong>FAIL: {{testMessage}}</strong>
+      <b-button size="sm" class="col-12" @click="displayDetailed = !displayDetailed">Additional</b-button>
+      <div v-if="displayDetailed" class="bg-light border-dark border-1 p-1 m-1" style="white-space: pre">
+        {{testResultAsJson}}
+      </div>
     </template>
     <template v-else>
       {{testStatus}}: {{testMessage}}
@@ -23,6 +27,7 @@ export default {
   },
   data() { return {
     testResult: null,
+    displayDetailed: false,
   }},
   created() {
     const testR = this.test.test(this.endpoint);
@@ -43,6 +48,19 @@ export default {
     },
     testMessage() {
       return this.testResult ? this.testResult.message : null;
+    },
+    testResultAsObj() {
+      if (!this.testResult) return { "error": "No test result" };
+      switch (this.testResult.resultType) {
+        case 'text':
+          return this.testResult.result;
+        case 'json':
+        case 'NodeNorm':
+          return this.testResult.result;
+      }
+    },
+    testResultAsJson() {
+      return JSON.stringify(this.testResultAsObj, null, 2);
     }
   }
 }
