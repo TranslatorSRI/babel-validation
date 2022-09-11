@@ -68,12 +68,15 @@ export default {
     tests() {
       if (this.testDataIncomplete) return [];
       return this.testData.flatMap(row => {
+        if(row['Ignore?'] && row['Ignore?'] == 'y') return [];
         return Test.convertRowToTests(row)
       });
     },
   },
   methods: {
     loadGoogleSheet() {
+      this.testDataIncomplete = true;
+      this.testData = [];
       Papa.parse('https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/gviz/tq?tqx=out:csv&sheet=Tests', {
         download: true,
         header: true,

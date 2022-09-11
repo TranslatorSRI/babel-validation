@@ -221,7 +221,6 @@ export class Test {
             tests.push(createCheckIDTest(query_id));
             if(row['Preferred ID']) {
                 const preferred_id = row['Preferred ID'];
-
                 tests.push(createCheckIDTest(preferred_id));
                 tests.push(createPreferredIdTest(query_id, preferred_id));
 
@@ -229,15 +228,14 @@ export class Test {
                     const additional_ids = row['Additional IDs'].split(/\s*\|\s*/);
 
                     additional_ids.forEach(additional_id => {
-                        tests.push(createCheckIDTest(additional_id));
                         tests.push(createPreferredIdTest(additional_id, preferred_id));
+                        tests.push(createClusterTogetherTest(additional_id, query_id));
                     });
                 }
             } else if(row['Additional IDs']) {
                 const additional_ids = row['Additional IDs'].split(/\s*\|\s*/);
 
                 additional_ids.forEach(additional_id => {
-                    tests.push(createCheckIDTest(additional_id));
                     tests.push(createClusterTogetherTest(additional_id, query_id));
                 });
             }
