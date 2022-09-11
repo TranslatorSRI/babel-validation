@@ -111,6 +111,7 @@ export class Test {
         }
 
         // Define some standard test types.
+        /** Check whether this identifier is present in this NodeNorm instance. */
         function createCheckIDTest(id) {
             return new Test(`Check for ID ${id}`, {
                 [id]: getURLForCURIE(id)
@@ -118,6 +119,45 @@ export class Test {
                 // Check to see if NodeNorm know about this ID.
                 // We have a success! Since the identifier was returned, this test is now passed.
                 return getNormalizedNodes(nodeNormEndpoint, id);
+            });
+        }
+
+        /**
+         * Check whether this identifier is of a particular Biolink class.
+         * Include a class in the format '!biolink:className' to pass only if this className is NOT present.
+         */
+        function createBiolinkClassTest(id, biolinkClass) {
+            return new Test(`Check that ID ${id} has Biolink class ${biolinkClass}`, {
+                [id]: getURLForCURIE(id)
+            }, source, source_url, function(nodeNormEndpoint) {
+                // Check to see if NodeNorm know about this ID.
+                // We have a success! Since the identifier was returned, this test is now passed.
+                return getNormalizedNodes(nodeNormEndpoint, id)
+                    .then(result => {
+                        // Continue propagating errors.
+                        if (!result.status) return result;
+
+                        // We have a success if query_id was found at all.
+                        // But to pass this test, we need to check that biolinkClass
+                        // is one of the Biolink classes of this identifier.
+                        const json = result.result;
+                        const biolinkClasses = new Set(json['type'] || []);
+
+                        if (biolinkClass.startsWith('!')) {
+                            const invertedBiolinkClass = biolinkClass.substring(1);
+                            if (biolinkClasses.has(invertedBiolinkClass)) {
+                                return TestResult.failure(`ID ${id} should not have Biolink class ${invertedBiolinkClass} but does`, 'NodeNorm', json);
+                            } else {
+                                return TestResult.success(`ID ${id} does not have Biolink class ${invertedBiolinkClass} as expected`, 'NodeNorm', json);
+                            }
+                        } else {
+                            if (biolinkClasses.has(biolinkClass)) {
+                                return TestResult.success(`ID ${id} has Biolink class ${biolinkClass}`, 'NodeNorm', json);
+                            } else {
+                                return TestResult.failure(`ID ${id} does not have Biolink class ${biolinkClass}`, 'NodeNorm', json);
+                            }
+                        }
+                    })
             });
         }
 
@@ -139,7 +179,7 @@ export class Test {
                         const equiv_ids = getEquivalentIDs(json);
 
                         if (json['id']['identifier'] === preferred_id && equiv_ids.has(query_id)) {
-                            return TestResult.success(`Query ID ${query_id} has preferred ID ${preferred_id}`, 'NodeNorm', result);
+                            return TestResult.success(`Query ID ${query_id} has preferred ID ${preferred_id}`, 'NodeNorm', json);
                         } else {
                             return TestResult.failure(`Query ID ${query_id} has preferred ID ${json['id']['identifier']}, not ${preferred_id}`, 'NodeNorm', result);
                         }
@@ -165,9 +205,9 @@ export class Test {
                         const preferred_id = json.id.identifier;
 
                         if (equiv_ids.has(id1) && equiv_ids.has(id2)) {
-                            return TestResult.success(`ID ${id1} and ID ${id2} are both equivalent to ${preferred_id}.`, 'NodeNorm', result);
+                            return TestResult.success(`ID ${id1} and ID ${id2} are both equivalent to ${preferred_id}.`, 'NodeNorm', json);
                         } else {
-                            return TestResult.failure(`ID ${id1} is equivalent to ${preferred_id} but ID ${id2} is not.`, 'NodeNorm', result);
+                            return TestResult.failure(`ID ${id1} is equivalent to ${preferred_id} but ID ${id2} is not.`, 'NodeNorm', json);
                         }
                     });
             });
@@ -199,6 +239,13 @@ export class Test {
                 additional_ids.forEach(additional_id => {
                     tests.push(createCheckIDTest(additional_id));
                     tests.push(createClusterTogetherTest(additional_id, query_id));
+                });
+            }
+
+            if(row['Biolink classes']) {
+                const biolink_classes = row['Biolink classes'].split(/\s*\|\s*/);
+                biolink_classes.forEach(biolink_class => {
+                    tests.push(createBiolinkClassTest(query_id, biolink_class));
                 });
             }
         }
