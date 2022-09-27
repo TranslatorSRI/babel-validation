@@ -1,90 +1,17 @@
-package org.renci.babel.validator
+package org.renci.babel.utils.cli
 
 import com.typesafe.scalalogging.LazyLogging
-import org.renci.babel.utils.MemoryUtils
-import org.renci.babel.validator.model.Compendium
+import org.renci.babel.utils.model.Compendium
+import zio.ZIO
 import zio.blocking.Blocking
 import zio.stream.ZStream
-import zio.{Chunk, ZIO}
 
 import java.io.Writer
 
-/** Methods in this class can be used to compare results between two compendia.
-  */
+/**
+ * Methods in this class can be used to compare results between two compendia.
+ */
 object Comparer extends LazyLogging {
-
-  /** Helper method for displaying the percent change between two counts.
-    */
-  def relativePercentChange(count: Long, countPrev: Long): String = {
-    val percentChange = (count - countPrev).toDouble / countPrev * 100
-    f"${count - countPrev}%+d\t$percentChange%+2.2f%%"
-  }
-
-  case class LengthComparison(filename: String, count: Long, prevCount: Long) {
-    val relativePercentChange: String =
-      Comparer.relativePercentChange(count, prevCount)
-    override val toString: String =
-      s"${filename}\t${count}\t${prevCount}\t${relativePercentChange}"
-  }
-
-  def compareLengths(
-      filename: String,
-      summary: Compendium,
-      prevSummary: Compendium
-  ): ZIO[Blocking, Throwable, LengthComparison] = {
-    for {
-      count <- summary.count
-      prevCount <- prevSummary.count
-    } yield LengthComparison(filename, count, prevCount)
-  }
-
-  case class TypeComparison(
-      filename: String,
-      types: Chunk[String],
-      prevTypes: Chunk[String]
-  ) {
-    val typesSet = types.toSet
-    val prevTypesSet = types.toSet
-    val added: Set[String] = typesSet -- prevTypesSet
-    val deleted: Set[String] = prevTypesSet -- typesSet
-    val changeString: String = (added.toSeq, deleted.toSeq) match {
-      case (Seq(), Seq())   => "No change"
-      case (added, Seq())   => s"Added: ${added}"
-      case (Seq(), deleted) => s"Deleted: ${deleted}"
-      case (added, deleted) =>
-        s"Added: ${added}, Deleted: ${deleted}"
-    }
-
-    override val toString: String =
-      s"${filename}\t${typesSet.mkString(", ")} (${types.length})\t${prevTypesSet
-          .mkString(", ")} (${prevTypes.length})\t${changeString}"
-  }
-
-  def compareTypes(
-      filename: String,
-      summary: Compendium,
-      prevSummary: Compendium
-  ): ZIO[Blocking, Throwable, TypeComparison] = {
-    for {
-      typesChunk <- (for {
-        row: Compendium.Record <- summary.records
-      } yield (row.`type`)).runCollect
-      _ <- summary.types.catchAll(err => {
-        logger.error(s"Types error: ${err}")
-        ZIO.fail(err)
-      })
-      prevTypesChunk <- (for {
-        row: Compendium.Record <- prevSummary.records
-      } yield (row.`type`)).runCollect
-      _ <- prevSummary.types.catchAll(err => {
-        logger.error(s"prevTypes error: ${err}")
-        ZIO.fail(err)
-      })
-    } yield {
-      TypeComparison(filename, typesChunk, prevTypesChunk)
-    }
-  }
-
   case class ClusterComparison(
       id: String,
       records: Set[Compendium.Record],
@@ -168,30 +95,31 @@ object Comparer extends LazyLogging {
     }
   }
 
-  /** Given two compendia, generate the "diff" between clusters in the two
-    * compendia based on the individual identifiers. For every identifier
-    * mentioned in either compendium, we identify the clusters it is included in
-    * in both the current compendium and the previous compendium. For most
-    * identifiers, we would expect these clusters to be unchanged, so this
-    * approach allows us to focus on the clusters that _have_ changed.
-    *
-    * The downside to this approach is that we generate more "diffs" than have
-    * actually taken place: for instance, if identifier 1 is added to cluster 1
-    * containing a single identifier 2, this results in two diffs: identifier 1
-    * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it
-    * might be worth summarizing these diffs further.
-    *
-    * @param filename
-    *   The name of the compendium begin compare.
-    * @param compendium
-    *   The current compendium.
-    * @param prevCompendium
-    *   The previous compendium.
-    * @param nCores
-    *   The number of cores available for this task.
-    * @return
-    *   A ZIO that evaluates to a ClusterComparisonReport or a Throwable.
-    */
+  /**
+   * Given two compendia, generate the "diff" between clusters in the two
+   * compendia based on the individual identifiers. For every identifier
+   * mentioned in either compendium, we identify the clusters it is included in
+   * in both the current compendium and the previous compendium. For most
+   * identifiers, we would expect these clusters to be unchanged, so this
+   * approach allows us to focus on the clusters that _have_ changed.
+   *
+   * The downside to this approach is that we generate more "diffs" than have
+   * actually taken place: for instance, if identifier 1 is added to cluster 1
+   * containing a single identifier 2, this results in two diffs: identifier 1
+   * was ADDED to cluster 1, but identifier 2 was MODIFIED. In the future, it
+   * might be worth summarizing these diffs further.
+   *
+   * @param filename
+   *   The name of the compendium begin compare.
+   * @param compendium
+   *   The current compendium.
+   * @param prevCompendium
+   *   The previous compendium.
+   * @param nCores
+   *   The number of cores available for this task.
+   * @return
+   *   A ZIO that evaluates to a ClusterComparisonReport or a Throwable.
+   */
   def diffClustersByIDs(
       filename: String,
       compendium: Compendium,
@@ -217,19 +145,19 @@ object Comparer extends LazyLogging {
       // If the number of identifiers is small enough, then don't both to use the ZStream algorithm --
       // just use a HashSet and assume it'll fit in memory.
       logger.info(
-        f"Memory at start of identifier process: ${MemoryUtils.getMemorySummary}"
+        f"Memory at start of identifier process: ${Utils.getMemorySummary}"
       )
       val records = runtime.unsafeRun(compendium.records.runCollect).toList
-      logger.debug(f"  Loaded records: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Loaded records: ${Utils.getMemorySummary}")
       val prevRecords =
         runtime.unsafeRun(prevCompendium.records.runCollect).toList
-      logger.debug(f"  Loaded prevRecords: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Loaded prevRecords: ${Utils.getMemorySummary}")
       val summary =
         records.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
-      logger.debug(f"  Generated summary: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Generated summary: ${Utils.getMemorySummary}")
       val prevSummary =
         prevRecords.flatMap(r => r.ids.map(id => (id, r))).groupMap(_._1)(_._2)
-      logger.debug(f"  Generated prevSummary: ${MemoryUtils.getMemorySummary}")
+      logger.debug(f"  Generated prevSummary: ${Utils.getMemorySummary}")
 
       val comparisons = identifiers.map(id => {
         ClusterComparison(
@@ -240,7 +168,7 @@ object Comparer extends LazyLogging {
       })
 
       logger.info(
-        f"Memory at end of cluster comparison generation: ${MemoryUtils.getMemorySummary}"
+        f"Memory at end of cluster comparison generation: ${Utils.getMemorySummary}"
       )
 
       return ZIO.succeed(ClusterComparisonReport(filename, comparisons))
@@ -292,7 +220,7 @@ object Comparer extends LazyLogging {
       comparison <- comparisons
     } yield {
       logger.info(
-        f"Memory at end of ZStream identifier process: ${MemoryUtils.getMemorySummary}"
+        f"Memory at end of ZStream identifier process: ${Utils.getMemorySummary}"
       )
       ClusterComparisonReport(filename, comparison.toSet)
     }

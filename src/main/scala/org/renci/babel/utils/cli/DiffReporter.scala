@@ -1,8 +1,9 @@
-package org.renci.babel.validator
+package org.renci.babel.utils.cli
 
 import com.typesafe.scalalogging.LazyLogging
-import org.renci.babel.validator.Validator.Conf
-import org.renci.babel.validator.model.{BabelOutput, Compendium}
+import org.renci.babel.utils.cli.Utils.SupportsFilenameFiltering
+import org.renci.babel.utils.model.{BabelOutput, Compendium}
+import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
 import zio.console.Console
@@ -11,51 +12,36 @@ import zio.stream.{ZSink, ZStream}
 import java.io.{File, FileOutputStream, OutputStreamWriter}
 import java.time.LocalDateTime
 
-/** Functions for reporting on the differences between two input files.
-  */
-object Reporter extends LazyLogging {
+/**
+ * Functions for reporting on the differences between two input files.
+ */
+object DiffReporter extends LazyLogging {
 
-  /** Helper method for displaying the percent change between two counts.
-    */
-  def relativePercentChange(count: Long, countPrev: Long): String = {
-    val percentChange = (count - countPrev).toDouble / countPrev * 100
-    f"${count - countPrev}%+d\t$percentChange%+2.2f%%"
+  /** The subcommand that controlling comparing. */
+  class DiffSubcommand
+      extends Subcommand("diff")
+      with SupportsFilenameFiltering {
+    val babelOutput: ScallopOption[File] = trailArg[File](
+      descr = "The current Babel output directory",
+      required = true
+    )
+    val babelPrevOutput: ScallopOption[File] =
+      trailArg[File](descr = "The previous Babel output", required = true)
+    validateFileIsDirectory(babelOutput)
+    validateFileIsDirectory(babelPrevOutput)
+
+    val nCores: ScallopOption[Int] = opt[Int](descr = "Number of cores to use")
+
+    val output: ScallopOption[File] = opt[File](descr = "Output file")
   }
 
-  /** Generic method to determine whether a particular filename should be
-    * filtered in or out from the results. The algorithm we use is:
-    *   1. If any `--filtered-in` prefixes are provided, then we exclude
-    *      everything that isn't explicitly filtered in (by starting with one of
-    *      those prefixes in a case-sensitive manner). 2. Otherwise, all
-    *      filenames are allowed EXCEPT those explicitly filtered out by
-    *      `--filtered-out` by starting with one of those prefixes in a
-    *      case-sensitive manner.
-    */
-  def filterFilename(conf: Conf, filename: String): Boolean = {
-    val filteredIn = conf.filterIn.getOrElse(List())
-    val filteredOut = conf.filterOut.getOrElse(List())
-
-    if (filteredIn.nonEmpty) {
-      if (filteredIn.exists(filename.startsWith(_))) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-
-    if (filteredOut.nonEmpty && filteredOut.exists(filename.startsWith(_))) {
-      return false;
-    }
-
-    true
-  }
-
-  /** Given two BabelOutputs, it returns a list of all compendia found in BOTH
-    * of the BabelOutputs paired together.
-    *
-    * TODO: modify this so we return every compendium found in EITHER
-    * BabelOutput.
-    */
+  /**
+   * Given two BabelOutputs, it returns a list of all compendia found in BOTH of
+   * the BabelOutputs paired together.
+   *
+   * TODO: modify this so we return every compendium found in EITHER
+   * BabelOutput.
+   */
   def retrievePairedCompendiaSummaries(
       babelOutput: BabelOutput,
       babelPrevOutput: BabelOutput
@@ -69,7 +55,9 @@ object Reporter extends LazyLogging {
     }
   }
 
-  def diffResults(conf: Conf): ZIO[Blocking with Console, Throwable, Unit] = {
+  def diffResults(
+      conf: DiffSubcommand
+  ): ZIO[Blocking with Console, Throwable, Unit] = {
     val babelOutput = new BabelOutput(conf.babelOutput())
     val babelPrevOutput = new BabelOutput(conf.babelPrevOutput())
     val outputDir = conf.output.getOrElse(new File("."))
@@ -86,7 +74,7 @@ object Reporter extends LazyLogging {
               filename: String,
               summary: Compendium,
               prevSummary: Compendium
-            ) if filterFilename(conf, filename) => {
+            ) if Utils.filterFilename(conf, filename) => {
 
           for {
             // lengthComparison <- Comparer.compareLengths(filename, summary, prevSummary)
@@ -119,7 +107,8 @@ object Reporter extends LazyLogging {
             summary
           }
         }
-        case (filename: String, _, _) if !filterFilename(conf, filename) => {
+        case (filename: String, _, _)
+            if !Utils.filterFilename(conf, filename) => {
           logger.info(s"Skipping ${filename}")
           ZIO.succeed("")
         }
