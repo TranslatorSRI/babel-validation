@@ -5,7 +5,7 @@ import org.renci.babel.utils.cli.Utils.{
   SupportsFilenameFiltering,
   filterFilename
 }
-import org.renci.babel.utils.model.BabelOutput
+import org.renci.babel.utils.model.{BabelOutput, Compendium}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
@@ -32,7 +32,8 @@ object Converter extends LazyLogging {
 
     val format: ScallopOption[String] = choice(
       choices = Seq(
-        "sssom"
+        "sssom",
+        "sapbert"
       ),
       descr = "The format to convert this Babel output to",
       default = Some("sssom")
@@ -58,17 +59,10 @@ object Converter extends LazyLogging {
     }
 
     val extension = conf.format() match {
-      case "sssom" => ".sssom.tsv"
-      case format  => throw new RuntimeException(s"Unknown format: ${format}")
+      case "sssom"   => ".sssom.tsv"
+      case "sapbert" => ".txt"
+      case format    => throw new RuntimeException(s"Unknown format: ${format}")
     }
-
-    case class Other(
-        cliqueId: String,
-        subject_information_content: Option[Double],
-        identifierIndex: Option[Long] = None
-    )
-    implicit val otherEncoder: JsonEncoder[Other] =
-      DeriveJsonEncoder.gen[Other]
 
     ZIO
       .foreachPar(babelOutput.compendia) { compendium =>
@@ -82,70 +76,100 @@ object Converter extends LazyLogging {
             compendium.filename.replaceFirst("\\.\\w{1,3}$", extension)
           val outputFile = new File(outputCompendia, outputFilename)
 
-          val results = compendium.records.zipWithIndex
-            .flatMapPar(conf.nCores()) { case (record, cliqueIndex) =>
-              val cliqueLeader = record.identifiers.head
-              val otherIdentifiers = record.identifiers.tail
+          conf.format() match {
+            case "sssom" =>
+              convertCompendiumToSSSOM(conf, compendium, outputFile)
+            case "sapbert" =>
+              convertCompendiumToSapbert(conf, compendium, outputFile)
+          }
+        }
+      }
+      // TODO: we return a Long here of the number of bytes (lines?) written out, so reporting them to STDERR would be nice.
+      .andThen(ZIO.succeed(()))
+  }
 
-              /*
-            logger.debug(s"Record: ${record}")
-            logger.debug(s" - Clique leader: ${cliqueLeader}")
-            logger.debug(s" - Others: ${otherIdentifiers}")
-               */
+  def convertCompendiumToSapbert(
+      conf: ConvertSubcommand,
+      compendium: Compendium,
+      outputFile: File
+  ): ZIO[Blocking, Throwable, Long] = {
+    // SAPBert uses a simple format:
+    //  id||label||synonym
 
-              val predicateId = "skos:exactMatch"
-              val subjectString =
-                s"${cliqueLeader.i.getOrElse("")}\t${cliqueLeader.l
-                    .getOrElse("")}\t${record.`type`}"
+    // TODO: we also need to read the corresponding synonym file and
+  }
 
-              // TODO: replace with mappingJustification => semapv:MappingChaining for the next version of SSSOM.
-              val matchType = "HumanCurated"
+  def convertCompendiumToSSSOM(
+      conf: ConvertSubcommand,
+      compendium: Compendium,
+      outputFile: File
+  ): ZIO[Blocking, Throwable, Long] = {
+    case class Other(
+        cliqueId: String,
+        subject_information_content: Option[Double],
+        identifierIndex: Option[Long] = None
+    )
+    implicit val otherEncoder: JsonEncoder[Other] =
+      DeriveJsonEncoder.gen[Other]
 
-              // TODO: remove tabs from other.toJson
-              if (otherIdentifiers.isEmpty) {
-                val other = Other(
-                  cliqueId = s"${compendium.filename}#$cliqueIndex",
-                  subject_information_content = record.ic
-                )
+    val results = compendium.records.zipWithIndex
+      .flatMapPar(conf.nCores()) { case (record, cliqueIndex) =>
+        val cliqueLeader = record.identifiers.head
+        val otherIdentifiers = record.identifiers.tail
 
-                ZStream.fromIterable(
-                  Seq(
-                    // s"${subjectString}\t\t\t${matchType}\t${other.toJson}"
-                    s"$subjectString\t$predicateId\t$subjectString\t$matchType\t${other.toJson}"
-                  )
-                )
-              } else {
-                ZStream
-                  .fromIterable(otherIdentifiers)
-                  .zipWithIndex
-                  .map({ case (obj, identifierIndex) =>
-                    val other = Other(
-                      cliqueId = s"${compendium.filename}#$cliqueIndex",
-                      subject_information_content = record.ic,
-                      identifierIndex = Some(identifierIndex)
-                    )
+        logger.debug(s"Record: ${record}")
+        logger.debug(s" - Clique leader: ${cliqueLeader}")
+        logger.debug(s" - Others: ${otherIdentifiers}")
 
-                    val objectString =
-                      s"${obj.i.getOrElse("")}\t${obj.l.getOrElse("")}\t${record.`type`}"
-                    s"$subjectString\t$predicateId\t$objectString\t$matchType\t${other.toJson}"
-                  })
-              }
-            }
+        val predicateId = "skos:exactMatch"
+        val subjectString = s"${cliqueLeader.i.getOrElse("")}\t${cliqueLeader.l
+            .getOrElse("")}\t${record.`type`}"
 
-          (ZStream.fromIterable(
+        // TODO: replace with mappingJustification => semapv:MappingChaining for the next version of SSSOM.
+        val matchType = "HumanCurated"
+
+        // TODO: remove tabs from other.toJson
+        if (otherIdentifiers.isEmpty) {
+          val other = Other(
+            cliqueId = s"${compendium.filename}#$cliqueIndex",
+            subject_information_content = record.ic
+          )
+
+          ZStream.fromIterable(
             Seq(
-              s"subject_id\tsubject_label\tsubject_category\tpredicate_id\tobject_id\tobject_label\tobject_category\tmatch_type\tother"
+              // s"${subjectString}\t\t\t${matchType}\t${other.toJson}"
+              s"$subjectString\t$predicateId\t$subjectString\t$matchType\t${other.toJson}"
             )
-          ) concat results)
-            .intersperse("\n")
-            .run({
-              logger.info(s"Writing to $outputFile")
-              ZSink
-                .fromFile(outputFile.toPath)
-                .contramapChunks[String](_.flatMap(_.getBytes))
+          )
+        } else {
+          ZStream
+            .fromIterable(otherIdentifiers)
+            .zipWithIndex
+            .map({ case (obj, identifierIndex) =>
+              val other = Other(
+                cliqueId = s"${compendium.filename}#$cliqueIndex",
+                subject_information_content = record.ic,
+                identifierIndex = Some(identifierIndex)
+              )
+
+              val objectString =
+                s"${obj.i.getOrElse("")}\t${obj.l.getOrElse("")}\t${record.`type`}"
+              s"$subjectString\t$predicateId\t$objectString\t$matchType\t${other.toJson}"
             })
         }
       }
-      .andThen(ZIO.succeed(()))
+
+    (ZStream.fromIterable(
+      Seq(
+        s"subject_id\tsubject_label\tsubject_category\tpredicate_id\tobject_id\tobject_label\tobject_category\tmatch_type\tother"
+      )
+    ) concat results)
+      .intersperse("\n")
+      .run({
+        logger.info(s"Writing to $outputFile")
+        ZSink
+          .fromFile(outputFile.toPath)
+          .contramapChunks[String](_.flatMap(_.getBytes))
+      })
   }
 }
