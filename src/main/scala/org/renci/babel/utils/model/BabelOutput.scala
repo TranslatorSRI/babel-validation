@@ -38,4 +38,17 @@ class BabelOutput(root: File) {
     getFilesInDir("compendia").map(filename =>
       new Compendium(new File(compendiaDir, filename))
     )
+
+  /**
+   * The synonyms directory in this BabelOutput.
+   */
+  val synonymDir: File = new File(root, "synonyms")
+
+  /**
+   * A dictionary of synonym files in the synonyms/ directory.
+   */
+  lazy val synonyms: Map[String, Synonyms] =
+    getFilesInDir("synonyms").map(filename =>
+      (filename, new Synonyms(new File(synonymDir, filename)))
+    ).toMap
 }
