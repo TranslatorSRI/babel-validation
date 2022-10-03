@@ -106,7 +106,7 @@ object Converter extends LazyLogging {
     }
 
     compendium.records.flatMap(record => {
-      // For this, we should only need to use the primary ID, but hey, while we're here, let's go for everything.
+      // For this, we should only need to use the primary ID, but hey, while we're here, let's try all the identifiers.
       val synonymsForId = record.identifiers
         .filter(!_.i.isEmpty)
         .flatMap(id => synonymsById.get(id.i.get))
@@ -114,12 +114,16 @@ object Converter extends LazyLogging {
 
       val namesForId = record.identifiers.flatMap(_.l) ++ (synonymsForId match {
         case Seq() => {
-          logger.warn(s"No identifier found for cluster ${record} in compendium ${compendium}")
+          logger.debug(s"No synonyms found for clique ${record} in compendium ${compendium}")
           Seq()
         }
         case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
       })
       val uniqueNamesForId = namesForId.toSet
+
+      if (uniqueNamesForId.isEmpty) {
+        logger.warn(s"No names found for clique ${record} in compendium ${compendium}")
+      }
 
       val labels = record.identifiers.flatMap(_.l)
       val primaryLabel = labels.headOption
