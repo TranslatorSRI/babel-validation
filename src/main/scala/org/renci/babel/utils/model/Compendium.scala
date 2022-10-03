@@ -76,6 +76,13 @@ class Compendium(file: File) extends LazyLogging {
   val path = file.toPath
 
   /**
+   * A string representation of this compendium.
+   */
+  override def toString: String = {
+    return s"Compendium(${file})"
+  }
+
+  /**
    * A ZStream of all the lines in this file as strings.
    */
   lazy val lines: ZStream[Blocking, Throwable, String] = {
