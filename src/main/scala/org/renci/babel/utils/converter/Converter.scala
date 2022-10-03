@@ -2,11 +2,11 @@ package org.renci.babel.utils.converter
 
 import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.utils.cli.Utils.{SupportsFilenameFiltering, filterFilename}
-import org.renci.babel.utils.model.{BabelOutput, Compendium, Synonyms}
+import org.renci.babel.utils.model.{BabelOutput, Compendium, Synonym, Synonyms}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
-import zio.console.{Console, putStrErr}
+import zio.console.Console
 import zio.json._
 import zio.stream.{ZSink, ZStream}
 
@@ -96,33 +96,43 @@ object Converter extends LazyLogging {
   ): ZIO[Blocking with Console, Throwable, Long] = {
     // SAPBert uses a simple format:
     //  id||label||synonym
-    for {
-      syns <- synonyms
-      record <- compendium.records.map(record => {
-        // Load up all the synonyms
-        val synonymsById = zio.Runtime.default.unsafeRun(syns.synonymsById)
-
-        val primaryId = record.primaryId match
-        val labels = record.identifiers.flatMap(_.l)
-        val primaryLabel = labels.head
-
-        // Do we have any synonyms from the Synonyms file?
-        syns = synonymsById.get()
-            case Some(zs) => {
-            }
-            case _ => {
-              putStrErr(s"WARNING: no synonyms file found for compendium ${compendium} or file is empty.")
-              Seq()
-            }
-          }
-        }
-        case _ => {
-          putStrErr(s"WARNING: cluster ${record} from compendium ${compendium} has no primary ID.")
-          ZStream.empty
-        }
-    })
+    val synonymsAsZIOOpt = synonyms.map(_.synonymsById)
+    val synonymsById: Map[String, Seq[Synonym]] = synonymsAsZIOOpt match {
+      case None => {
+        logger.warn(s"No synonyms file found for compendium ${compendium} or file is empty.")
+        Map()
       }
-    })
+      case Some(synonymsByZIO) => zio.Runtime.default.unsafeRun(synonymsByZIO)
+    }
+
+    compendium.records.flatMap(record => {
+      // For this, we should only need to use the primary ID, but hey, while we're here, let's go for everything.
+      val synonymsForId = record.identifiers
+        .filter(!_.i.isEmpty)
+        .flatMap(id => synonymsById.get(id.i.get))
+        .flatten
+
+      val namesForId = record.identifiers.flatMap(_.l) ++ (synonymsForId match {
+        case Seq() => {
+          logger.warn(s"No identifier found for cluster ${record} in compendium ${compendium}")
+          Seq()
+        }
+        case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
+      })
+      val uniqueNamesForId = namesForId.toSet
+
+      val labels = record.identifiers.flatMap(_.l)
+      val primaryLabel = labels.headOption
+
+      ZStream.fromIterable(uniqueNamesForId)
+        .map(name => s"${record.primaryId.getOrElse("")}||${primaryLabel.getOrElse("")}||${name}")
+    }).intersperse("\n")
+      .run({
+        logger.info(s"Writing to $outputFile")
+        ZSink
+          .fromFile(outputFile.toPath)
+          .contramapChunks[String](_.flatMap(_.getBytes))
+      })
   }
 
   def convertCompendiumToSSSOM(
