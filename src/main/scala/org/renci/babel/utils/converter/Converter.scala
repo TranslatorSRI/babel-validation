@@ -114,7 +114,7 @@ object Converter extends LazyLogging {
 
       val namesForId = record.identifiers.flatMap(_.l) ++ (synonymsForId match {
         case Seq() => {
-          logger.debug(s"No synonyms found for clique ${record} in compendium ${compendium}")
+          // logger.debug(s"No synonyms found for clique ${record} in compendium ${compendium}")
           Seq()
         }
         case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
