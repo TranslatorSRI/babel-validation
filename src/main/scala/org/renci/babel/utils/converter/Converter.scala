@@ -1,6 +1,7 @@
 package org.renci.babel.utils.converter
 
 import com.typesafe.scalalogging.LazyLogging
+import org.renci.babel.utils.cli.Utils
 import org.renci.babel.utils.cli.Utils.{SupportsFilenameFiltering, filterFilename}
 import org.renci.babel.utils.model.{BabelOutput, Compendium, Synonym, Synonyms}
 import org.rogach.scallop.{ScallopOption, Subcommand}
@@ -63,7 +64,7 @@ object Converter extends LazyLogging {
     }
 
     ZIO
-      .foreach(babelOutput.compendia) { compendium =>
+      .foreachPar_(babelOutput.compendia) { compendium =>
         if (!filterFilename(conf, compendium.filename)) {
           logger.warn(
             s"Skipping ${compendium.filename} because of filtering options."
@@ -106,10 +107,16 @@ object Converter extends LazyLogging {
       case Some(synonymsByZIO) => zio.Runtime.default.unsafeRun(synonymsByZIO)
     }
 
-    compendium.records.flatMapPar(conf.nCores.getOrElse(DEFAULT_CORES))(record => {
+    logger.info(
+      s"Loaded ${synonymsById.keys.size} identifiers " +
+        s"from synonym file ${synonyms.map(_.filename).getOrElse("(no synonym file)")} " +
+        s"for ${compendium.filename}")
+    logger.info(Utils.getMemorySummary)
+
+    compendium.records.flatMapPar(conf.nCores())(record => {
       // For this, we should only need to use the primary ID, but hey, while we're here, let's try all the identifiers.
       val synonymsForId = record.identifiers
-        .filter(!_.i.isEmpty)
+        .filter(_.i.isDefined)
         .flatMap(id => synonymsById.get(id.i.get))
         .flatten
 
@@ -132,14 +139,23 @@ object Converter extends LazyLogging {
       val labels = record.identifiers.flatMap(_.l)
       val primaryLabel = labels.headOption
 
+      if (record.primaryId.isEmpty) {
+        logger.warn(s"No primary ID for clique ${record}")
+      }
+
       ZStream.fromIterable(uniqueNamesForId)
-        .map(name => s"${record.primaryId.getOrElse("")}||${primaryLabel.getOrElse("")}||${name}")
+        .map(name => s"${record.`type`}||${record.primaryId.getOrElse("(no identifier)")}||${primaryLabel.getOrElse("")}||${name}")
     }).intersperse("\n")
       .run({
         logger.info(s"Writing to $outputFile")
         ZSink
           .fromFile(outputFile.toPath)
           .contramapChunks[String](_.flatMap(_.getBytes))
+      })
+      .tap(bytes => {
+        logger.info(s"Completed writing ${bytes} bytes to ${outputFile.toPath}")
+        logger.info(Utils.getMemorySummary)
+        ZIO.succeed(bytes)
       })
   }
 
@@ -157,7 +173,7 @@ object Converter extends LazyLogging {
       DeriveJsonEncoder.gen[Other]
 
     val results = compendium.records.zipWithIndex
-      .flatMapPar(conf.nCores.getOrElse(DEFAULT_CORES)) { case (record, cliqueIndex) =>
+      .flatMapPar(conf.nCores()) { case (record, cliqueIndex) =>
         val cliqueLeader = record.identifiers.head
         val otherIdentifiers = record.identifiers.tail
 
