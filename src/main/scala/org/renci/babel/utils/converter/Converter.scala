@@ -16,6 +16,7 @@ import java.io.File
  * Convert Babel files into other formats.
  */
 object Converter extends LazyLogging {
+  val DEFAULT_CORES = 5;
 
   /** The subcommand that controlling converting. */
   class ConvertSubcommand
@@ -37,7 +38,7 @@ object Converter extends LazyLogging {
     )
 
     val nCores: ScallopOption[Int] =
-      opt[Int](descr = "Number of cores to use", default = Some(4))
+      opt[Int](descr = "Number of cores to use", default = Some(DEFAULT_CORES))
 
     val output: ScallopOption[File] =
       opt[File](descr = "Output directory", required = true)
@@ -62,7 +63,7 @@ object Converter extends LazyLogging {
     }
 
     ZIO
-      .foreachPar(babelOutput.compendia) { compendium =>
+      .foreach(babelOutput.compendia) { compendium =>
         if (!filterFilename(conf, compendium.filename)) {
           logger.warn(
             s"Skipping ${compendium.filename} because of filtering options."
@@ -105,13 +106,16 @@ object Converter extends LazyLogging {
       case Some(synonymsByZIO) => zio.Runtime.default.unsafeRun(synonymsByZIO)
     }
 
-    compendium.records.flatMap(record => {
+    compendium.records.flatMapPar(conf.nCores.getOrElse(DEFAULT_CORES))(record => {
       // For this, we should only need to use the primary ID, but hey, while we're here, let's try all the identifiers.
       val synonymsForId = record.identifiers
         .filter(!_.i.isEmpty)
         .flatMap(id => synonymsById.get(id.i.get))
         .flatten
 
+      // For SAPBert training, retrieve:
+      // - the labels for this record
+      // - all known synonyms for this record
       val namesForId = record.identifiers.flatMap(_.l) ++ (synonymsForId match {
         case Seq() => {
           // logger.debug(s"No synonyms found for clique ${record} in compendium ${compendium}")
@@ -122,7 +126,7 @@ object Converter extends LazyLogging {
       val uniqueNamesForId = namesForId.toSet
 
       if (uniqueNamesForId.isEmpty) {
-        logger.warn(s"No names found for clique ${record} in compendium ${compendium}")
+        // logger.warn(s"No names found for clique ${record} in compendium ${compendium}")
       }
 
       val labels = record.identifiers.flatMap(_.l)
@@ -153,7 +157,7 @@ object Converter extends LazyLogging {
       DeriveJsonEncoder.gen[Other]
 
     val results = compendium.records.zipWithIndex
-      .flatMapPar(conf.nCores()) { case (record, cliqueIndex) =>
+      .flatMapPar(conf.nCores.getOrElse(DEFAULT_CORES)) { case (record, cliqueIndex) =>
         val cliqueLeader = record.identifiers.head
         val otherIdentifiers = record.identifiers.tail
 
