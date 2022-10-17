@@ -10,8 +10,7 @@ import java.nio.file.Path
 /**
  * A single synonym from a synonyms file in the Compendium output.
  */
-case class Synonym
-(
+case class Synonym(
     id: String,
     relation: String,
     synonym: String
@@ -41,8 +40,14 @@ class Synonyms(file: File) {
     lines.flatMap(line => {
       val pattern = "^(.*?)\t(.*?)\t(.*)$".r
       line match {
-        case pattern(id, relation, synonym) => ZStream.succeed(Synonym(id, relation, synonym))
-        case _ => ZStream.fail(new RuntimeException(s"Could not parse line in synonym file ${file}: ${line}"))
+        case pattern(id, relation, synonym) =>
+          ZStream.succeed(Synonym(id, relation, synonym))
+        case _ =>
+          ZStream.fail(
+            new RuntimeException(
+              s"Could not parse line in synonym file ${file}: ${line}"
+            )
+          )
       }
     })
   }
@@ -50,7 +55,7 @@ class Synonyms(file: File) {
   /**
    * Load all of the synonyms into a Map so that they can be looked up by ID.
    */
-    // TODO: we ignore the relation for now, but we should probably check that here.
+  // TODO: we ignore the relation for now, but we should probably check that here.
   lazy val synonymsById: ZIO[Blocking, Throwable, Map[String, Seq[Synonym]]] =
     synonyms.runCollect
       .map(chunk => chunk.map(s => (s.id, s)).groupMap(_._1)(_._2))

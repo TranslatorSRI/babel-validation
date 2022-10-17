@@ -48,7 +48,7 @@ class BabelOutput(root: File) {
    * A dictionary of synonym files in the synonyms/ directory.
    */
   lazy val synonyms: Map[String, Synonyms] =
-    getFilesInDir("synonyms").map(filename =>
-      (filename, new Synonyms(new File(synonymDir, filename)))
-    ).toMap
+    getFilesInDir("synonyms")
+      .map(filename => (filename, new Synonyms(new File(synonymDir, filename))))
+      .toMap
 }

@@ -2,7 +2,10 @@ package org.renci.babel.utils.converter
 
 import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.utils.cli.Utils
-import org.renci.babel.utils.cli.Utils.{SupportsFilenameFiltering, filterFilename}
+import org.renci.babel.utils.cli.Utils.{
+  SupportsFilenameFiltering,
+  filterFilename
+}
 import org.renci.babel.utils.model.{BabelOutput, Compendium, Synonym, Synonyms}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
@@ -101,7 +104,9 @@ object Converter extends LazyLogging {
     val synonymsAsZIOOpt = synonyms.map(_.synonymsById)
     val synonymsById: Map[String, Seq[Synonym]] = synonymsAsZIOOpt match {
       case None => {
-        logger.warn(s"No synonyms file found for compendium ${compendium} or file is empty.")
+        logger.warn(
+          s"No synonyms file found for compendium ${compendium} or file is empty."
+        )
         Map()
       }
       case Some(synonymsByZIO) => zio.Runtime.default.unsafeRun(synonymsByZIO)
@@ -110,42 +115,50 @@ object Converter extends LazyLogging {
     logger.info(
       s"Loaded ${synonymsById.keys.size} identifiers " +
         s"from synonym file ${synonyms.map(_.filename).getOrElse("(no synonym file)")} " +
-        s"for ${compendium.filename}")
+        s"for ${compendium.filename}"
+    )
     logger.info(Utils.getMemorySummary)
 
-    compendium.records.flatMapPar(conf.nCores())(record => {
-      // For this, we should only need to use the primary ID, but hey, while we're here, let's try all the identifiers.
-      val synonymsForId = record.identifiers
-        .filter(_.i.isDefined)
-        .flatMap(id => synonymsById.get(id.i.get))
-        .flatten
+    compendium.records
+      .flatMapPar(conf.nCores())(record => {
+        // For this, we should only need to use the primary ID, but hey, while we're here, let's try all the identifiers.
+        val synonymsForId = record.identifiers
+          .filter(_.i.isDefined)
+          .flatMap(id => synonymsById.get(id.i.get))
+          .flatten
 
-      // For SAPBert training, retrieve:
-      // - the labels for this record
-      // - all known synonyms for this record
-      val namesForId = record.identifiers.flatMap(_.l) ++ (synonymsForId match {
-        case Seq() => {
-          // logger.debug(s"No synonyms found for clique ${record} in compendium ${compendium}")
-          Seq()
+        // For SAPBert training, retrieve:
+        // - the labels for this record
+        // - all known synonyms for this record
+        val namesForId =
+          record.identifiers.flatMap(_.l) ++ (synonymsForId match {
+            case Seq() => {
+              // logger.debug(s"No synonyms found for clique ${record} in compendium ${compendium}")
+              Seq()
+            }
+            case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
+          })
+        val uniqueNamesForId = namesForId.toSet
+
+        if (uniqueNamesForId.isEmpty) {
+          // logger.warn(s"No names found for clique ${record} in compendium ${compendium}")
         }
-        case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
+
+        val labels = record.identifiers.flatMap(_.l)
+        val primaryLabel = labels.headOption
+
+        if (record.primaryId.isEmpty) {
+          logger.warn(s"No primary ID for clique ${record}")
+        }
+
+        ZStream
+          .fromIterable(uniqueNamesForId)
+          .map(name =>
+            s"${record.`type`}||${record.primaryId.getOrElse("(no identifier)")}||${primaryLabel
+                .getOrElse("")}||${name}"
+          )
       })
-      val uniqueNamesForId = namesForId.toSet
-
-      if (uniqueNamesForId.isEmpty) {
-        // logger.warn(s"No names found for clique ${record} in compendium ${compendium}")
-      }
-
-      val labels = record.identifiers.flatMap(_.l)
-      val primaryLabel = labels.headOption
-
-      if (record.primaryId.isEmpty) {
-        logger.warn(s"No primary ID for clique ${record}")
-      }
-
-      ZStream.fromIterable(uniqueNamesForId)
-        .map(name => s"${record.`type`}||${record.primaryId.getOrElse("(no identifier)")}||${primaryLabel.getOrElse("")}||${name}")
-    }).intersperse("\n")
+      .intersperse("\n")
       .run({
         logger.info(s"Writing to $outputFile")
         ZSink
