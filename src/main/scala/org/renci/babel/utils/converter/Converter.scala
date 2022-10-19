@@ -190,9 +190,9 @@ object Converter extends LazyLogging {
         val cliqueLeader = record.identifiers.head
         val otherIdentifiers = record.identifiers.tail
 
-        logger.debug(s"Record: ${record}")
-        logger.debug(s" - Clique leader: ${cliqueLeader}")
-        logger.debug(s" - Others: ${otherIdentifiers}")
+        // logger.debug(s"Record: ${record}")
+        // logger.debug(s" - Clique leader: ${cliqueLeader}")
+        // logger.debug(s" - Others: ${otherIdentifiers}")
 
         val predicateId = "skos:exactMatch"
         val subjectString = s"${cliqueLeader.i.getOrElse("")}\t${cliqueLeader.l
