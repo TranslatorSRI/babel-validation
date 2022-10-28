@@ -2,7 +2,10 @@ package org.renci.babel.utils.converter
 
 import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.utils.cli.Utils
-import org.renci.babel.utils.cli.Utils.{SupportsFilenameFiltering, filterFilename}
+import org.renci.babel.utils.cli.Utils.{
+  SupportsFilenameFiltering,
+  filterFilename
+}
 import org.renci.babel.utils.model.{BabelOutput, Compendium, Synonym, Synonyms}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
@@ -41,7 +44,8 @@ object Converter extends LazyLogging {
 
     val maxPairsPerConcept: ScallopOption[Int] = opt[Int](
       descr = "Maximum number of pairs of synonyms to produce for each concept",
-      default = Some(50))
+      default = Some(50)
+    )
 
     val lowercaseNames: ScallopOption[Boolean] = opt[Boolean](
       descr = "Lowercase all the labels and synonyms",
@@ -150,8 +154,12 @@ object Converter extends LazyLogging {
             }
             case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
           })
-        val uniqueNamesForId = if (conf.lowercaseNames()) namesForId.toSet.map({ n: String => n.toLowerCase }) else
-          namesForId.toSet
+        val uniqueNamesForId =
+          if (conf.lowercaseNames()) namesForId.toSet.map({ n: String =>
+            n.toLowerCase
+          })
+          else
+            namesForId.toSet
 
         if (uniqueNamesForId.isEmpty) {
           // logger.warn(s"No names found for clique ${record} in compendium ${compendium}")
