@@ -43,8 +43,8 @@ object Converter extends LazyLogging {
       descr = "Maximum number of pairs of synonyms to produce for each concept",
       default = Some(50))
 
-    val lowercaseLabels: ScallopOption[Boolean] = opt[Boolean](
-      descr = "Lowercase all the labels",
+    val lowercaseNames: ScallopOption[Boolean] = opt[Boolean](
+      descr = "Lowercase all the labels and synonyms",
       default = Some(false)
     )
 
@@ -150,7 +150,7 @@ object Converter extends LazyLogging {
             }
             case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
           })
-        val uniqueNamesForId = if (conf.lowercaseLabels()) namesForId.toSet.map(_.toLowerCase) else
+        val uniqueNamesForId = if (conf.lowercaseNames()) namesForId.toSet.map({ n: String => n.toLowerCase }) else
           namesForId.toSet
 
         if (uniqueNamesForId.isEmpty) {
@@ -159,20 +159,24 @@ object Converter extends LazyLogging {
 
         val primaryId = record.primaryId.getOrElse("(no identifier)")
 
-        val namePairs = {
-          // Generate all the pairs of unique names.
-          uniqueNamesForId.zip(uniqueNamesForId)
-            // Filter out cases where a name is paired with itself
-            .filter(n => n._1 != n._2)
-        }
-        val randomizedNamePairs = Random.shuffle(namePairs.toSeq)
-        val randomizedLimitedNamePairs = randomizedNamePairs.take(conf.maxPairsPerConcept())
-        if (randomizedNamePairs.size > conf.maxPairsPerConcept()) {
-          logger.warn(s"Found ${randomizedNamePairs.size} randomized name pairs for ${primaryId}, reduced to ${randomizedLimitedNamePairs.size}.")
+        val namePairs = for {
+          n1 <- Random.shuffle(uniqueNamesForId.toSeq)
+          n2 <- Random.shuffle(uniqueNamesForId.toSeq)
+        } yield {
+          // We want to make sure we don't repeat (a, b) and (b, a)
+          if (n1 < n2) (n1, n2) else (n2, n1)
         }
 
+        val uniqueNamePairs = namePairs.filter(n => n._1 != n._2).toSet
+        val limitedNamePairs = uniqueNamePairs.take(conf.maxPairsPerConcept())
+        if (uniqueNamePairs.size > conf.maxPairsPerConcept()) {
+          logger.warn(s"Found ${uniqueNamePairs.size} randomized name pairs for ${primaryId}, reduced to ${limitedNamePairs.size}.")
+        }
+
+        logger.info(s"For ${primaryId}, found unique names ${uniqueNamesForId}, resulting in randomized pairs: ${limitedNamePairs}")
+
         ZStream
-          .fromIterable(randomizedLimitedNamePairs)
+          .fromIterable(uniqueNamePairs)
           .map({ case (name1, name2) =>
             s"${record.`type`}||${primaryId}||${name1}||${name2}}"
           })
