@@ -2,7 +2,7 @@ package org.renci.babel.utils.validator
 
 import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.utils.cli.Utils.SupportsFilenameFiltering
-import org.renci.babel.utils.model.BabelOutput
+import org.renci.babel.utils.model.{BabelOutput, Compendium}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
@@ -100,63 +100,159 @@ object Validator extends LazyLogging {
     val outputSynonyms = new File(outputDir, "synonyms")
     outputSynonyms.mkdirs()
 
-    val outputSynonyms = new File(outputDir, "conflation")
-    outputSynonyms.mkdirs()
+    val outputConflations = new File(outputDir, "conflation")
+    outputConflations.mkdirs()
 
     // Start writing out an overall output file.
-    zio.blocking.effectBlockingIO(new PrintWriter(new FileWriter(new File(outputDir, "validation.txt"))))
+    zio.blocking
+      .effectBlockingIO(
+        new PrintWriter(new FileWriter(new File(outputDir, "validation.txt")))
+      )
       .bracketAuto { pw =>
         for {
-          compendiumNames <- validateCompendia(pw, babelOutput)
+          compendiumSummaries <- validateCompendia(pw, babelOutput)
           synonymNames <- validateSynonyms(pw, babelOutput)
           conflationNames <- validateConflations(pw, babelOutput)
         } yield {
-          logger.info(s"Validated compendia [${compendiumNames.size}]: ${compendiumNames}")
-          logger.info(s"Validated synonyms [${synonymNames.size}]: ${synonymNames}")
-          logger.info(s"Validated conflations [${conflationNames.size}]: ${conflationNames}")
+          val successfulCompendia = compendiumSummaries.filter(_.valid)
+          val failedCompendia = compendiumSummaries.filter(!_.valid)
+
+          logger.info(
+            s"Validated ${successfulCompendia.size} compendia: [${successfulCompendia.map(_.compendium.filename).mkString(", ")}]"
+          )
+          if (failedCompendia.nonEmpty)
+            logger.info(
+              s"${failedCompendia.size} compendia failed validation: [${failedCompendia
+                  .map(_.compendium.filename)
+                  .mkString(", ")}]"
+            )
+          logger.info(
+            s"Validated synonyms [${synonymNames.size}]: ${synonymNames}"
+          )
+          logger.info(
+            s"Validated conflations [${conflationNames.size}]: ${conflationNames}"
+          )
         }
       }
   }
 
-  def validateCompendia(pw: PrintWriter, output: BabelOutput): ZIO[Blocking with Console, Throwable, Seq[String]] = {
-    val compendia = output.compendia
-    if (compendia.toSet != EXPECTED_COMPENDIA) {
-      pw.println(s"ERROR: compendia missing\n- Expected: ${EXPECTED_COMPENDIA}\n- Observed: ${compendia.toSet}")
-      ZIO.succeed(Seq());
-    } else {
-      ZStream.fromIterable(compendia)
-        .map(compendium => {
+  case class CompendiumSummary(
+      compendium: Compendium,
+      valid: Boolean,
+      types: Set[String],
+      prefixes: Map[String, Int]
+  )
 
-          compendium.filename
-        }).runCollect
+  def validateCompendia(
+      pw: PrintWriter,
+      output: BabelOutput
+  ): ZIO[Blocking with Console, Throwable, Seq[CompendiumSummary]] = {
+    val compendia = output.compendia
+    val compendiaFilenames = compendia.map(_.filename).toSet
+    if (compendiaFilenames != EXPECTED_COMPENDIA) {
+      val errorStr =
+        s"""FAIL: compendia missing
+            | - Expected: ${EXPECTED_COMPENDIA}
+            | - Observed: ${compendiaFilenames}
+            |   - Extra files: ${compendiaFilenames.diff(EXPECTED_COMPENDIA)}
+            |   - Missing files: ${EXPECTED_COMPENDIA.diff(
+            compendiaFilenames
+          )}""".stripMargin
+      logger.error(errorStr)
+      pw.println(errorStr)
+      pw.flush()
     }
+
+    ZStream
+      .fromIterable(compendia)
+      .map(compendium => {
+        val resultsZS = for {
+          record <- compendium.records
+
+          // Type
+          typ = record.`type`
+
+          // We define the prefix as everything until the LAST ':'. This allows us to check for CHEBI:CHEBI: bugs
+          // (see https://github.com/TranslatorSRI/babel-validation/issues/16)
+          prefixes = record.identifiers
+            .map(_.i)
+            .map(identifierOpt => {
+              val identifier = identifierOpt.getOrElse("(no identifier)")
+              val prefixComponents = identifier.split(':')
+              prefixComponents.tail.mkString(":")
+            })
+        } yield (typ, prefixes)
+
+        val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
+        val valid = {
+          if (results.isEmpty) {
+            val errorStr =
+              s"FAIL: compendium ${compendium.filename} has zero records."
+            logger.error(errorStr)
+            pw.println(errorStr)
+            pw.flush()
+            false
+          } else {
+            val successStr =
+              s"SUCCESS: compendium $compendium passed validation with ${results.size} records."
+            logger.info(successStr)
+            pw.println(successStr)
+            pw.flush()
+            true
+          }
+        }
+
+        CompendiumSummary(
+          compendium,
+          valid,
+          results.map(_._1).toSet,
+          results.flatMap(_._2.groupBy(identity)).toMap.mapValues(_.size).toMap
+        )
+      })
+      .runCollect
   }
 
-  def validateSynonyms(pw: PrintWriter, output: BabelOutput): ZIO[Blocking with Console, Throwable, Seq[String]] = {
+  def validateSynonyms(
+      pw: PrintWriter,
+      output: BabelOutput
+  ): ZIO[Blocking with Console, Throwable, Seq[String]] = {
     val synonyms = output.synonyms
     if (synonyms.keySet != EXPECTED_SYNONYMS) {
-      pw.println(s"ERROR: synonyms missing\n- Expected: ${EXPECTED_SYNONYMS}\n- Observed: ${synonyms.toSet}")
+      pw.println(
+        s"FAIL: synonyms missing\n- Expected: ${EXPECTED_SYNONYMS}\n- Observed: ${synonyms.toSet}"
+      )
       ZIO.succeed(Seq());
     } else {
-      ZStream.fromIterable(synonyms)
-        .map({ case (filename, synonym) => {
+      ZStream
+        .fromIterable(synonyms)
+        .map({
+          case (filename, synonym) => {
 
-          filename
-        }}).runCollect
+            filename
+          }
+        })
+        .runCollect
     }
   }
 
-  def validateConflations(pw: PrintWriter, output: BabelOutput): ZIO[Blocking with Console, Throwable, Seq[String]] = {
+  def validateConflations(
+      pw: PrintWriter,
+      output: BabelOutput
+  ): ZIO[Blocking with Console, Throwable, Seq[String]] = {
     val conflations = output.conflations
     if (conflations.toSet != EXPECTED_CONFLATIONS) {
-      pw.println(s"ERROR: conflations missing\n- Expected: ${EXPECTED_CONFLATIONS}\n- Observed: ${conflations.toSet}")
+      pw.println(
+        s"FAIL: conflations missing\n- Expected: ${EXPECTED_CONFLATIONS}\n- Observed: ${conflations.toSet}"
+      )
       ZIO.succeed(Seq());
     } else {
-      ZStream.fromIterable(conflations)
+      ZStream
+        .fromIterable(conflations)
         .map(conflation => {
 
           conflation
-        }).runCollect
+        })
+        .runCollect
     }
   }
 }
