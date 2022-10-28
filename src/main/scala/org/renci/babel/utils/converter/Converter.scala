@@ -170,13 +170,13 @@ object Converter extends LazyLogging {
         val uniqueNamePairs = namePairs.filter(n => n._1 != n._2).toSet
         val limitedNamePairs = uniqueNamePairs.take(conf.maxPairsPerConcept())
         if (uniqueNamePairs.size > conf.maxPairsPerConcept()) {
-          logger.warn(s"Found ${uniqueNamePairs.size} randomized name pairs for ${primaryId}, reduced to ${limitedNamePairs.size}.")
+          // logger.warn(s"Found ${uniqueNamePairs.size} randomized name pairs for ${primaryId}, reduced to ${limitedNamePairs.size}.")
         }
 
-        logger.info(s"For ${primaryId}, found unique names ${uniqueNamesForId}, resulting in randomized pairs: ${limitedNamePairs}")
+        // logger.info(s"For ${primaryId}, found unique names ${uniqueNamesForId}, resulting in randomized pairs: ${limitedNamePairs}")
 
         ZStream
-          .fromIterable(uniqueNamePairs)
+          .fromIterable(limitedNamePairs)
           .map({ case (name1, name2) =>
             s"${record.`type`}||${primaryId}||${name1}||${name2}}"
           })
