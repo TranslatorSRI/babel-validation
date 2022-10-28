@@ -21,6 +21,7 @@ class BabelOutput(root: File) {
    */
   def getFilesInDir(dirName: String): Seq[String] = {
     val dir = new File(root, dirName)
+    if (!dir.exists()) return Seq()
     val filenames = dir.list()
     // TODO: this would be a good place to look for out-of-place files.
     filenames.toSeq
@@ -51,4 +52,15 @@ class BabelOutput(root: File) {
     getFilesInDir("synonyms")
       .map(filename => (filename, new Synonyms(new File(synonymDir, filename))))
       .toMap
+
+  /**
+   * The conflations directory in this BabelOutput.
+   */
+  val conflationsDir: File = new File(root, "conflations")
+
+  /**
+   * A list of conflations in the conflations/ directory.
+   */
+  lazy val conflations: Seq[String] =
+    getFilesInDir("conflations")
 }
