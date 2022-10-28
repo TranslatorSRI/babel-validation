@@ -19,7 +19,7 @@ import scala.collection.Set
 object Validator extends LazyLogging {
   val DEFAULT_CORES = 5;
 
-  val EXPECTED_COMPENDIA = Set(
+  val EXPECTED_COMPENDIA: Set[String] = Set(
     "AnatomicalEntity.txt",
     "Disease.txt",
     "OrganismTaxon.txt",
@@ -42,7 +42,7 @@ object Validator extends LazyLogging {
     "MolecularMixture.txt",
     "umls.txt"
   )
-  val EXPECTED_SYNONYMS = Set(
+  val EXPECTED_SYNONYMS: Set[String] = Set(
     "AnatomicalEntity.txt",
     "Disease.txt",
     "OrganismTaxon.txt",
@@ -65,7 +65,7 @@ object Validator extends LazyLogging {
     "MolecularMixture.txt",
     "umls.txt"
   )
-  val EXPECTED_CONFLATIONS = Set(
+  val EXPECTED_CONFLATIONS: Set[String] = Set(
     "GeneProtein.txt"
   )
 
@@ -113,7 +113,7 @@ object Validator extends LazyLogging {
         } yield {
           logger.info(s"Validated compendia [${compendiumNames.size}]: ${compendiumNames}")
           logger.info(s"Validated synonyms [${synonymNames.size}]: ${synonymNames}")
-          logger.info(s"Validated conflation [${conflationNames.size}]: ${conflationNames}")
+          logger.info(s"Validated conflations [${conflationNames.size}]: ${conflationNames}")
         }
       }
   }
