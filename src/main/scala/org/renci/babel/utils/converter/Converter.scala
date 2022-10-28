@@ -2,10 +2,7 @@ package org.renci.babel.utils.converter
 
 import com.typesafe.scalalogging.LazyLogging
 import org.renci.babel.utils.cli.Utils
-import org.renci.babel.utils.cli.Utils.{
-  SupportsFilenameFiltering,
-  filterFilename
-}
+import org.renci.babel.utils.cli.Utils.{SupportsFilenameFiltering, filterFilename}
 import org.renci.babel.utils.model.{BabelOutput, Compendium, Synonym, Synonyms}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
@@ -15,6 +12,7 @@ import zio.json._
 import zio.stream.{ZSink, ZStream}
 
 import java.io.File
+import scala.util.Random
 
 /**
  * Convert Babel files into other formats.
@@ -39,6 +37,15 @@ object Converter extends LazyLogging {
       ),
       descr = "The format to convert this Babel output to",
       default = Some("sssom")
+    )
+
+    val maxPairsPerConcept: ScallopOption[Int] = opt[Int](
+      descr = "Maximum number of pairs of synonyms to produce for each concept",
+      default = Some(50))
+
+    val lowercaseLabels: ScallopOption[Boolean] = opt[Boolean](
+      descr = "Lowercase all the labels",
+      default = Some(false)
     )
 
     val nCores: ScallopOption[Int] =
@@ -100,7 +107,12 @@ object Converter extends LazyLogging {
       outputFile: File
   ): ZIO[Blocking with Console, Throwable, Long] = {
     // SAPBert uses a simple format:
-    //  id||label||synonym
+    //  id||synonym 1||synonym 2
+    //
+    // Since Babel has labels and synonyms, we will:
+    //  - Consider them both as ways of referring to concepts
+    //  - Make a Set of all the unique labels+synonyms (and just call them synonyms)
+    //  - Generate pairs of these synonyms, limited to conf.maxPairsPerConcept
     val synonymsAsZIOOpt = synonyms.map(_.synonymsById)
     val synonymsById: Map[String, Seq[Synonym]] = synonymsAsZIOOpt match {
       case None => {
@@ -138,25 +150,32 @@ object Converter extends LazyLogging {
             }
             case synonyms: Seq[Synonym] => synonyms.map(_.synonym)
           })
-        val uniqueNamesForId = namesForId.toSet
+        val uniqueNamesForId = if (conf.lowercaseLabels()) namesForId.toSet.map(_.toLowerCase) else
+          namesForId.toSet
 
         if (uniqueNamesForId.isEmpty) {
           // logger.warn(s"No names found for clique ${record} in compendium ${compendium}")
         }
 
-        val labels = record.identifiers.flatMap(_.l)
-        val primaryLabel = labels.headOption
+        val primaryId = record.primaryId.getOrElse("(no identifier)")
 
-        if (record.primaryId.isEmpty) {
-          logger.warn(s"No primary ID for clique ${record}")
+        val namePairs = {
+          // Generate all the pairs of unique names.
+          uniqueNamesForId.zip(uniqueNamesForId)
+            // Filter out cases where a name is paired with itself
+            .filter(n => n._1 != n._2)
+        }
+        val randomizedNamePairs = Random.shuffle(namePairs.toSeq)
+        val randomizedLimitedNamePairs = randomizedNamePairs.take(conf.maxPairsPerConcept())
+        if (randomizedNamePairs.size > conf.maxPairsPerConcept()) {
+          logger.warn(s"Found ${randomizedNamePairs.size} randomized name pairs for ${primaryId}, reduced to ${randomizedLimitedNamePairs.size}.")
         }
 
         ZStream
-          .fromIterable(uniqueNamesForId)
-          .map(name =>
-            s"${record.`type`}||${record.primaryId.getOrElse("(no identifier)")}||${primaryLabel
-                .getOrElse("")}||${name}"
-          )
+          .fromIterable(randomizedLimitedNamePairs)
+          .map({ case (name1, name2) =>
+            s"${record.`type`}||${primaryId}||${name1}||${name2}}"
+          })
       })
       .intersperse("\n")
       .run({
