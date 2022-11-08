@@ -56,7 +56,7 @@ class BabelOutput(root: File) {
   /**
    * The conflations directory in this BabelOutput.
    */
-  val conflationsDir: File = new File(root, "conflations")
+  val conflationsDir: File = new File(root, "conflation")
 
   /**
    * A list of conflations in the conflations/ directory.

@@ -7,7 +7,6 @@ import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
 import zio.blocking.Blocking
 import zio.console.Console
-import zio.json._
 import zio.stream.ZStream
 
 import java.io.{File, FileWriter, PrintWriter}
@@ -110,28 +109,44 @@ object Validator extends LazyLogging {
       )
       .bracketAuto { pw =>
         for {
-          compendiumSummaries <- ZIO.succeed(Seq[CompendiumSummary]()) // validateCompendia(pw, babelOutput)
-          synonymNames <- validateSynonyms(pw, babelOutput)
-          conflationNames <- validateConflations(pw, babelOutput)
+          compendia <- ZIO.succeed(Seq[CompendiumSummary]()) // validateCompendia(pw, babelOutput)
+          synonyms <- validateSynonyms(pw, babelOutput)
+          conflations <- validateConflations(pw, babelOutput)
         } yield {
-          val successfulCompendia = compendiumSummaries.filter(_.valid)
-          val failedCompendia = compendiumSummaries.filter(!_.valid)
+          val successfulCompendia = compendia.filter(_.valid)
+          val failedCompendia = compendia.filter(!_.valid)
 
-          logger.info(
+          pw.println(s"== COMPENDIA [${compendia.size}] ==")
+          pw.println(
             s"Validated ${successfulCompendia.size} compendia: [${successfulCompendia.map(_.compendium.filename).mkString(", ")}]"
           )
-          if (failedCompendia.nonEmpty)
-            logger.info(
-              s"${failedCompendia.size} compendia failed validation: [${failedCompendia
-                  .map(_.compendium.filename)
-                  .mkString(", ")}]"
-            )
+          if (failedCompendia.nonEmpty) {
+            val err = s"${failedCompendia.size} compendia failed validation: [${
+              failedCompendia
+                .map(_.compendium.filename)
+                .mkString(", ")
+            }]"
+            logger.error(err)
+            pw.println(err)
+          }
+          pw.println()
+
           logger.info(
-            s"Validated synonyms [${synonymNames.size}]: ${synonymNames}"
+            s"Validated synonyms [${synonyms.size}]: ${synonyms}"
           )
+          pw.println(s"== SYNONYMS [${synonyms.size}] ==")
+          synonyms.foreach({ synonym =>
+            pw.println(s" - ${synonym.filename}: ${synonym.uniqueIds.size} unique IDs, ${synonym.uniqueRelations.size} unique relations (${synonym.uniqueRelations.mkString(", ")}), ${synonym.uniqueSynonyms} unique synonyms.")
+          })
+          pw.println()
+
           logger.info(
-            s"Validated conflations [${conflationNames.size}]: ${conflationNames}"
+            s"Validated conflations [${conflations.size}]: ${conflations}"
           )
+          pw.println(s"== CONFLATIONS [${conflations.size}] ==")
+          conflations.foreach({ conflation =>
+            pw.println(s" - ${conflation.filename}: ${conflation.uniqueIds} unique identifiers across ${conflation.confCount} conflations.")
+          })
         }
       }
   }
@@ -213,8 +228,10 @@ object Validator extends LazyLogging {
   }
 
   case class SynonymSummary(
-      filename: String,
-      synonymCount: Long
+                             filename: String,
+                             uniqueIds: Set[String],
+                             uniqueRelations: Set[String],
+                             uniqueSynonyms: Set[String]
   )
 
   def validateSynonyms(
@@ -231,9 +248,18 @@ object Validator extends LazyLogging {
       for {
         summaries <- ZStream
           .fromIterable(synonyms)
-          .flatMap({
-            case (filename, synonyms) => ZStream.fromEffect(synonyms.synonyms.map(_.synonym).runCount)
-              .map(count => SynonymSummary(filename, count))
+          .mapM({
+            case (filename, synonyms) => for {
+              uniqueCounts <- synonyms.synonyms.fold((Set[String](), Set[String](), Set[String]())) {
+                case ((ids, relations, syns), synonyms) =>
+                  (ids + synonyms.id, relations + synonyms.relation, syns + synonyms.synonym)
+              }
+            } yield SynonymSummary(
+              filename,
+              uniqueCounts._1,
+              uniqueCounts._2,
+              uniqueCounts._3
+            )
           })
       } yield summaries
     }.runCollect
@@ -241,15 +267,14 @@ object Validator extends LazyLogging {
 
   case class ConflationSummary(
       filename: String,
-      sourceIds: Set[String],
-      destIds: Set[String],
-      relations: Set[String]
+      uniqueIds: Set[String],
+      confCount: Long
   )
 
   def validateConflations(
       pw: PrintWriter,
       output: BabelOutput
-  ): ZIO[Blocking with Console, Throwable, Seq[String]] = {
+  ): ZIO[Blocking with Console, Throwable, Seq[ConflationSummary]] = {
     val conflations = output.conflations
     if (conflations.toSet != EXPECTED_CONFLATIONS) {
       pw.println(
@@ -259,10 +284,14 @@ object Validator extends LazyLogging {
     } else {
       ZStream
         .fromIterable(conflations)
-        .map(conflation => {
-
-          conflation
-        })
+        .mapM(conflation => for {
+          confCount <- conflation.conflations.runCount
+          confsById <- conflation.conflationsById
+        } yield ConflationSummary(
+          conflation.filename,
+          confsById.keySet,
+          confCount
+        ))
         .runCollect
     }
   }
