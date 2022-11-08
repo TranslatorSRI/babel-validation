@@ -110,7 +110,7 @@ object Validator extends LazyLogging {
       )
       .bracketAuto { pw =>
         for {
-          compendiumSummaries <- validateCompendia(pw, babelOutput)
+          compendiumSummaries <- ZIO.succeed(Seq[CompendiumSummary]()) // validateCompendia(pw, babelOutput)
           synonymNames <- validateSynonyms(pw, babelOutput)
           conflationNames <- validateConflations(pw, babelOutput)
         } yield {
@@ -212,10 +212,15 @@ object Validator extends LazyLogging {
       .runCollect
   }
 
+  case class SynonymSummary(
+      filename: String,
+      synonymCount: Long
+  )
+
   def validateSynonyms(
       pw: PrintWriter,
       output: BabelOutput
-  ): ZIO[Blocking with Console, Throwable, Seq[String]] = {
+  ): ZIO[Blocking with Console, Throwable, Seq[SynonymSummary]] = {
     val synonyms = output.synonyms
     if (synonyms.keySet != EXPECTED_SYNONYMS) {
       pw.println(
@@ -223,17 +228,23 @@ object Validator extends LazyLogging {
       )
       ZIO.succeed(Seq());
     } else {
-      ZStream
-        .fromIterable(synonyms)
-        .map({
-          case (filename, synonym) => {
-
-            filename
-          }
-        })
-        .runCollect
-    }
+      for {
+        summaries <- ZStream
+          .fromIterable(synonyms)
+          .flatMap({
+            case (filename, synonyms) => ZStream.fromEffect(synonyms.synonyms.map(_.synonym).runCount)
+              .map(count => SynonymSummary(filename, count))
+          })
+      } yield summaries
+    }.runCollect
   }
+
+  case class ConflationSummary(
+      filename: String,
+      sourceIds: Set[String],
+      destIds: Set[String],
+      relations: Set[String]
+  )
 
   def validateConflations(
       pw: PrintWriter,
