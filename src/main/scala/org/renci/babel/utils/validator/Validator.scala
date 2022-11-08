@@ -109,7 +109,7 @@ object Validator extends LazyLogging {
       )
       .bracketAuto { pw =>
         for {
-          compendia <- ZIO.succeed(Seq[CompendiumSummary]()) // validateCompendia(pw, babelOutput)
+          compendia <- validateCompendia(pw, babelOutput)
           synonyms <- validateSynonyms(pw, babelOutput)
           conflations <- validateConflations(pw, babelOutput)
         } yield {
