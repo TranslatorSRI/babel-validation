@@ -113,13 +113,14 @@ object Validator extends LazyLogging {
           synonyms <- validateSynonyms(pw, babelOutput)
           conflations <- validateConflations(pw, babelOutput)
         } yield {
-          val successfulCompendia = compendia.filter(_.valid)
           val failedCompendia = compendia.filter(!_.valid)
 
           pw.println(s"== COMPENDIA [${compendia.size}] ==")
-          pw.println(
-            s"Validated ${successfulCompendia.size} compendia: [${successfulCompendia.map(_.compendium.filename).mkString(", ")}]"
-          )
+          compendia.foreach({compendium =>
+            pw.println(
+              s" - ${compendium.compendium.filename} [${if (compendium.valid) "valid" else "INVALID"}]: types=${compendium.types}, prefixes=${compendium.prefixes}"
+            )
+          })
           if (failedCompendia.nonEmpty) {
             val err = s"${failedCompendia.size} compendia failed validation: [${
               failedCompendia
@@ -127,7 +128,6 @@ object Validator extends LazyLogging {
                 .mkString(", ")
             }]"
             logger.error(err)
-            pw.println(err)
           }
           pw.println()
 
