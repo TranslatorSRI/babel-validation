@@ -136,7 +136,10 @@ object Validator extends LazyLogging {
           )
           pw.println(s"== SYNONYMS [${synonyms.size}] ==")
           synonyms.foreach({ synonym =>
-            pw.println(s" - ${synonym.filename}: ${synonym.uniqueIds.size} unique IDs, ${synonym.uniqueRelations.size} unique relations (${synonym.uniqueRelations.mkString(", ")}), ${synonym.uniqueSynonyms} unique synonyms.")
+            pw.println(
+              s" - ${synonym.filename}: ${synonym.uniqueIds.size} unique IDs, ${synonym.uniqueRelations.size} unique relations (${synonym.uniqueRelations
+                  .mkString(", ")}), ${synonym.uniqueSynonyms.size} unique synonyms."
+            )
           })
           pw.println()
 
