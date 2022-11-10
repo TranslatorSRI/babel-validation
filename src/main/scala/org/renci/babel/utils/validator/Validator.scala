@@ -116,19 +116,20 @@ object Validator extends LazyLogging {
           val failedCompendia = compendia.filter(!_.valid)
 
           pw.println(s"== COMPENDIA [${compendia.size}] ==")
-          compendia.foreach({compendium =>
+          compendia.foreach({ compendium =>
             pw.println(
-              s" - ${compendium.compendium.filename} [${if (compendium.valid) "valid" else "INVALID"}]: types=${compendium.types}, prefixes=${compendium.prefixes}"
+              s" - ${compendium.compendium.filename} [${if (compendium.valid) "valid"
+                else "INVALID"}]: types=${compendium.types}, prefixes=${compendium.prefixes}, ${compendium.recordCount} records"
             )
           })
           if (failedCompendia.nonEmpty) {
-            val err = s"${failedCompendia.size} compendia failed validation: [${
-              failedCompendia
-                .map(_.compendium.filename)
-                .mkString(", ")
-            }]"
+            val err =
+              s"${failedCompendia.size} compendia failed validation: [${failedCompendia
+                  .map(_.compendium.filename)
+                  .mkString(", ")}]"
             logger.error(err)
           }
+          pw.println(s"Total record count: ${compendia.map(_.recordCount).sum}")
           pw.println()
 
           logger.info(
@@ -148,7 +149,9 @@ object Validator extends LazyLogging {
           )
           pw.println(s"== CONFLATIONS [${conflations.size}] ==")
           conflations.foreach({ conflation =>
-            pw.println(s" - ${conflation.filename}: ${conflation.uniqueIds} unique identifiers across ${conflation.confCount} conflations.")
+            pw.println(
+              s" - ${conflation.filename}: ${conflation.uniqueIds} unique identifiers across ${conflation.confCount} conflations."
+            )
           })
         }
       }
@@ -157,6 +160,7 @@ object Validator extends LazyLogging {
   case class CompendiumSummary(
       compendium: Compendium,
       valid: Boolean,
+      recordCount: Int,
       types: Set[String],
       prefixes: Map[String, Int]
   )
@@ -198,19 +202,24 @@ object Validator extends LazyLogging {
               val prefixRegex = "^(.*):(.*?)$".r
 
               identifierOpt match {
-                case Some(identifier) => identifier match {
-                  case prefixRegex(prefix, _) => prefix
-                  case _ => {
-                    logger.warn(s"Could not determine prefix for identifier ${identifier}")
-                    identifier
+                case Some(identifier) =>
+                  identifier match {
+                    case prefixRegex(prefix, _) => prefix
+                    case _ => {
+                      logger.warn(
+                        s"Could not determine prefix for identifier ${identifier}"
+                      )
+                      identifier
+                    }
                   }
-                }
                 case None => "(no identifier)"
               }
-            }).toSet
+            })
+            .toSet
         } yield (typ, prefixes)
 
         val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
+        val recordCount = results.size
         val valid = {
           if (results.isEmpty) {
             val errorStr =
@@ -221,7 +230,7 @@ object Validator extends LazyLogging {
             false
           } else {
             val successStr =
-              s"SUCCESS: compendium $compendium passed validation with ${results.size} records."
+              s"SUCCESS: compendium $compendium passed validation with ${recordCount} records."
             logger.info(successStr)
             pw.println(successStr)
             pw.flush()
@@ -232,6 +241,7 @@ object Validator extends LazyLogging {
         CompendiumSummary(
           compendium,
           valid,
+          recordCount,
           results.map(_._1).toSet,
           results.flatMap(_._2.groupBy(identity)).toMap.mapValues(_.size).toMap
         )
@@ -240,10 +250,10 @@ object Validator extends LazyLogging {
   }
 
   case class SynonymSummary(
-                             filename: String,
-                             uniqueIds: Set[String],
-                             uniqueRelations: Set[String],
-                             uniqueSynonyms: Set[String]
+      filename: String,
+      uniqueIds: Set[String],
+      uniqueRelations: Set[String],
+      uniqueSynonyms: Set[String]
   )
 
   def validateSynonyms(
@@ -260,11 +270,16 @@ object Validator extends LazyLogging {
       for {
         summaries <- ZStream
           .fromIterable(synonyms)
-          .mapM({
-            case (filename, synonyms) => for {
-              uniqueCounts <- synonyms.synonyms.fold((Set[String](), Set[String](), Set[String]())) {
-                case ((ids, relations, syns), synonyms) =>
-                  (ids + synonyms.id, relations + synonyms.relation, syns + synonyms.synonym)
+          .mapM({ case (filename, synonyms) =>
+            for {
+              uniqueCounts <- synonyms.synonyms.fold(
+                (Set[String](), Set[String](), Set[String]())
+              ) { case ((ids, relations, syns), synonyms) =>
+                (
+                  ids + synonyms.id,
+                  relations + synonyms.relation,
+                  syns + synonyms.synonym
+                )
               }
             } yield SynonymSummary(
               filename,
@@ -296,14 +311,16 @@ object Validator extends LazyLogging {
     } else {
       ZStream
         .fromIterable(conflations)
-        .mapM(conflation => for {
-          confCount <- conflation.conflations.runCount
-          confsById <- conflation.conflationsById
-        } yield ConflationSummary(
-          conflation.filename,
-          confsById.keySet,
-          confCount
-        ))
+        .mapM(conflation =>
+          for {
+            confCount <- conflation.conflations.runCount
+            confsById <- conflation.conflationsById
+          } yield ConflationSummary(
+            conflation.filename,
+            confsById.keySet,
+            confCount
+          )
+        )
         .runCollect
     }
   }
