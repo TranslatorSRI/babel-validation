@@ -192,10 +192,19 @@ object Validator extends LazyLogging {
           prefixes = record.identifiers
             .map(_.i)
             .map(identifierOpt => {
-              val identifier = identifierOpt.getOrElse("(no identifier)")
-              val prefixComponents = identifier.split(':')
-              prefixComponents.tail.mkString(":")
-            })
+              val prefixRegex = "^(.*):(.*?)$".r
+
+              identifierOpt match {
+                case Some(identifier) => identifier match {
+                  case prefixRegex(prefix, _) => prefix
+                  case _ => {
+                    logger.warn(s"Could not determine prefix for identifier ${identifier}")
+                    identifier
+                  }
+                }
+                case None => "(no identifier)"
+              }
+            }).toSet
         } yield (typ, prefixes)
 
         val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
