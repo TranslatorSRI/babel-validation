@@ -10,7 +10,7 @@ import zio.console.Console
 import zio.stream.ZStream
 
 import java.io.{File, FileWriter, PrintWriter}
-import scala.collection.Set
+import scala.collection.{Set, immutable}
 
 /**
  * Validate Babel outputs.
@@ -243,7 +243,7 @@ object Validator extends LazyLogging {
           valid,
           recordCount,
           results.map(_._1).toSet,
-          results.flatMap(_._2.groupBy(identity)).toMap.mapValues(_.size).toMap
+          results.flatMap(_._2.groupBy(identity)).map(a => (a._1, a._2.size)).toMap
         )
       })
       .runCollect
@@ -281,7 +281,7 @@ object Validator extends LazyLogging {
           .mapM({ case (filename, synonyms) =>
             for {
               uniqueCounts <- synonyms.synonyms.fold(
-                (Set[String](), Set[String](), Set[String]())
+                (immutable.Set[String](), immutable.Set[String](), immutable.Set[String]())
               ) { case ((ids, relations, syns), synonyms) =>
                 (
                   ids + synonyms.id,
