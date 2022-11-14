@@ -166,7 +166,7 @@ object Validator extends LazyLogging {
     val compendiaFilenames = compendia.map(_.filename).toSet
     if (compendiaFilenames != EXPECTED_COMPENDIA) {
       val errorStr =
-        s"""FAIL: compendia missing
+        s"""FAIL: compendia missing or extra
             | - Expected: ${EXPECTED_COMPENDIA}
             | - Observed: ${compendiaFilenames}
             |   - Extra files: ${compendiaFilenames.diff(EXPECTED_COMPENDIA)}
@@ -250,7 +250,15 @@ object Validator extends LazyLogging {
     val synonyms = output.synonyms
     if (synonyms.keySet != EXPECTED_SYNONYMS) {
       pw.println(
-        s"FAIL: synonyms missing\n- Expected: ${EXPECTED_SYNONYMS}\n- Observed: ${synonyms.toSet}"
+        s"""FAIL: synonyms missing or extra
+           | - Expected: ${EXPECTED_SYNONYMS}
+           | - Observed: ${synonyms.keySet}
+           |   - Extra files: ${synonyms.keySet.diff(EXPECTED_SYNONYMS)}
+           |   - Missing files: ${
+          EXPECTED_SYNONYMS.diff(
+            synonyms.keySet
+          )
+        }""".stripMargin
       )
       ZIO.succeed(Seq());
     } else {
@@ -285,9 +293,18 @@ object Validator extends LazyLogging {
       output: BabelOutput
   ): ZIO[Blocking with Console, Throwable, Seq[ConflationSummary]] = {
     val conflations = output.conflations
-    if (conflations.toSet != EXPECTED_CONFLATIONS) {
+    val conflationFilenames = conflations.map(_.filename).toSet
+    if (conflationFilenames != EXPECTED_CONFLATIONS) {
       pw.println(
-        s"FAIL: conflations missing\n- Expected: ${EXPECTED_CONFLATIONS}\n- Observed: ${conflations.toSet}"
+        s"""FAIL: conflations missing or extra
+           | - Expected: ${EXPECTED_CONFLATIONS}
+           | - Observed: ${conflationFilenames}
+           |   - Extra files: ${conflationFilenames.diff(EXPECTED_CONFLATIONS)}
+           |   - Missing files: ${
+          EXPECTED_CONFLATIONS.diff(
+            conflationFilenames
+          )
+        }""".stripMargin
       )
       ZIO.succeed(Seq());
     } else {
