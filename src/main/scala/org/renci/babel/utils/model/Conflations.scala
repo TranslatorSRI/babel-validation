@@ -38,11 +38,18 @@ class Conflations(file: File) {
   lazy val conflations: ZStream[Blocking, Throwable, Conflation] = {
     val arrayDecoder = JsonDecoder[Seq[String]]
 
-    lines.zipWithIndex.flatMap({
-      case (line, index) => arrayDecoder.decodeJson(line).fold(
-        error => ZStream.fail(new RuntimeException(s"Could not parse line ${index + 1} of file ${filename}: ${error} (line: ${line})")),
-        conflatedIds => ZStream.succeed(Conflation(conflatedIds))
-      )
+    lines.zipWithIndex.flatMap({ case (line, index) =>
+      arrayDecoder
+        .decodeJson(line)
+        .fold(
+          error =>
+            ZStream.fail(
+              new RuntimeException(
+                s"Could not parse line ${index + 1} of file ${filename}: ${error} (line: ${line})"
+              )
+            ),
+          conflatedIds => ZStream.succeed(Conflation(conflatedIds))
+        )
     })
   }
 
@@ -50,9 +57,14 @@ class Conflations(file: File) {
    * Load all of the synonyms into a Map so that they can be looked up by ID.
    */
   // TODO: we ignore the relation for now, but we should probably check that here.
-  lazy val conflationsById: ZIO[Blocking, Throwable, Map[String, Seq[Conflation]]] =
+  lazy val conflationsById
+      : ZIO[Blocking, Throwable, Map[String, Seq[Conflation]]] =
     conflations.runCollect
-      .map(chunk => chunk.flatMap(s => {
-        s.conflatedIds.map { id => (id, s)}
-      }).groupMap(_._1)(_._2))
+      .map(chunk =>
+        chunk
+          .flatMap(s => {
+            s.conflatedIds.map { id => (id, s) }
+          })
+          .groupMap(_._1)(_._2)
+      )
 }

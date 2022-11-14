@@ -62,5 +62,7 @@ class BabelOutput(root: File) {
    * A list of conflations in the conflations/ directory.
    */
   lazy val conflations: Seq[Conflations] =
-    getFilesInDir("conflations").map(filename => new Conflations(new File(conflationsDir, filename)))
+    getFilesInDir("conflations").map(filename =>
+      new Conflations(new File(conflationsDir, filename))
+    )
 }

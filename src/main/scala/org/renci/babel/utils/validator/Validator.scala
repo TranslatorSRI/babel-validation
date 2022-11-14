@@ -243,7 +243,10 @@ object Validator extends LazyLogging {
           valid,
           recordCount,
           results.map(_._1).toSet,
-          results.flatMap(_._2.groupBy(identity)).map(a => (a._1, a._2.size)).toMap
+          results
+            .flatMap(_._2.groupBy(identity))
+            .map(a => (a._1, a._2.size))
+            .toMap
         )
       })
       .runCollect
@@ -267,11 +270,9 @@ object Validator extends LazyLogging {
            | - Expected: ${EXPECTED_SYNONYMS}
            | - Observed: ${synonyms.keySet}
            |   - Extra files: ${synonyms.keySet.diff(EXPECTED_SYNONYMS)}
-           |   - Missing files: ${
-          EXPECTED_SYNONYMS.diff(
+           |   - Missing files: ${EXPECTED_SYNONYMS.diff(
             synonyms.keySet
-          )
-        }""".stripMargin
+          )}""".stripMargin
       )
       ZIO.succeed(Seq());
     } else {
@@ -281,7 +282,11 @@ object Validator extends LazyLogging {
           .mapM({ case (filename, synonyms) =>
             for {
               uniqueCounts <- synonyms.synonyms.fold(
-                (immutable.Set[String](), immutable.Set[String](), immutable.Set[String]())
+                (
+                  immutable.Set[String](),
+                  immutable.Set[String](),
+                  immutable.Set[String]()
+                )
               ) { case ((ids, relations, syns), synonyms) =>
                 (
                   ids + synonyms.id,
@@ -318,11 +323,9 @@ object Validator extends LazyLogging {
            | - Expected: ${EXPECTED_CONFLATIONS}
            | - Observed: ${conflationFilenames}
            |   - Extra files: ${conflationFilenames.diff(EXPECTED_CONFLATIONS)}
-           |   - Missing files: ${
-          EXPECTED_CONFLATIONS.diff(
+           |   - Missing files: ${EXPECTED_CONFLATIONS.diff(
             conflationFilenames
-          )
-        }""".stripMargin
+          )}""".stripMargin
       )
       ZIO.succeed(Seq());
     } else {
