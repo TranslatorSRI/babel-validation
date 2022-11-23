@@ -5,6 +5,7 @@ import org.renci.babel.utils.cli.Utils.SupportsFilenameFiltering
 import org.renci.babel.utils.model.{BabelOutput, Compendium}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
+import zio.json._
 import zio.blocking.Blocking
 import zio.console.Console
 import zio.stream.ZStream
@@ -153,6 +154,29 @@ object Validator extends LazyLogging {
               s" - ${conflation.filename}: ${conflation.uniqueIds} unique identifiers across ${conflation.confCount} conflations."
             )
           })
+
+          /*
+           * Calculate prefix counts (specifically for https://github.com/TranslatorSRI/NodeNormalization/issues/153#issuecomment-1323664976)
+           */
+          case class PrefixCount(
+              filename: String,
+              typ: String,
+              prefix: String,
+              count: Int
+          )
+          val prefixCounts = compendia.flatMap(compendium => for {
+            typ <- compendium.prefixesByType.keySet
+            (prefix, count) <- compendium.prefixesByType.getOrElse(typ, Map[String, Int]())
+          } yield PrefixCount(compendium.compendium.filename, typ, prefix, count))
+
+          // To simulate the /get_curie_prefixes endpoint, we want this to be in the format:
+          // {typ}\t{prefix}\t{count}
+          val curiePrefixCounts = prefixCounts.groupBy(_.typ)
+            .map(t => (t._1, t._2.groupMapReduce(_.prefix)(_.count)(_ + _)))
+
+          pw.println("\n== get_curie_prefixes ==")
+          pw.println(curiePrefixCounts)
+          pw.println(curiePrefixCounts.toJsonPretty)
         }
       }
   }
@@ -162,7 +186,8 @@ object Validator extends LazyLogging {
       valid: Boolean,
       recordCount: Int,
       types: Set[String],
-      prefixes: Map[String, Int]
+      prefixes: Map[String, Int],
+      prefixesByType: Map[String, Map[String, Int]]
   )
 
   def validateCompendia(
@@ -214,8 +239,7 @@ object Validator extends LazyLogging {
                   }
                 case None => "(no identifier)"
               }
-            })
-            .toSet
+            }).groupBy(identity).map(t => (t._1, t._2.size))
         } yield (typ, prefixes)
 
         val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
@@ -238,15 +262,15 @@ object Validator extends LazyLogging {
           }
         }
 
+        val resultMap = results.toMap
+
         CompendiumSummary(
           compendium,
           valid,
           recordCount,
-          results.map(_._1).toSet,
-          results
-            .flatMap(_._2.groupBy(identity))
-            .map(a => (a._1, a._2.size))
-            .toMap
+          resultMap.keySet,
+          resultMap.values.flatten.groupMapReduce(_._1)(_._2)(_ + _),
+          resultMap
         )
       })
       .runCollect
