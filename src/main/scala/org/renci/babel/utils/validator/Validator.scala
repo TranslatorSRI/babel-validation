@@ -239,7 +239,16 @@ object Validator extends LazyLogging {
                   }
                 case None => "(no identifier)"
               }
-            }).groupBy(identity).map(t => (t._1, t._2.length.toLong))
+            })
+            .groupBy(identity)
+            .map(t => {
+              val prefix = t._1
+              val prefixCount = t._2.length.toLong
+              if (prefixCount > (Int.MaxValue - 1000)) {
+                logger.error(s"Prefix ${prefix} has a prefix count (${prefixCount}) extremely close to Int.MaxValue (${Int.MaxValue}) -- the count may overflow!")
+              }
+              (prefix, prefixCount)
+            })
         } yield (typ, prefixes)
 
         val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
