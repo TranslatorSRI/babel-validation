@@ -239,7 +239,7 @@ object Validator extends LazyLogging {
                   }
                 case None => "(no identifier)"
               }
-            }).groupBy(identity).map(t => (t._1, t._2.size))
+            }).groupBy(identity).map(t => (t._1, t._2.length.toLong))
         } yield (typ, prefixes)
 
         val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
