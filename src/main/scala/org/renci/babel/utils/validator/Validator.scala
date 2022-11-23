@@ -178,6 +178,10 @@ object Validator extends LazyLogging {
           pw.println(prefixCounts)
           pw.println(curiePrefixCounts)
           pw.println(curiePrefixCounts.toJsonPretty)
+          pw.println()
+
+          // Just in case we need to flush this to disk.
+          pw.flush()
         }
       }
   }
