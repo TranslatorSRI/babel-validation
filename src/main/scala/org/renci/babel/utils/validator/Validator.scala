@@ -162,11 +162,11 @@ object Validator extends LazyLogging {
               filename: String,
               typ: String,
               prefix: String,
-              count: Int
+              count: Long
           )
           val prefixCounts = compendia.flatMap(compendium => for {
             typ <- compendium.prefixesByType.keySet
-            (prefix, count) <- compendium.prefixesByType.getOrElse(typ, Map[String, Int]())
+            (prefix, count) <- compendium.prefixesByType.getOrElse(typ, Map[String, Long]())
           } yield PrefixCount(compendium.compendium.filename, typ, prefix, count))
 
           // To simulate the /get_curie_prefixes endpoint, we want this to be in the format:
@@ -184,10 +184,10 @@ object Validator extends LazyLogging {
   case class CompendiumSummary(
       compendium: Compendium,
       valid: Boolean,
-      recordCount: Int,
+      recordCount: Long,
       types: Set[String],
-      prefixes: Map[String, Int],
-      prefixesByType: Map[String, Map[String, Int]]
+      prefixes: Map[String, Long],
+      prefixesByType: Map[String, Map[String, Long]]
   )
 
   def validateCompendia(
