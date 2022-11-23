@@ -175,6 +175,7 @@ object Validator extends LazyLogging {
             .map(t => (t._1, t._2.groupMapReduce(_.prefix)(_.count)(_ + _)))
 
           pw.println("\n== get_curie_prefixes ==")
+          pw.println(prefixCounts)
           pw.println(curiePrefixCounts)
           pw.println(curiePrefixCounts.toJsonPretty)
         }
