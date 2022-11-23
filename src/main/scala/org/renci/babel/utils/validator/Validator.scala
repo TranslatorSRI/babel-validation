@@ -244,8 +244,8 @@ object Validator extends LazyLogging {
             .map(t => {
               val prefix = t._1
               val prefixCount = t._2.length.toLong
-              if (prefixCount > (Int.MaxValue - 1000)) {
-                logger.error(s"Prefix ${prefix} has a prefix count (${prefixCount}) extremely close to Int.MaxValue (${Int.MaxValue}) -- the count may overflow!")
+              if (prefixCount < 0 || prefixCount > (Int.MaxValue - 1000)) {
+                logger.error(s"Prefix ${prefix} has a prefix count (${prefixCount}) that is negative or extremely close to Int.MaxValue (${Int.MaxValue}) -- before of Int overflow!")
               }
               (prefix, prefixCount)
             })
