@@ -5,9 +5,9 @@ import org.renci.babel.utils.cli.Utils.SupportsFilenameFiltering
 import org.renci.babel.utils.model.{BabelOutput, Compendium}
 import org.rogach.scallop.{ScallopOption, Subcommand}
 import zio.ZIO
-import zio.json._
 import zio.blocking.Blocking
 import zio.console.Console
+import zio.json._
 import zio.stream.ZStream
 
 import java.io.{File, FileWriter, PrintWriter}
@@ -167,6 +167,7 @@ object Validator extends LazyLogging {
           val prefixCounts = compendia.flatMap(compendium => for {
             typ <- compendium.prefixesByType.keySet
             (prefix, count) <- compendium.prefixesByType.getOrElse(typ, Map[String, Long]())
+            _ = logger.warn(s"Found prefix count: ${compendium.compendium.filename}, ${typ}, ${prefix}, ${count}")
           } yield PrefixCount(compendium.compendium.filename, typ, prefix, count))
 
           // To simulate the /get_curie_prefixes endpoint, we want this to be in the format:
@@ -226,7 +227,7 @@ object Validator extends LazyLogging {
 
           // We define the prefix as everything until the LAST ':'. This allows us to check for CHEBI:CHEBI: bugs
           // (see https://github.com/TranslatorSRI/babel-validation/issues/16)
-          prefixes = record.identifiers
+          prefixCountMap: Seq[(String, Long)] = record.identifiers
             .map(_.i)
             .map(identifierOpt => {
               val prefixRegex = "^(.*):(.*?)$".r
@@ -252,9 +253,10 @@ object Validator extends LazyLogging {
               if (prefixCount < 0 || prefixCount > (Int.MaxValue - 1000)) {
                 logger.error(s"Prefix ${prefix} has a prefix count (${prefixCount}) that is negative or extremely close to Int.MaxValue (${Int.MaxValue}) -- before of Int overflow!")
               }
+              // logger.debug(s"Found prefix count (${prefix}, ${prefixCount})")
               (prefix, prefixCount)
-            })
-        } yield (typ, prefixes)
+            }).toSeq
+        } yield (typ, prefixCountMap)
 
         val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
         val recordCount = results.size
@@ -276,7 +278,10 @@ object Validator extends LazyLogging {
           }
         }
 
-        val resultMap = results.toMap
+        val resultWithSeqs = results.groupMapReduce(_._1)(_._2)((a, b) => (a ++ b).groupMapReduce(_._1)(_._2)(_ + _).toSeq)
+        val resultMap = resultWithSeqs.map(t => (t._1, t._2.toMap))
+
+        logger.warn(s"Found resultMap for ${compendium.filename}: ${resultMap}")
 
         CompendiumSummary(
           compendium,
