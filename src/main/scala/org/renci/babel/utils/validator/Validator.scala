@@ -164,15 +164,26 @@ object Validator extends LazyLogging {
               prefix: String,
               count: Long
           )
-          val prefixCounts = compendia.flatMap(compendium => for {
-            typ <- compendium.prefixesByType.keySet
-            (prefix, count) <- compendium.prefixesByType.getOrElse(typ, Map[String, Long]())
-            _ = logger.warn(s"Found prefix count: ${compendium.compendium.filename}, ${typ}, ${prefix}, ${count}")
-          } yield PrefixCount(compendium.compendium.filename, typ, prefix, count))
+          val prefixCounts = compendia.flatMap(compendium =>
+            for {
+              typ <- compendium.prefixesByType.keySet
+              (prefix, count) <- compendium.prefixesByType
+                .getOrElse(typ, Map[String, Long]())
+              _ = logger.warn(
+                s"Found prefix count: ${compendium.compendium.filename}, ${typ}, ${prefix}, ${count}"
+              )
+            } yield PrefixCount(
+              compendium.compendium.filename,
+              typ,
+              prefix,
+              count
+            )
+          )
 
           // To simulate the /get_curie_prefixes endpoint, we want this to be in the format:
           // {typ}\t{prefix}\t{count}
-          val curiePrefixCounts = prefixCounts.groupBy(_.typ)
+          val curiePrefixCounts = prefixCounts
+            .groupBy(_.typ)
             .map(t => (t._1, t._2.groupMapReduce(_.prefix)(_.count)(_ + _)))
 
           pw.println("\n== get_curie_prefixes ==")
@@ -251,11 +262,14 @@ object Validator extends LazyLogging {
               val prefix = t._1
               val prefixCount = t._2.length.toLong
               if (prefixCount < 0 || prefixCount > (Int.MaxValue - 1000)) {
-                logger.error(s"Prefix ${prefix} has a prefix count (${prefixCount}) that is negative or extremely close to Int.MaxValue (${Int.MaxValue}) -- before of Int overflow!")
+                logger.error(
+                  s"Prefix ${prefix} has a prefix count (${prefixCount}) that is negative or extremely close to Int.MaxValue (${Int.MaxValue}) -- before of Int overflow!"
+                )
               }
               // logger.debug(s"Found prefix count (${prefix}, ${prefixCount})")
               (prefix, prefixCount)
-            }).toSeq
+            })
+            .toSeq
         } yield (typ, prefixCountMap)
 
         val results = zio.Runtime.default.unsafeRun(resultsZS.runCollect)
@@ -278,7 +292,9 @@ object Validator extends LazyLogging {
           }
         }
 
-        val resultWithSeqs = results.groupMapReduce(_._1)(_._2)((a, b) => (a ++ b).groupMapReduce(_._1)(_._2)(_ + _).toSeq)
+        val resultWithSeqs = results.groupMapReduce(_._1)(_._2)((a, b) =>
+          (a ++ b).groupMapReduce(_._1)(_._2)(_ + _).toSeq
+        )
         val resultMap = resultWithSeqs.map(t => (t._1, t._2.toMap))
 
         logger.warn(s"Found resultMap for ${compendium.filename}: ${resultMap}")
