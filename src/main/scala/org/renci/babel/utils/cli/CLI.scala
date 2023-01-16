@@ -2,6 +2,7 @@ package org.renci.babel.utils.cli
 
 import com.typesafe.scalalogging.{LazyLogging, Seq}
 import org.renci.babel.utils.converter.Converter
+import org.renci.babel.utils.validator.Validator
 import org.rogach.scallop.ScallopConf
 import zio.blocking.Blocking
 import zio.console.Console
@@ -26,6 +27,7 @@ object CLI extends zio.App with LazyLogging {
    *   The command-line arguments to this application.
    */
   class Conf(args: Seq[String]) extends ScallopConf(args) {
+    addSubcommand(new Validator.ValidateSubcommand())
     addSubcommand(new DiffReporter.DiffSubcommand())
     addSubcommand(new Converter.ConvertSubcommand())
     requireSubcommand()
@@ -47,6 +49,8 @@ object CLI extends zio.App with LazyLogging {
         DiffReporter.diffResults(diff).exitCode
       case Some(convert: Converter.ConvertSubcommand) =>
         Converter.convert(convert).exitCode
+      case Some(validate: Validator.ValidateSubcommand) =>
+        Validator.validate(validate).exitCode
       case a =>
         ZIO.fail(s"Error: no subcommand provided or invalid ($a)").exitCode
     }

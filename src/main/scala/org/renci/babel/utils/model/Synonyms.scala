@@ -8,7 +8,7 @@ import java.io.File
 import java.nio.file.Path
 
 /**
- * A single synonym from a synonyms file in the Compendium output.
+ * A single synonym from a synonyms file in the Babel output.
  */
 case class Synonym(
     id: String,
@@ -17,7 +17,7 @@ case class Synonym(
 )
 
 /**
- * A synonyms file in the Compendium output.
+ * A synonyms file in the Babel output.
  */
 class Synonyms(file: File) {
   val filename: String = file.getName
