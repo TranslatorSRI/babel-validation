@@ -183,10 +183,12 @@ object Converter extends LazyLogging {
 
         // logger.info(s"For ${primaryId}, found unique names ${uniqueNamesForId}, resulting in randomized pairs: ${limitedNamePairs}")
 
+        val canonicalLabel = record.identifiers.head.l
+
         ZStream
           .fromIterable(limitedNamePairs)
           .map({ case (name1, name2) =>
-            s"${record.`type`}||${primaryId}||${name1}||${name2}"
+            s"${record.`type`}||${primaryId}||${canonicalLabel.getOrElse("")}||${name1}||${name2}"
           })
       })
       .intersperse("\n")
