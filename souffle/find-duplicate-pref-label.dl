@@ -1,0 +1,27 @@
+
+.type curie = symbol
+.type synonym = symbol
+
+.type SynonymList = [
+	item: synonym,
+	next: SynonymList
+]
+.type CurieList= [
+	item: curie,
+	next: CurieList
+]
+
+.decl Synonym(
+	curie: curie,
+	preferred_name: synonym,
+	names: SynonymList,
+	types: CurieList
+)
+
+// Read synonyms from a GZipped synonyms file.
+.input Synonym(IO=jsonfile, filename="../data/2023may18/synonyms/AnatomicalEntity.txt")
+
+.decl result(curie: curie, label: synonym)
+result(curie, preferred_name) :- Synonym(curie, preferred_name, _, _), match(".*cartilage.*", preferred_name).
+
+.output result(IO=stdout)
