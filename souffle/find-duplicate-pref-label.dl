@@ -13,15 +13,13 @@
 
 .decl Synonym(
 	curie: curie,
-	preferred_name: synonym,
-	names: SynonymList,
-	types: CurieList
+	preferred_name: synonym
 )
 
 // Read synonyms from a GZipped synonyms file.
-.input Synonym(IO=jsonfile, filename="../data/2023may18/synonyms/AnatomicalEntity.txt")
+.input Synonym(IO=file, filename="../data/2023may18/synonyms/AnatomicalEntity.tsv")
 
 .decl result(curie: curie, label: synonym)
-result(curie, preferred_name) :- Synonym(curie, preferred_name, _, _), match(".*cartilage.*", preferred_name).
+result(curie, preferred_name) :- Synonym(curie, preferred_name), match(".*cartilage.*", preferred_name).
 
 .output result(IO=stdout)
