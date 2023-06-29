@@ -188,7 +188,8 @@ object Converter extends LazyLogging {
         ZStream
           .fromIterable(limitedNamePairs)
           .map({ case (name1, name2) =>
-            s"${record.`type`}||${primaryId}||${canonicalLabel.getOrElse("")}||${name1}||${name2}"
+            s"${record.`type`}||${primaryId}||${canonicalLabel
+                .getOrElse("")}||${name1}||${name2}"
           })
       })
       .intersperse("\n")
