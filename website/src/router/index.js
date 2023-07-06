@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "@/views/HomeView.vue";
 import NodeNormValidator from "@/views/NodeNormValidator.vue";
+import NameResValidator from "@/views/NameResValidator.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -13,7 +14,12 @@ const router = createRouter({
     {
       path: "/nodenorm",
       name: "Node Normalization Validator",
-      component: NodeNormValidator
+      component: NodeNormValidator,
+    },
+    {
+      path: "/nameres",
+      name: "Name Resolver Validator",
+      component: NameResValidator,
     },
     {
       path: "/about",

@@ -1,12 +1,10 @@
 <template>
-  <small><a href="/">Return to front page</a></small>
-  <h1>Node Normalization Validation</h1>
+  <h1>Name Resolver Validation</h1>
   <p>
     <a href="https://github.com/TranslatorSRI/babel">Babel</a> is the program that generates the datasets of
     interrelated identifiers that underlies <a href="https://github.com/TranslatorSRI/NodeNormalization">Node Normalization</a>
-    and <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a>.
-
-    This page will test several instances of the Name Resolver.
+    and <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a>. This website is intended to provide
+    a single place where tests can be executed against multiple versions of these tools.
   </p>
 
   <b-button @click="loadGoogleSheet()">Reload</b-button>
