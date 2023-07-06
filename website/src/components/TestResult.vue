@@ -17,7 +17,7 @@
 </template>
 
 <script>
-import {Test} from "@/models/tests";
+import {Test} from "@/models/NodeNormTesting";
 
 export default {
   props: {

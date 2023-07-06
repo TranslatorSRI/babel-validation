@@ -6,7 +6,7 @@
     interrelated identifiers that underlies <a href="https://github.com/TranslatorSRI/NodeNormalization">Node Normalization</a>
     and <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a>.
 
-    This page will test several instances of the Name Resolver.
+    This page will test several instances of the Node Normalization service.
   </p>
 
   <b-button @click="loadGoogleSheet()">Reload</b-button>
@@ -46,7 +46,7 @@
 import {BTable} from "bootstrap-vue-3";
 import Papa from 'papaparse';
 import TextWithURLs from "@/components/TextWithURLs.vue";
-import { Test } from '@/models/tests';
+import { Test } from '@/models/NodeNormTesting';
 import TestResult from "@/components/TestResult.vue";
 
 export default {
