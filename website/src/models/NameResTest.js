@@ -1,39 +1,13 @@
-/*
- * This file collects several model classes that we need to process data.
- */
+import {TestResult} from "@/models/TestResult";
 
 /**
- * A class representing the result of a test.
- */
-export class TestResult {
-    /** Construct a TestResult based largely on a JSON result from . */
-    constructor(status, message, resultType= "null", result = {}) {
-        this.status = status;
-        this.message = message;
-        this.resultType = resultType;
-        this.result = result;
-    }
-
-    /** Create a TestResult for a success. */
-    static success(message, resultType = "unknown", result = null) {
-        return new TestResult(true, message, resultType, result);
-    }
-
-    /** Create a TestResult for a failure. */
-    static failure(message, resultType="unknown", result=null) {
-        return new TestResult(false, message, resultType, result);
-    }
-}
-
-
-/**
- * Represents a single test in our test suite. This is constructed in some way (currently, from a row in a spreadsheet)
+ * Represents a single NameRes test in our test suite. This is constructed in some way (currently, from a row in a spreadsheet)
  * and includes within it a closure that includes the test itself. The test can be executed by passing it an endpoint to
  * test, and it returns a TestResult representing the result.
  */
-export class Test {
+export class NameResTest {
     /**
-     * Each test has a description, source, source_url and
+     * Each test has a description, source, source_url and a test function.
      */
     constructor(description, urls={}, source=null, source_url=null, test=function(nodeNormEndpoint) { return Promise.resolve(TestResult.failure(`Not implemented (${nodeNormEndpoint})`)); }) {
         this.description = description;
@@ -113,7 +87,7 @@ export class Test {
         // Define some standard test types.
         /** Check whether this identifier is present in this NodeNorm instance. */
         function createCheckIDTest(id) {
-            return new Test(`Check for ID ${id}`, {
+            return new NodeNormTest(`Check for ID ${id}`, {
                 [id]: getURLForCURIE(id)
             }, source, source_url, function(nodeNormEndpoint) {
                 // Check to see if NodeNorm know about this ID.
@@ -127,7 +101,7 @@ export class Test {
          * Include a class in the format '!biolink:className' to pass only if this className is NOT present.
          */
         function createBiolinkClassTest(id, biolinkClass) {
-            return new Test(`Check that ID ${id} has Biolink class ${biolinkClass}`, {
+            return new NodeNormTest(`Check that ID ${id} has Biolink class ${biolinkClass}`, {
                 [id]: getURLForCURIE(id)
             }, source, source_url, function(nodeNormEndpoint) {
                 // Check to see if NodeNorm know about this ID.
@@ -162,7 +136,7 @@ export class Test {
         }
 
         function createPreferredIdTest(query_id, preferred_id) {
-            return new Test(`Check ID ${query_id} has preferred ID ${preferred_id}`, {
+            return new NodeNormTest(`Check ID ${query_id} has preferred ID ${preferred_id}`, {
                 [query_id]: getURLForCURIE(query_id),
                 [preferred_id]: getURLForCURIE(preferred_id),
             }, source, source_url, function(nodeNormEndpoint) {
@@ -188,7 +162,7 @@ export class Test {
         }
 
         function createClusterTogetherTest(id1, id2) {
-            return new Test(`Check ID ${id1} and ID ${id2} cluster together`, {
+            return new NodeNormTest(`Check ID ${id1} and ID ${id2} cluster together`, {
                 [id1]: getURLForCURIE(id1),
                 [id2]: getURLForCURIE(id2),
             }, source, source_url,function(nodeNormEndpoint) {

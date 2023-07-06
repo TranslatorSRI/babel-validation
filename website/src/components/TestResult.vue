@@ -17,11 +17,11 @@
 </template>
 
 <script>
-import {Test} from "@/models/NodeNormTesting";
+import {NodeNormTest} from "@/models/NodeNormTest";
 
 export default {
   props: {
-    test: Test,
+    test: NodeNormTest,
     endpoint: String,
     description: String,
   },

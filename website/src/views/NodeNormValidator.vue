@@ -46,7 +46,7 @@
 import {BTable} from "bootstrap-vue-3";
 import Papa from 'papaparse';
 import TextWithURLs from "@/components/TextWithURLs.vue";
-import { Test } from '@/models/NodeNormTesting';
+import { NodeNormTest } from '@/models/NodeNormTest';
 import TestResult from "@/components/TestResult.vue";
 
 export default {
@@ -73,7 +73,7 @@ export default {
       if (this.testDataIncomplete) return [];
       return this.testData.flatMap(row => {
         if(row['Ignore?'] && row['Ignore?'] == 'y') return [];
-        return Test.convertRowToTests(row)
+        return NodeNormTest.convertRowToTests(row)
       });
     },
   },

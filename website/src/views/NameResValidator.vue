@@ -1,4 +1,6 @@
 <template>
+  <small><a href="/">Return to front page</a></small>
+
   <h1>Name Resolver Validation</h1>
   <p>
     <a href="https://github.com/TranslatorSRI/babel">Babel</a> is the program that generates the datasets of
@@ -45,7 +47,7 @@
 import {BTable} from "bootstrap-vue-3";
 import Papa from 'papaparse';
 import TextWithURLs from "@/components/TextWithURLs.vue";
-import { Test } from '@/models/NodeNormTesting';
+import { NameResTest } from '@/models/NameResTest';
 import TestResult from "@/components/TestResult.vue";
 
 export default {
@@ -54,10 +56,10 @@ export default {
     return {
       nameResEndpoints: {
         "NameRes-RENCI-exp": "https://name-resolution-sri-dev.apps.renci.org",
-        "NodeNorm-RENCI-dev": "https://name-resolution-sri.apps.renci.org",
-        "NodeNorm-ITRB-ci": "https://name-lookup.ci.transltr.io",
-        "NodeNorm-ITRB-test": "https://name-lookup.test.transltr.io",
-        "NodeNorm-ITRB-prod": "https://name-lookup.transltr.io"
+        "NameRes-RENCI-dev": "https://name-resolution-sri.apps.renci.org",
+        "NameRes-ITRB-ci": "https://name-lookup.ci.transltr.io",
+        "NameRes-ITRB-test": "https://name-lookup.test.transltr.io",
+        "NameRes-ITRB-prod": "https://name-lookup.transltr.io"
       },
       testData: [],
       testDataErrors: [],
@@ -72,7 +74,7 @@ export default {
       if (this.testDataIncomplete) return [];
       return this.testData.flatMap(row => {
         if(row['Ignore?'] && row['Ignore?'] == 'y') return [];
-        return Test.convertRowToTests(row)
+        return NameResTest.convertRowToTests(row)
       });
     },
   },
