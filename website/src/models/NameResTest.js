@@ -1,5 +1,6 @@
 import {TestResult} from "@/models/TestResult";
 import {getURLForCURIE} from "@/models/helpers";
+import {Test} from "@/models/Test";
 
 // Helper functions
 /**
@@ -23,18 +24,7 @@ function convertPrevNameResFormatToCurrent(response) {
  * and includes within it a closure that includes the test itself. The test can be executed by passing it an endpoint to
  * test, and it returns a TestResult representing the result.
  */
-export class NameResTest {
-    /**
-     * Each test has a description, source, source_url and a test function.
-     */
-    constructor(description, urls={}, source=null, source_url=null, test=function(nodeNormEndpoint) { return Promise.resolve(TestResult.failure(`Not implemented (${nodeNormEndpoint})`)); }) {
-        this.description = description;
-        this.urls = urls;
-        this.source = source;
-        this.source_url = source_url;
-        this.test = test;
-    }
-
+export class NameResTest extends Test {
     /**
      * Convert a single row into zero or more tests.
      */
@@ -71,7 +61,7 @@ export class NameResTest {
                             return TestResult.failure(`NameRes /lookup returned an unexpected response`, 'json', responseJson);
                         }
 
-                        return TestResult.success(`NameRes /lookup returned ${results.length} results`, 'nameres', results);
+                        return TestResult.success(`NameRes /lookup returned ${results.length} results`, 'NameRes', results);
                     });
             });
         }

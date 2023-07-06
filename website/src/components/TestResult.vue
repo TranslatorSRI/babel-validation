@@ -13,15 +13,25 @@
     <template v-else>
       {{testStatus}}: {{testMessage}}
     </template>
+
+    <div v-if="testResult.resultType === 'NameRes'">
+      <ul>
+        <li v-for="result in testResult.result" :key="result['curie']">
+          {{result['curie']}}
+          ({{result['label'] || (result['synonyms'] || [])[0]}})
+          <template v-if="result['types']">[{{result['types'][0]}}]</template>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
 <script>
-import {NodeNormTest} from "@/models/NodeNormTest";
+import {Test} from "@/models/Test";
 
 export default {
   props: {
-    test: NodeNormTest,
+    test: Test,
     endpoint: String,
     description: String,
   },
