@@ -55,8 +55,8 @@ export default {
   data () {
     return {
       nameResEndpoints: {
-        "NameRes-RENCI-exp": "https://name-resolution-sri-dev.apps.renci.org",
-        "NameRes-RENCI-dev": "https://name-resolution-sri.apps.renci.org",
+        "NameRes-RENCI-exp": "http://name-resolution-sri-dev.apps.renci.org",
+        "NameRes-RENCI-dev": "http://name-resolution-sri.renci.org",
         "NameRes-ITRB-ci": "https://name-lookup.ci.transltr.io",
         "NameRes-ITRB-test": "https://name-lookup.test.transltr.io",
         "NameRes-ITRB-prod": "https://name-lookup.transltr.io"

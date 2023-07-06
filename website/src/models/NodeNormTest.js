@@ -1,4 +1,10 @@
 import {TestResult} from "@/models/TestResult";
+import {getURLForCURIE} from "@/models/helpers";
+
+// Helper functions
+function getEquivalentIDs(result) {
+    return new Set((result['equivalent_identifiers'] || []).map(r => r.identifier))
+}
 
 /**
  * Represents a single test in our test suite. This is constructed in some way (currently, from a row in a spreadsheet)
@@ -24,32 +30,6 @@ export class NodeNormTest {
         const source = row['Source'];
         const source_url = row['Source URL'];
 
-        // Helper functions.
-        function getURLForCURIE(curie) {
-            const iri_stems = {
-                'UMLS': 'https://uts.nlm.nih.gov/uts/umls/concept/',
-            }
-
-            const curie_split = (curie.toUpperCase().split(':') || [''])
-            const curie_prefix = curie_split[0];
-            if (new Set('HTTP', 'HTTPS', 'URN').has(curie_prefix)) {
-                // Looks like a URI! Leave it unchanged.
-                return curie;
-            }
-
-            if (iri_stems[curie_prefix] && curie_split.length > 1) {
-                return iri_stems[curie_prefix] + curie.substring(curie.indexOf(':') + 1);
-            }
-
-            // Default to bioregistry.io lookup
-            return 'http://bioregistry.io/' + encodeURIComponent(curie);
-            // return 'https://google.com/search?q=' + encodeURIComponent(curie);
-        }
-
-        function getEquivalentIDs(result) {
-            return new Set((result['equivalent_identifiers'] || []).map(r => r.identifier))
-        }
-
         // A helper function that returns a Promise that evaluates to a JSON result object.
         // TODO: cache this.
         function getNormalizedNodes(nodeNormEndpoint, id) {
@@ -57,7 +37,11 @@ export class NodeNormTest {
             // console.log("Querying", url);
             return fetch(url).then(response => {
                 if (!response.ok) return TestResult.failure("Could not get_normalized_nodes", 'text', response.statusText);
-                return response.json().then(results => {
+                return response.json()
+                    .catch(err => {
+                        return TestResult.failure(`NodeNorm /get_normalized_nodes returned a non-JSON result: ${err}`, 'text', response);
+                    })
+                    .then(results => {
                     // console.log("Results:", results);
                     if (!results) return TestResult.failure(`get_normalized_nodes returned invalid response`, 'text', response);
                     const result = results[id];
@@ -72,7 +56,7 @@ export class NodeNormTest {
                         if (result['id']) {
                             const preferred_id = result.id['identifier'];
                             const preferred_label = result.id['label'];
-                            if (id == preferred_id) {
+                            if (id === preferred_id) {
                                 preferred_label_text = ` (\"${preferred_label}\")`;
                             } else {
                                 preferred_label_text = ` (${preferred_id} "${preferred_label}\")`;
