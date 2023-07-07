@@ -3,26 +3,28 @@
     <template v-if="!testResult">
       WAITING
     </template>
-    <template v-else-if="testStatus == 'FAIL'">
-      <strong>FAIL: {{testMessage}}</strong>
-      <b-button size="sm" class="col-12" @click="displayDetailed = !displayDetailed">Additional</b-button>
-      <div v-if="displayDetailed" class="bg-light border-dark border-1 p-1 m-1" style="white-space: pre">
-        {{testResultAsJson}}
+    <template v-else>
+      <template v-if="testStatus == 'FAIL'">
+        <strong>FAIL: {{testMessage}}</strong>
+        <b-button size="sm" class="col-12" @click="displayDetailed = !displayDetailed">Additional</b-button>
+        <div v-if="displayDetailed" class="bg-light border-dark border-1 p-1 m-1" style="white-space: pre">
+          {{testResultAsJson}}
+        </div>
+      </template>
+      <template v-else>
+        {{testStatus}}: {{testMessage}}
+      </template>
+
+      <div v-if="testResult.resultType === 'NameRes'">
+        <ul>
+          <li v-for="result in testResult.result" :key="result['curie']">
+            {{result['curie']}}
+            ({{result['label'] || (result['synonyms'] || [])[0]}})
+            <template v-if="result['types']">[{{result['types'][0]}}]</template>
+          </li>
+        </ul>
       </div>
     </template>
-    <template v-else>
-      {{testStatus}}: {{testMessage}}
-    </template>
-
-    <div v-if="testResult.resultType === 'NameRes'">
-      <ul>
-        <li v-for="result in testResult.result" :key="result['curie']">
-          {{result['curie']}}
-          ({{result['label'] || (result['synonyms'] || [])[0]}})
-          <template v-if="result['types']">[{{result['types'][0]}}]</template>
-        </li>
-      </ul>
-    </div>
   </div>
 </template>
 
