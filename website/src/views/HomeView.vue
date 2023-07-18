@@ -11,6 +11,7 @@
   <ul>
     <li><a href="/nodenorm">Node Normalization Validator</a></li>
     <li><a href="/nameres">Name Resolver Validator</a></li>
+    <li><a href="/autocomplete">Autocomplete Validator</a></li>
   </ul>
 </template>
 

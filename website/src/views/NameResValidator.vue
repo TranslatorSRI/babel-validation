@@ -55,6 +55,7 @@ export default {
   data () {
     return {
       nameResEndpoints: {
+	      "NameRes-localhost": "http://localhost:8080",
         "NameRes-RENCI-exp": "http://name-resolution-sri-dev.apps.renci.org",
         "NameRes-RENCI-dev": "http://name-resolution-sri.renci.org",
         "NameRes-ITRB-ci": "https://name-lookup.ci.transltr.io",
