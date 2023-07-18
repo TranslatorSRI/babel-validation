@@ -19,6 +19,40 @@ function convertPrevNameResFormatToCurrent(response) {
     });
 }
 
+// A helper function that returns a Promise that evaluates to a JSON result object.
+// TODO: cache this.
+export function lookupNameRes(nameResEndpoint, query, limit=10) {
+    // TODO: once all current instances are upgraded to 1.3.2+, we can replace this with a GET request.
+    const url = nameResEndpoint + "/lookup?string=" + encodeURIComponent(query) + "&limit=" + encodeURIComponent(limit);
+    const request = new Request(
+        url, {
+            method: "POST"
+        }
+    );
+
+    return fetch(request).then(response => {
+        if (!response.ok) return TestResult.failure("Could not submit request to NameRes /lookup", 'text', response.statusText);
+        return response.json()
+            .catch(err => {
+                return TestResult.failure(`NameRes /lookup returned a non-JSON result: ${err}`, 'text', response);
+            })
+            .then(responseJson => {
+                // There are two possible formats that could be returned. If this is the old format, the results
+                // will be a dictionary; if the new format, this will be a list.
+                let results;
+                if (Array.isArray(responseJson)) {
+                    results = responseJson;
+                } else if(typeof responseJson === 'object') {
+                    results = convertPrevNameResFormatToCurrent(responseJson);
+                } else {
+                    return TestResult.failure(`NameRes /lookup returned an unexpected response`, 'json', responseJson);
+                }
+
+                return TestResult.success(`NameRes /lookup returned ${results.length} results`, 'NameRes', results);
+            });
+    });
+}
+
 /**
  * Represents a single NameRes test in our test suite. This is constructed in some way (currently, from a row in a spreadsheet)
  * and includes within it a closure that includes the test itself. The test can be executed by passing it an endpoint to
@@ -31,40 +65,6 @@ export class NameResTest extends Test {
     static convertRowToTests(row) {
         const source = row['Source'];
         const source_url = row['Source URL'];
-
-        // A helper function that returns a Promise that evaluates to a JSON result object.
-        // TODO: cache this.
-        function lookupNameRes(nameResEndpoint, query, limit=10) {
-            // TODO: once all current instances are upgraded to 1.3.2+, we can replace this with a GET request.
-            const url = nameResEndpoint + "/lookup?string=" + encodeURIComponent(query) + "&limit=" + encodeURIComponent(limit);
-            const request = new Request(
-                url, {
-                    method: "POST"
-                }
-            );
-
-            return fetch(request).then(response => {
-                if (!response.ok) return TestResult.failure("Could not submit request to NameRes /lookup", 'text', response.statusText);
-                return response.json()
-                    .catch(err => {
-                        return TestResult.failure(`NameRes /lookup returned a non-JSON result: ${err}`, 'text', response);
-                    })
-                    .then(responseJson => {
-                        // There are two possible formats that could be returned. If this is the old format, the results
-                        // will be a dictionary; if the new format, this will be a list.
-                        let results;
-                        if (Array.isArray(responseJson)) {
-                            results = responseJson;
-                        } else if(typeof responseJson === 'object') {
-                            results = convertPrevNameResFormatToCurrent(responseJson);
-                        } else {
-                            return TestResult.failure(`NameRes /lookup returned an unexpected response`, 'json', responseJson);
-                        }
-
-                        return TestResult.success(`NameRes /lookup returned ${results.length} results`, 'NameRes', results);
-                    });
-            });
-        }
 
         // Define some standard test types.
         function createCheckIDTest(id) {
