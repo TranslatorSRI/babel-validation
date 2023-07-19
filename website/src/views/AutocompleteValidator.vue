@@ -9,19 +9,26 @@
     queries than the <a href="/nameres">Name Resolution validator</a>, we will only test a single endpoint at a time.
   </p>
 
-  <b-card title="Settings" class="mb-2 p-0">
+  <b-card title="Settings">
     <b-card-body>
       <p>Choose NameRes endpoint:</p>
       <b-dropdown :text="currentEndpoint">
         <b-dropdown-item
             v-for="endpoint in Object.keys(nameResEndpoints)"
-            @click="currentEndpoint = endpoint"
+            @click="setCurrentEndpoint(endpoint)"
         >{{endpoint}}</b-dropdown-item>
       </b-dropdown>
     </b-card-body>
+
+    <b-card-footer>
+      <b-button-group>
+        <b-button @click="loadGoogleSheet()">Reload Google Sheet</b-button>
+        <b-button @click="nameResResults = {}; currentEndpoint = '';">Reset NameRes results</b-button>
+      </b-button-group>
+    </b-card-footer>
   </b-card>
 
-  <b-button @click="loadGoogleSheet()">Reload</b-button>
+
 
   <h2 class="mt-2">Tests</h2>
 
@@ -46,10 +53,9 @@
           <td :rowspan="generateAutocompleteTexts(row['Query label']).length + 1">{{row['Query label']}}</td>
           <td :rowspan="generateAutocompleteTexts(row['Query label']).length + 1">{{row['Query ID']}}</td>
           <td>{{row['Query label']}}</td>
-          <td>{{loadNameResResults(currentEndpoint, row['Query label'])}}</td>
           <td>
             <ul>
-              <li v-for="res in (nameResResults[currentEndpoint] || {})[row['Query label']]">
+              <li v-for="res in getNameResResults(currentEndpoint, row['Query label'])">
                 {{res.curie}} ({{res.synonyms[0]}})
               </li>
             </ul>
@@ -58,10 +64,9 @@
         <template v-for="text in generateAutocompleteTexts(row['Query label'])">
           <tr>
             <td>{{text}}</td>
-            <td>{{loadNameResResults(currentEndpoint, text)}}</td>
             <td>
               <ul>
-                <li v-for="res in (nameResResults[currentEndpoint] || {})[text]">
+                <li v-for="res in getNameResResults(currentEndpoint, text)">
                   {{res.curie}} ({{res.synonyms[0]}})
                 </li>
               </ul>
@@ -143,6 +148,11 @@ export default {
         })
       })
     },
+    getNameResResults(endpoint, text) {
+      if (!(endpoint in this.nameResResults)) return [];
+      if (!(text in this.nameResResults[endpoint])) return [];
+      return this.nameResResults[endpoint][text];
+    },
     generateAutocompleteTexts(string = "") {
       // Given a string (e.g. "Botulinum toxin type A"), break it down into autocomplete texts (e.g. "Botu", "Botul",
       // and so on). We start from the minimum character size.
@@ -154,15 +164,42 @@ export default {
 
       return texts.reverse();
     },
-    async loadNameResResults(currentEndpoint, query, limit = 10) {
-      if (currentEndpoint in this.nameResResults && query in this.nameResResults[currentEndpoint]) return;
-      return await nameResBottleneck.schedule(() => lookupNameRes(this.nameResEndpoints[currentEndpoint], query, limit))
+    setCurrentEndpoint(endpoint) {
+      this.currentEndpoint = endpoint;
+      console.log("this.currentEndpoint is now", this.currentEndpoint);
+      // Start loading NameRes results for every text for every row.
+      this.rowsHead(2).forEach(row => {
+        const query = row['Query label'];
+
+        this.loadNameResResults(endpoint, query, 10)
+        const texts = this.generateAutocompleteTexts(query);
+        texts.forEach(text => {
+          console.log("Loading NameRes results for text: ", text);
+          // TODO: we can await this to slow the entire process down.
+          this.loadNameResResults(endpoint, text, 10)
+        });
+      });
+    },
+    async loadNameResResults(endpoint, query, limit = 10) {
+      // Don't load a query that has already been cached.
+      if (endpoint in this.nameResResults && query in this.nameResResults[endpoint]) return;
+
+      // Use the nameResBottleneck to make queries at a suitable rate.
+      return await nameResBottleneck.schedule(() => lookupNameRes(this.nameResEndpoints[endpoint], query, limit)
           .then(tr => {
-            if (!(currentEndpoint in this.nameResResults)) {
-              this.nameResResults[currentEndpoint] = {};
+            console.info(`Found results in ${endpoint} (${this.currentEndpoint}) for query ${query} with result`, tr.result);
+
+            // If the endpoint is no longer the current endpoint, then stop download these results.
+            if (endpoint !== this.currentEndpoint) return;
+
+            // If the endpoint has not been created in the nameResResults, create it now. Then save the result to it.
+            if (!(endpoint in this.nameResResults)) {
+              this.nameResResults[endpoint] = {};
             }
-            this.nameResResults[currentEndpoint][query] = tr.result;
-          });
+            this.nameResResults[endpoint][query] = tr.result;
+
+            console.log(`Set this.nameResResults[${endpoint}][${query}] to:`, tr.result);
+          }));
     },
   }
 }
