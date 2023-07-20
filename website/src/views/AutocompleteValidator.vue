@@ -48,11 +48,13 @@
       </tr>
     </thead>
     <tbody>
-      <template v-for="row in rowsHead(2)">
+      <template v-for="row in rows">
         <tr>
           <td :rowspan="generateAutocompleteTexts(row['Query label']).length + 1">{{row['Query label']}}</td>
           <td :rowspan="generateAutocompleteTexts(row['Query label']).length + 1">{{row['Query ID']}}</td>
-          <td>{{row['Query label']}}</td>
+          <td>{{row['Query label']}}<br/>
+            <small><a target="autocomplete-examine" :href="nameResEndpoints[currentEndpoint] + '/lookup?string=' + encodeURIComponent(row['Query label']) + '&limit=' + limit">Lookup</a></small>
+          </td>
           <td>
             <ul>
               <li v-for="res in getNameResResults(currentEndpoint, row['Query label'])">
@@ -63,7 +65,10 @@
         </tr>
         <template v-for="text in generateAutocompleteTexts(row['Query label'])">
           <tr>
-            <td>{{text}}</td>
+            <td>
+              {{text}}<br/>
+              <small><a target="autocomplete-examine" :href="nameResEndpoints[currentEndpoint] + '/lookup?string=' + encodeURIComponent(text) + '&limit=' + limit">Lookup</a></small>
+            </td>
             <td>
               <ul>
                 <li v-for="res in getNameResResults(currentEndpoint, text)">
@@ -116,6 +121,7 @@ export default {
       testDataErrors: [],
       testDataIncomplete: true,
       nameResResults: {},
+      limit: 10,
     }
   },
   created() {
@@ -168,7 +174,7 @@ export default {
       this.currentEndpoint = endpoint;
       console.log("this.currentEndpoint is now", this.currentEndpoint);
       // Start loading NameRes results for every text for every row.
-      this.rowsHead(2).forEach(row => {
+      this.rows.forEach(row => {
         const query = row['Query label'];
 
         this.loadNameResResults(endpoint, query, 10)
@@ -180,12 +186,12 @@ export default {
         });
       });
     },
-    async loadNameResResults(endpoint, query, limit = 10) {
+    async loadNameResResults(endpoint, query) {
       // Don't load a query that has already been cached.
       if (endpoint in this.nameResResults && query in this.nameResResults[endpoint]) return;
 
       // Use the nameResBottleneck to make queries at a suitable rate.
-      return await nameResBottleneck.schedule(() => lookupNameRes(this.nameResEndpoints[endpoint], query, limit)
+      return await nameResBottleneck.schedule(() => lookupNameRes(this.nameResEndpoints[endpoint], query, this.limit)
           .then(tr => {
             console.info(`Found results in ${endpoint} (${this.currentEndpoint}) for query ${query} with result`, tr.result);
 
