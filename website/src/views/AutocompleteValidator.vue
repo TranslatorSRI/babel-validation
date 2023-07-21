@@ -103,7 +103,7 @@ export default {
   props: {
     minimumAutocompleteChars: {
       type: Number,
-      default: 3
+      default: 2, // As per https://github.com/NCATSTranslator/Feedback/issues/315#issuecomment-1604515810
     },
   },
   data () {
