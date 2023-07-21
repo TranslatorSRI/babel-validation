@@ -13,13 +13,14 @@
 
 .decl Synonym(
 	curie: curie,
+	types: symbol,
 	preferred_name: synonym
 )
 
 // Read synonyms from a GZipped synonyms file.
-.input Synonym(IO=file, filename="../data/2023may18/synonyms/AnatomicalEntity.tsv")
+.input Synonym(IO=file, filename="../data/2023jul13/synonyms/combined.tsv.gz")
 
-.decl result(curie: curie, label: synonym)
-result(curie, preferred_name) :- Synonym(curie, preferred_name), match(".*cartilage.*", preferred_name).
+.decl result(preferred_name: synonym, curie1: curie, curie2: curie, types1: symbol, types2: symbol)
+result(preferred_name, curie1, curie2, types1, types2) :- Synonym(curie1, types1, preferred_name), Synonym(curie2, types2, preferred_name), curie1 < curie2 .
 
-.output result(IO=stdout)
+.output result(IO=file, filename="../data/2023jul13/synonyms/duplicates.tsv.gz", compress=True)
