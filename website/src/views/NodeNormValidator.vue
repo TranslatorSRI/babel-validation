@@ -54,11 +54,11 @@ export default {
   data () {
     return {
       nodeNormEndpoints: {
-        "NodeNorm-RENCI-exp": "https://nodenormalization-dev.apps.renci.org/1.3",
-        "NodeNorm-RENCI-dev": "https://nodenormalization-sri.renci.org/1.3",
-        "NodeNorm-ITRB-ci": "https://nodenorm.ci.transltr.io/1.3",
-        "NodeNorm-ITRB-test": "https://nodenorm.test.transltr.io/1.3",
-        "NodeNorm-ITRB-prod": "https://nodenorm.transltr.io/1.3"
+        "NodeNorm-RENCI-exp": "https://nodenormalization-dev.apps.renci.org",
+        "NodeNorm-RENCI-dev": "https://nodenormalization-sri.renci.org",
+        "NodeNorm-ITRB-ci": "https://nodenorm.ci.transltr.io",
+        "NodeNorm-ITRB-test": "https://nodenorm.test.transltr.io",
+        "NodeNorm-ITRB-prod": "https://nodenorm.transltr.io"
       },
       testData: [],
       testDataErrors: [],
