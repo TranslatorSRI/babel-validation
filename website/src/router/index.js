@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "@/views/HomeView.vue";
 import NodeNormValidator from "@/views/NodeNormValidator.vue";
 import NameResValidator from "@/views/NameResValidator.vue";
+import Autocomplete from "@/views/Autocomplete.vue";
 import AutocompleteBulkValidator from "@/views/AutocompleteBulkValidator.vue";
 
 const router = createRouter({
@@ -22,6 +23,11 @@ const router = createRouter({
       path: "/nameres/",
       name: "Name Resolver Validator",
       component: () => import("../views/NameResValidator.vue"),
+    },
+    {
+      path: "/autocomplete",
+      name: "Autocomplete",
+      component: Autocomplete,
     },
     {
       path: "/autocomplete-bulk",
