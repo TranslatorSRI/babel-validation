@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "@/views/HomeView.vue";
 import NodeNormValidator from "@/views/NodeNormValidator.vue";
 import NameResValidator from "@/views/NameResValidator.vue";
-import AutocompleteValidator from "@/views/AutocompleteValidator.vue";
+import AutocompleteBulkValidator from "@/views/AutocompleteBulkValidator.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -26,7 +26,7 @@ const router = createRouter({
     {
       path: "/autocomplete/",
       name: "Autocomplete Validator",
-      component: () => import("../views/AutocompleteValidator.vue"),
+      component: () => import("../views/AutocompleteBulkValidator.vue"),
     },
     {
       path: "/about/",
