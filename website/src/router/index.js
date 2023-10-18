@@ -24,9 +24,9 @@ const router = createRouter({
       component: () => import("../views/NameResValidator.vue"),
     },
     {
-      path: "/autocomplete/",
-      name: "Autocomplete Validator",
-      component: () => import("../views/AutocompleteBulkValidator.vue"),
+      path: "/autocomplete-bulk",
+      name: "Autocomplete Bulk Validator",
+      component: AutocompleteBulkValidator,
     },
     {
       path: "/about/",
