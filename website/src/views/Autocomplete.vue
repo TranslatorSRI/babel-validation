@@ -82,10 +82,14 @@
       :fields="autocompleteFields"
       :items="autocompleteResults"
     />
+    <b-button @click="exportAsCSV()" variant="secondary">Export as CSV</b-button>
   </b-card>
 </template>
 
 <script>
+import { stringify } from "csv-stringify/browser/esm";
+import { saveAs } from "file-saver";
+
 function getURLForCURIE(curie) {
   const [prefix, suffix] = curie.split(':', 2);
   switch (prefix) {
@@ -204,6 +208,31 @@ export default {
             this.autocompleteQuery = query;
           });
       });
+    },
+    exportAsCSV() {
+      if (this.autocompleteResults.length === 0) return;
+
+      const rows = [
+        this.autocompleteFields,
+        ...this.autocompleteResults.map(row => {
+          return this.autocompleteFields.map(field => row[field] || '')
+        }),
+      ];
+      console.log(rows);
+
+      stringify(
+        rows,
+        (err, csv) => {
+          if (err) {
+            alert("Could not export as CSV: " + err);
+            return;
+          }
+
+          const content = [csv];
+          const csvFile = new Blob(content, {type: 'text/csv;charset=utf-8'});
+          saveAs(csvFile, 'autocomplete.csv', { autoBom: false });
+        }
+      );
     },
   },
 };
