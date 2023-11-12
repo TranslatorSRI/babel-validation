@@ -11,7 +11,7 @@ def pytest_addoption(parser):
     # The target environment(s) to target.
     parser.addoption(
         '--target',
-        default=['dev'],
+        default=[],
         action='append',  # You can specify multiple targets, e.g. `--target prod --target dev`
         help="The target to test. See targets.ini file for a list of targets."
     )
@@ -31,9 +31,20 @@ def get_target(config, target):
     return targets[target]
 
 
+def get_targets(config):
+    targets = config.getoption('--target')
+    if not targets:
+        # Default to 'dev'
+        return ['dev']
+    if "all" in targets:
+        config_path = os.path.join(config.rootpath, 'tests', 'targets.ini')
+        return read_targets(config_path).sections()
+    return targets
+
+
 def pytest_report_header(config):
     target_info = []
-    targets = config.getoption('--target')
+    targets = get_targets(config)
     for target in targets:
         target_info.append(f"testing target '{target}': {dict(get_target(config, target))}")
 
@@ -41,8 +52,8 @@ def pytest_report_header(config):
 
 
 def pytest_generate_tests(metafunc):
-    targets = metafunc.config.getoption("--target")
+    targets = get_targets(metafunc.config)
     if "target" in metafunc.fixturenames:
         metafunc.parametrize("target", targets)
     if "target_info" in metafunc.fixturenames:
-        metafunc.parametrize("target_info", map(lambda target: get_target(metafunc.config, target), targets))
+        metafunc.parametrize("target_info", map(lambda target: get_target(metafunc.config, target), targets), ids=targets)
