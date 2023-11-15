@@ -18,7 +18,7 @@ def test_openapi_json(target_info):
     assert response.ok, f"Could not GET {url}: {response}"
 
     openapi_json = response.json()
-    assert openapi_json['info']['x-translator']['infores'] == 'infores:sri-node-normalization'
+    assert openapi_json['info']['x-translator']['infores'] == 'infores:sri-node-normalizer'
 
     try:
         validate_url(url)
