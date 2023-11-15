@@ -7,6 +7,24 @@ import pytest
 import configparser
 
 
+def get_targets_ini_path(config):
+    """
+    Return the path to targets.ini. Because of some confusion over the root path, this checks both:
+        - rootpath + '/targets.ini'
+        - rootpath + '/tests/targets.ini'.
+
+    :param config: PyTest configuration settings.
+    :return: The filepath to targets.ini, or raises an exception if it can't be found.
+    """
+    config_path = os.path.join(config.rootpath, 'targets.ini')
+    if not os.path.isfile(config_path):
+        config_path_with_tests = os.path.join(config.rootpath, 'tests', 'targets.ini')
+        if not os.path.isfile(config_path_with_tests):
+            raise RuntimeError(f"Could not find targets.ini configuration file at either {config_path} or {config_path_with_tests}")
+        return config_path_with_tests
+    return config_path
+
+
 def pytest_addoption(parser):
     # The target environment(s) to target.
     parser.addoption(
@@ -24,7 +42,7 @@ def read_targets(config_path):
 
 
 def get_target(config, target):
-    config_path = os.path.join(config.rootpath, 'tests', 'targets.ini')
+    config_path = get_targets_ini_path(config)
     targets = read_targets(config_path)
     if target not in targets:
         raise RuntimeError(f"Could not find target '{target}' in {targets} loaded from {config_path}.")
@@ -37,7 +55,7 @@ def get_targets(config):
         # Default to 'dev'
         return ['dev']
     if "all" in targets:
-        config_path = os.path.join(config.rootpath, 'tests', 'targets.ini')
+        config_path = get_targets_ini_path(config)
         return read_targets(config_path).sections()
     return targets
 

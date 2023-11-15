@@ -11,6 +11,10 @@ from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
 
 def test_openapi_json(target_info):
+    """
+    Test the OpenAPI specification.
+    """
+
     nameres_url = target_info['NameResURL']
 
     url = urllib.parse.urljoin(nameres_url, 'openapi.json')
