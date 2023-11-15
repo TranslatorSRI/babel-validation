@@ -4,6 +4,7 @@
 # This library contains classes and methods for accessing those test cases.
 import csv
 import io
+from collections import Counter
 
 import requests
 
@@ -32,3 +33,7 @@ class GoogleSheetTestCases:
             reader = csv.DictReader(f)
             for row in reader:
                 self.rows.append(row)
+
+    def categories(self):
+        """ Return a dict of all the categories of tests available with their counts. """
+        return Counter(map(lambda t: t.get('Category', ''), self.rows))
