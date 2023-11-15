@@ -9,7 +9,6 @@ import requests
 from openapi_spec_validator import validate_url
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
-
 def test_openapi_json(target_info):
     """
     Test the OpenAPI specification.

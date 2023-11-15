@@ -4,9 +4,47 @@
 # This library contains classes and methods for accessing those test cases.
 import csv
 import io
+from dataclasses import dataclass
 from collections import Counter
+from typing import Iterable
 
 import requests
+
+
+@dataclass(frozen=True)
+class TestRow:
+    """
+    A TestRow models a single row from a GoogleSheet.
+    """
+    Category: str
+    QueryLabel: str
+    PreferredLabel: str
+    AdditionalLabels: list[str]
+    QueryID: str
+    PreferredID: str
+    AdditionalIDs: list[str]
+    Conflations: list[str]
+    BiolinkClasses: list[str]
+    Source: str
+    SourceURL: str
+    Notes: str
+
+    @staticmethod
+    def from_data_row(row):
+        return TestRow(
+            Category=row.get('Category', ''),
+            QueryLabel=row.get('Query Label', ''),
+            QueryID=row.get('Query ID', ''),
+            PreferredID=row.get('Preferred ID', ''),
+            AdditionalIDs=row.get('Additional IDs', '').split('|'),
+            PreferredLabel=row.get('Preferred Label', ''),
+            AdditionalLabels=row.get('Additional Labels', '').split('|'),
+            Conflations=row.get('Conflations', '').split('|'),
+            BiolinkClasses=row.get('Biolink Classes', '').split('|'),
+            Source=row.get('Source', ''),
+            SourceURL=row.get('Source URL', ''),
+            Notes=row.get('Notes', '')
+        )
 
 
 class GoogleSheetTestCases:
@@ -33,6 +71,19 @@ class GoogleSheetTestCases:
             reader = csv.DictReader(f)
             for row in reader:
                 self.rows.append(row)
+
+    @property
+    def test_rows(self) -> list[TestRow]:
+        """
+        self.rows is the raw list of rows we got back from the Google Sheets. This method transforms that into
+        a list of TestRows.
+
+        :return: A list of TestRows for the rows in this file.
+        """
+        def has_nonempty_value(d: dict):
+            return not all(not s for s in d.values())
+
+        return list(map(TestRow.from_data_row, filter(has_nonempty_value, self.rows)))
 
     def categories(self):
         """ Return a dict of all the categories of tests available with their counts. """
