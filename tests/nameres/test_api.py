@@ -4,7 +4,10 @@
 #
 import urllib.parse
 
+import pytest
 import requests
+from openapi_spec_validator import validate_url
+from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
 
 def test_openapi_json(target_info):
@@ -16,3 +19,8 @@ def test_openapi_json(target_info):
 
     openapi_json = response.json()
     assert openapi_json['info']['x-translator']['infores'] == 'infores:sri-name-resolver'
+
+    try:
+        validate_url(url)
+    except OpenAPIValidationError as e:
+        pytest.fail(f"Could not validate OpenAPI at {url}: {e}")
