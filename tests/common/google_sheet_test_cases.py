@@ -23,7 +23,7 @@ class TestRow:
     QueryID: str
     PreferredID: str
     AdditionalIDs: list[str]
-    Conflations: list[str]
+    Conflations: set[str]
     BiolinkClasses: list[str]
     Prefixes: set[str]
     Source: str
@@ -41,7 +41,7 @@ class TestRow:
             AdditionalIDs=row.get('Additional IDs', '').split('|'),
             PreferredLabel=row.get('Preferred Label', ''),
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
-            Conflations=row.get('Conflations', '').split('|'),
+            Conflations=set(row.get('Conflations', '').split('|')),
             BiolinkClasses=row.get('Biolink Classes', '').split('|'),
             Prefixes=set(row.get('Prefixes', '').split('|')),
             Source=row.get('Source', ''),
