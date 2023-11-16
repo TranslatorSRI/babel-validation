@@ -6,7 +6,6 @@ import csv
 import io
 from dataclasses import dataclass
 from collections import Counter
-from typing import Iterable
 
 import requests
 
@@ -28,6 +27,7 @@ class TestRow:
     Source: str
     SourceURL: str
     Notes: str
+    Flags: set[str]
 
     @staticmethod
     def from_data_row(row):
@@ -43,7 +43,8 @@ class TestRow:
             BiolinkClasses=row.get('Biolink Classes', '').split('|'),
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),
-            Notes=row.get('Notes', '')
+            Notes=row.get('Notes', ''),
+            Flags=set(row.get('Flags', '').split('|'))
         )
 
 
