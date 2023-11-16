@@ -16,6 +16,7 @@ class TestRow:
     A TestRow models a single row from a GoogleSheet.
     """
     Category: str
+    Flags: set[str]
     QueryLabel: str
     PreferredLabel: str
     AdditionalLabels: list[str]
@@ -24,15 +25,16 @@ class TestRow:
     AdditionalIDs: list[str]
     Conflations: list[str]
     BiolinkClasses: list[str]
+    Prefixes: set[str]
     Source: str
     SourceURL: str
     Notes: str
-    Flags: set[str]
 
     @staticmethod
     def from_data_row(row):
         return TestRow(
             Category=row.get('Category', ''),
+            Flags=set(row.get('Flags', '').split('|')),
             QueryLabel=row.get('Query Label', ''),
             QueryID=row.get('Query ID', ''),
             PreferredID=row.get('Preferred ID', ''),
@@ -41,10 +43,10 @@ class TestRow:
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
             Conflations=row.get('Conflations', '').split('|'),
             BiolinkClasses=row.get('Biolink Classes', '').split('|'),
+            Prefixes=set(row.get('Prefixes', '').split('|')),
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),
-            Notes=row.get('Notes', ''),
-            Flags=set(row.get('Flags', '').split('|'))
+            Notes=row.get('Notes', '')
         )
 
 

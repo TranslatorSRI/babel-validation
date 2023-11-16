@@ -10,6 +10,7 @@ gsheet = GoogleSheetTestCases()
 @pytest.mark.parametrize("test_row", gsheet.test_rows)
 def test_label(target_info, test_row, test_category):
     nameres_url = target_info['NameResURL']
+    limit = target_info['NameResLimit']
 
     category = test_row.Category
     if not test_category(category):
@@ -44,8 +45,11 @@ def test_label(target_info, test_row, test_category):
             request = {
                 "string": label,
                 "biolink_type": biolink_class,
-                "limit": 100
+                "limit": limit
             }
+            if test_row.Prefixes:
+                request['only_prefixes'] = "|".join(list(test_row.Prefixes))
+
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
             response = requests.get(nameres_url_lookup, request)
 
@@ -53,7 +57,19 @@ def test_label(target_info, test_row, test_category):
             results = response.json()
 
             # All curies
-            all_curies = [map(lambda r: r['curie'], results)]
+            all_curies = list(map(lambda r: r['curie'], results))
+
+            # Check for negative results
+            if 'negative' in test_row.Flags:
+                if not results:
+                    assert not results, f"Negative test {test_summary} successful: no results found."
+                    continue
+
+                top_result = results[0]
+                if top_result['label'] == label:
+                    pytest.fail(f"Negative test {test_summary} found top result with label '{label}': {results}")
+                else:
+                    pytest.xfail(f"Negative test {test_summary} found results, but top result doesn't have label '{label}': {results}")
 
             # There are three possible responses:
             if not results:
@@ -76,7 +92,4 @@ def test_label(target_info, test_row, test_category):
                 pytest.fail(f"{test_summary} returns {results[0]['curie']} ('{results[0]['label']}') as the "
                             f"top result, but {expected_id} is at {expected_index} index.")
             else:
-                if 'negative' in test_row.Flags:
-                    pytest.fail(f"Negative test {test_summary} found expected result {expected_id} not found: {results}")
-                else:
-                    pytest.fail(f"{test_summary} but expected result {expected_id} not found: {results}")
+                pytest.fail(f"{test_summary} but expected result {expected_id} not found: {results}")
