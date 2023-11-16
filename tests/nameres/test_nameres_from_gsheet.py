@@ -88,7 +88,7 @@ def test_label(target_info, test_row, test_category):
                         f"Biolink types for {top_result['curie']} are {top_result['types']}, which includes {biolink_class_exclude} which should be excluded."
 
             elif expected_id in all_curies:
-                expected_index = all_curies.index(all_curies)
+                expected_index = all_curies.index(expected_id)
                 pytest.fail(f"{test_summary} returns {results[0]['curie']} ('{results[0]['label']}') as the "
                             f"top result, but {expected_id} is at {expected_index} index.")
             else:
