@@ -8,8 +8,12 @@ gsheet = GoogleSheetTestCases()
 
 
 @pytest.mark.parametrize("test_row", gsheet.test_rows)
-def test_label(target_info, test_row):
+def test_label(target_info, test_row, test_category):
     nameres_url = target_info['NameResURL']
+
+    category = test_row.Category
+    if not test_category(category):
+        pytest.skip(f"Skipping category {category} because of the category filter.")
 
     source = test_row.Source
     source_url = test_row.SourceURL
@@ -25,15 +29,24 @@ def test_label(target_info, test_row):
     query_labels.extend(test_row.AdditionalLabels)
 
     # Test these labels against NameRes
-    for label in query_labels:
+    for query_label in query_labels:
+        label = query_label.strip()
+        if not label:
+            continue
+
         for biolink_class in biolink_classes:
+            biolink_class_exclude = ''
+            if biolink_class.startswith('!'):
+                biolink_class_exclude = biolink_class[1:]
+                biolink_class = ''
+
             nameres_url_lookup = urllib.parse.urljoin(nameres_url, 'lookup')
             request = {
                 "string": label,
                 "biolink_type": biolink_class,
                 "limit": 100
             }
-            test_summary = f"querying {nameres_url_lookup} with label {label} and biolink_type {biolink_class}"
+            test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
             response = requests.get(nameres_url_lookup, request)
 
             assert response.ok, f"Could not send request {request} to GET {nameres_url_lookup}: {response}"
@@ -49,7 +62,15 @@ def test_label(target_info, test_row):
             elif expected_id == '':
                 pytest.fail(f"No expected CURIE for {test_summary} from {source_info}: best result is {results[0]}")
             elif results[0]['curie'] == expected_id:
-                assert results[0]['curie'] == expected_id, f"{test_summary} returned expected ID {expected_id} as first result"
+                top_result = results[0]
+                assert top_result['curie'] == expected_id,\
+                    f"{test_summary} returned expected ID {expected_id} as top result"
+
+                # Additionally, test the biolink_class_exclude field if there is one.
+                if biolink_class_exclude:
+                    assert biolink_class_exclude not in top_result['types'],\
+                        f"Biolink types for {top_result['curie']} are {top_result['types']}, which includes {biolink_class_exclude} which should be excluded."
+
             elif expected_id in all_curies:
                 expected_index = all_curies.index(all_curies)
                 pytest.fail(f"{test_summary} returns {results[0]['curie']} ('{results[0]['label']}') as the "

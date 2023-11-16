@@ -33,6 +33,19 @@ def pytest_addoption(parser):
         action='append',  # You can specify multiple targets, e.g. `--target prod --target dev`
         help="The target to test. See targets.ini file for a list of targets."
     )
+    # Categories to process.
+    parser.addoption(
+        '--category',
+        default=[],
+        action='append',
+        help="The categories of tests to run."
+    )
+    parser.addoption(
+        '--category-exclude',
+        default=[],
+        action='append',
+        help="The categories of tests to exclude."
+    )
 
 
 def read_targets(config_path):
@@ -66,6 +79,11 @@ def pytest_report_header(config):
     for target in targets:
         target_info.append(f"testing target '{target}': {dict(get_target(config, target))}")
 
+    categories_include = set(config.getoption('--category'))
+    categories_exclude = set(config.getoption('--category-exclude'))
+    target_info.append(f"included categories: {categories_include}")
+    target_info.append(f"excluded categories: {categories_exclude}")
+
     return target_info
 
 
@@ -75,3 +93,23 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("target", targets)
     if "target_info" in metafunc.fixturenames:
         metafunc.parametrize("target_info", map(lambda target: get_target(metafunc.config, target), targets), ids=targets)
+
+
+@pytest.fixture
+def test_category(request):
+    def category_test(cat):
+        categories_include = set(request.config.getoption('--category'))
+        categories_exclude = set(request.config.getoption('--category-exclude'))
+
+        if categories_include:
+            # Only include the included categories minus the excluded categories.
+            if cat in categories_include and cat not in categories_exclude:
+                return True
+            return False
+        else:
+            # Only exclude the categories that are explicitly excluded.
+            if cat in categories_exclude:
+                return False
+            return True
+
+    return category_test
