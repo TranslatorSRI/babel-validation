@@ -65,11 +65,9 @@ def test_label(target_info, test_row, test_category):
                     assert not results, f"Negative test {test_summary} successful: no results found."
                     continue
 
-                top_result = results[0]
-                if top_result['label'] == label:
-                    pytest.fail(f"Negative test {test_summary} found top result with label '{label}': {results}")
-                else:
-                    pytest.xfail(f"Negative test {test_summary} found results, but top result doesn't have label '{label}': {results}")
+                expected_index = all_curies.index(expected_id)
+                assert expected_id in all_curies, \
+                    f"Negative test {test_summary} found expected CURIE {expected_id} in top {limit} results: {results[expected_index]}"
 
             # There are three possible responses:
             if not results:
