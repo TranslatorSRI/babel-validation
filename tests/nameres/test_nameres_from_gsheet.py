@@ -65,9 +65,14 @@ def test_label(target_info, test_row, test_category):
                     assert not results, f"Negative test {test_summary} successful: no results found."
                     continue
 
-                expected_index = all_curies.index(expected_id)
-                assert expected_id in all_curies, \
-                    f"Negative test {test_summary} found expected CURIE {expected_id} in top {limit} results: {results[expected_index]}"
+                if expected_id in all_curies:
+                    expected_index = all_curies.index(expected_id)
+                    assert expected_id not in all_curies, \
+                        f"Negative test {test_summary} found expected CURIE {expected_id} in top {limit} results: {results[expected_index]}"
+                else:
+                    assert expected_id not in all_curies, f"Negative test {test_summary} did not find expected ID {expected_id} in top {limit} results."
+
+                return
 
             # There are three possible responses:
             if not results:
