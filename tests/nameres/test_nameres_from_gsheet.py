@@ -26,8 +26,9 @@ def test_label(target_info, test_row, test_category):
         biolink_classes.append('')
 
     expected_id = test_row.PreferredID
-    query_labels = [test_row.QueryLabel]
-    query_labels.extend(test_row.AdditionalLabels)
+    query_labels = {test_row.QueryLabel}
+    query_labels.add(test_row.PreferredLabel)
+    query_labels.update(test_row.AdditionalLabels)
 
     # Test these labels against NameRes
     for query_label in query_labels:
