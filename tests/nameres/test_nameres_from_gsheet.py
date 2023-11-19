@@ -11,6 +11,7 @@ gsheet = GoogleSheetTestCases()
 def test_label(target_info, test_row, test_category):
     nameres_url = target_info['NameResURL']
     limit = target_info['NameResLimit']
+    nameres_xfail_if_in_top = int(target_info['NameResXFailIfInTop'])
 
     category = test_row.Category
     if not test_category(category):
@@ -93,7 +94,12 @@ def test_label(target_info, test_row, test_category):
 
             elif expected_id in all_curies:
                 expected_index = all_curies.index(expected_id)
-                pytest.fail(f"{test_summary} returns {results[0]['curie']} ('{results[0]['label']}') as the "
-                            f"top result, but {expected_id} is at {expected_index} index.")
+
+                fail_message = f"{test_summary} returns {results[0]['curie']} ('{results[0]['label']}') as the " \
+                    f"top result, but {expected_id} is at {expected_index} index."
+                if expected_index <= nameres_xfail_if_in_top:
+                    pytest.xfail(fail_message)
+                else:
+                    pytest.fail(fail_message)
             else:
                 pytest.fail(f"{test_summary} but expected result {expected_id} not found: {results}")

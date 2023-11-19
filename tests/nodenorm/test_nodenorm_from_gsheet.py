@@ -20,14 +20,16 @@ def test_normalization(target_info, test_row, test_category):
     source_url = test_row.SourceURL
     source_info = f"{source} ({source_url})"
 
+    preferred_label = test_row.PreferredLabel
+
     expected_id = test_row.PreferredID
-    query_ids = [test_row.QueryID]
-    query_ids.extend(test_row.AdditionalIDs)
+    query_ids = {test_row.QueryID}
+    query_ids.add(test_row.PreferredID)
+    query_ids.update(test_row.AdditionalIDs)
 
     # Test these labels against NameRes
     for query_id in query_ids:
-        label = query_id.strip()
-        if not label:
+        if not query_id:
             continue
 
         nodenorm_url_lookup = urllib.parse.urljoin(nodenorm_url, 'get_normalized_nodes')
@@ -45,7 +47,7 @@ def test_normalization(target_info, test_row, test_category):
                 leftover_conflations.remove('drug_chemical')
             assert leftover_conflations == set(), f"Unknown conflations in for {test_row}: {leftover_conflations}"
 
-        test_summary = f"Queried {query_id} on {nodenorm_url_lookup}"
+        test_summary = f"Queried {query_id} ({preferred_label}) on {nodenorm_url_lookup}"
         response = requests.get(nodenorm_url_lookup, request)
 
         assert response.ok, f"Could not send request {request} to GET {nodenorm_url_lookup}: {response}"
@@ -64,12 +66,13 @@ def test_normalization(target_info, test_row, test_category):
 
         # Test preferred identifier
         assert result['id']['identifier'] == expected_id,\
-            f"{test_summary} but normalized {query_id} to {result['id']['identifier']}, not expected identifier {expected_id}."
+            (f"{test_summary} but normalized to {result['id']['identifier']} ({result['id']['label']}), not expected "
+             f"identifier {expected_id}.")
 
         # Test preferred label
         if test_row.PreferredLabel:
-            assert result['id']['label'] == test_row.PreferredLabel,\
-                f"{test_summary} but preferred label is {result['id']['label']}, not expected label {test_row.PreferredLabel}."
+            assert result['id']['label'] == preferred_label,\
+                f"{test_summary} but preferred label is {result['id']['label']}, not expected label {preferred_label}."
 
         # Test Biolink types
         biolink_types = result['type']
@@ -78,8 +81,8 @@ def test_normalization(target_info, test_row, test_category):
                 continue
             elif biolink_type.startswith('!'):
                 biolink_type = biolink_type[1:]
-                assert biolink_type not in set(biolink_types), (f"{test_summary} excluded biolink type {biolink_type} found "
-                                                                f"in types: {biolink_types}")
+                assert biolink_type not in set(biolink_types), (f"{test_summary} excluded biolink type {biolink_type} "
+                                                                f"found in types: {biolink_types}")
             else:
                 assert biolink_type in set(biolink_types), (f"{test_summary} biolink type {biolink_type} not found in "
                                                             f"types: {biolink_types}")

@@ -30,6 +30,9 @@ class TestRow:
     SourceURL: str
     Notes: str
 
+    # Mark as not a test despite starting with TestRow.
+    __test__ = False
+
     @staticmethod
     def from_data_row(row):
         return TestRow(
