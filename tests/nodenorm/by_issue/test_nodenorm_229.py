@@ -51,6 +51,14 @@ def test_nodenorm_229(target_info):
                         "categories": ["biolink:Drug"],
                         "name": "Valsartan",
                     },
+                    "DRUGBANK:DB00966": {
+                        "categories": ["biolink:Drug"],
+                        "name": "Telmisartan",
+                    },
+                    "DRUGBANK:DB00678": {
+                        "categories": ["biolink:Drug"],
+                        "name": "Losartan",
+                    },
                 },
                 "edges": {
                     "e0": {
@@ -151,6 +159,38 @@ def test_nodenorm_229(target_info):
                     },
                     "e3": {
                         "subject": "DRUGBANK:DB00966",
+                        "object": "MONDO:0001134",
+                        "predicate": "biolink:treats",
+                        "sources": [
+                            {
+                                "resource_id": "infores:openpredict",
+                                "resource_role": "primary_knowledge_source",
+                            },
+                            {
+                                "resource_id": "infores:cohd",
+                                "resource_role": "supporting_data_source",
+                            },
+                        ],
+                        "attributes": [
+                            {
+                                "description": "model_id",
+                                "attribute_type_id": "EDAM:data_1048",
+                                "value": "openpredict_baseline",
+                            },
+                            {
+                                "attribute_type_id": "biolink:agent_type",
+                                "value": "computational_model",
+                                "attribute_source": "infores:openpredict",
+                            },
+                            {
+                                "attribute_type_id": "biolink:knowledge_level",
+                                "value": "prediction",
+                                "attribute_source": "infores:openpredict",
+                            },
+                        ],
+                    },
+                    "e4": {
+                        "subject": "DRUGBANK:DB00678",
                         "object": "MONDO:0001134",
                         "predicate": "biolink:treats",
                         "sources": [
@@ -771,8 +811,32 @@ def test_nodenorm_229(target_info):
             "results": [
                 {
                     "node_bindings": {
-                        "n0": [{"id": "DRUGBANK:DB00275"}],
-                        "n1": [{"id": "MONDO:0001134"}],
+                        "n0": [
+                            {
+                                "id": "PUBCHEM.COMPOUND:130881",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 100.0,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
+                        "n1": [
+                            {
+                                "id": "MONDO:0001134",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 83.0,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
                     },
                     "analyses": [
                         {
@@ -785,8 +849,32 @@ def test_nodenorm_229(target_info):
                 },
                 {
                     "node_bindings": {
-                        "n0": [{"id": "DRUGBANK:DB00876"}],
-                        "n1": [{"id": "MONDO:0001134"}],
+                        "n0": [
+                            {
+                                "id": "PUBCHEM.COMPOUND:5281037",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 92.7,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
+                        "n1": [
+                            {
+                                "id": "MONDO:0001134",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 83.0,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
                     },
                     "analyses": [
                         {
@@ -799,8 +887,32 @@ def test_nodenorm_229(target_info):
                 },
                 {
                     "node_bindings": {
-                        "n0": [{"id": "DRUGBANK:DB00177"}],
-                        "n1": [{"id": "MONDO:0001134"}],
+                        "n0": [
+                            {
+                                "id": "PUBCHEM.COMPOUND:60846",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 92.7,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
+                        "n1": [
+                            {
+                                "id": "MONDO:0001134",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 83.0,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
                     },
                     "analyses": [
                         {
@@ -813,8 +925,32 @@ def test_nodenorm_229(target_info):
                 },
                 {
                     "node_bindings": {
-                        "n0": [{"id": "DRUGBANK:DB00966"}],
-                        "n1": [{"id": "MONDO:0001134"}],
+                        "n0": [
+                            {
+                                "id": "PUBCHEM.COMPOUND:65999",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 95.4,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
+                        "n1": [
+                            {
+                                "id": "MONDO:0001134",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 83.0,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
                     },
                     "analyses": [
                         {
@@ -827,15 +963,39 @@ def test_nodenorm_229(target_info):
                 },
                 {
                     "node_bindings": {
-                        "n0": [{"id": "DRUGBANK:DB00678"}],
-                        "n1": [{"id": "MONDO:0001134"}],
+                        "n0": [
+                            {
+                                "id": "PUBCHEM.COMPOUND:3961",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 90.8,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
+                        "n1": [
+                            {
+                                "id": "MONDO:0001134",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 83.0,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
                     },
                     "analyses": [
                         {
                             "resource_id": "infores:openpredict",
+                            "edge_bindings": {"e01": [{"id": "e4"}]},
                             "score": 0.682246949249408,
                             "scoring_method": "Model confidence between 0 and 1",
-                            "edge_bindings": {"e01": [{"id": "e4"}]},
                         }
                     ],
                 },
@@ -848,14 +1008,14 @@ def test_nodenorm_229(target_info):
         "status": "Success",
     }
 
-    url = urllib.parse.urljoin(nodenorm_url, "1.4/query")
+    url = urllib.parse.urljoin(nodenorm_url, "query")
     response = requests.post(url, json=input_json)
     assert response.ok, f"Could not POST test content to {url}: {response.json()}"
     actual_output = response.json()
 
     # For this issue, we are primarily interested in the results.
-    input_results = input_json['message']['results']
-    expected_results = expected_output['message']['results']
-    actual_results = actual_output['message']['results']
+    input_results = input_json["message"]["results"]
+    expected_results = expected_output["message"]["results"]
+    actual_results = actual_output["message"]["results"]
 
     assert actual_results == expected_results, f"Did not receive the expected results."
