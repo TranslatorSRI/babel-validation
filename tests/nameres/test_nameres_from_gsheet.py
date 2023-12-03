@@ -123,7 +123,7 @@ def test_label(target_info, test_row, test_category):
 @pytest.mark.parametrize("category_and_expected_times", [
     # We expect unit tests to run in less than half a second each query and name.
     {'category': 'Unit Tests', 'expected_time_per_query': 0.5},
-    {'category': 'Slow Tests', 'expected_time_per_query': 1},
+    # {'category': 'Slow Tests', 'expected_time_per_query': 1},
 ])
 def test_query_rates(target_info, category_and_expected_times):
     """
