@@ -1,4 +1,5 @@
 import itertools
+import time
 import urllib.parse
 import requests
 import pytest
@@ -10,6 +11,16 @@ gsheet = GoogleSheetTestCases()
 
 @pytest.mark.parametrize("test_row", gsheet.test_rows)
 def test_normalization(target_info, test_row, test_category):
+    """
+    Test normalization on NodeNorm.
+
+    :param target_info: The target information to test.
+    :param test_row: The TestRow to test.
+    :param test_category: A function that accepts a category name and
+    :return: The number of queries executed.
+    """
+    count_queries = 0
+
     nodenorm_url = target_info['NodeNormURL']
 
     category = test_row.Category
@@ -49,6 +60,7 @@ def test_normalization(target_info, test_row, test_category):
 
         test_summary = f"Queried {query_id} ({preferred_label}) on {nodenorm_url_lookup}"
         response = requests.get(nodenorm_url_lookup, request)
+        count_queries += 1
 
         assert response.ok, f"Could not send request {request} to GET {nodenorm_url_lookup}: {response}"
         results = response.json()
@@ -86,3 +98,43 @@ def test_normalization(target_info, test_row, test_category):
             else:
                 assert biolink_type in set(biolink_types), (f"{test_summary} biolink type {biolink_type} not found in "
                                                             f"types: {biolink_types}")
+
+    return count_queries
+
+
+@pytest.mark.parametrize("category_and_expected_times", [
+    # We expect unit tests to run in less than half a second each query and name.
+    {'category': 'Unit Tests', 'expected_time_per_query': 0.2},
+])
+def test_normalization_rates(target_info, category_and_expected_times):
+    """
+    This is being done in service of https://github.com/TranslatorSRI/NodeNormalization/issues/205
+
+    To ensure that we can handle 20 simultaneous queries within 10 seconds, we will run a set of
+    rows from the Google Sheet, and measure the rate at which we process those queries.
+
+    :param target_info: The target_info object (really a config object).
+    """
+
+    category = category_and_expected_times['category']
+    rows_to_test = list(filter(lambda row: row.Category == category, gsheet.test_rows))
+    assert len(rows_to_test) > 0, f"Category '{category}' not found in Google Sheet {gsheet}."
+
+    time_started = time.time_ns()
+    count_queries = 0
+    for row in rows_to_test:
+        count_queries += test_normalization(target_info, row, lambda cat: True)
+    time_ended = time.time_ns()
+    time_taken = time_ended - time_started
+    time_taken_secs = float(time_taken) / 1e+9
+
+    time_per_test_row = time_taken_secs / len(rows_to_test)
+    time_per_query = time_taken_secs / count_queries
+    print(f"NodeNorm took {time_taken_secs:.3f} seconds to process {len(rows_to_test)} test rows " +
+          f"({time_per_test_row:.3f} seconds/test row, {time_per_query:.3f} seconds/query) on {target_info}")
+
+    assert len(rows_to_test) > 20, f"Categories with fewer than twenty test rows are not likely to be representative."
+    assert count_queries > 20, f"Categories with fewer than twenty queries are not likely to be representative."
+
+    if 'expected_time_per_query' in category_and_expected_times:
+        assert time_per_query < category_and_expected_times['expected_time_per_query']
