@@ -95,6 +95,10 @@ def test_label(target_info, test_row, test_category):
                 assert top_result['curie'] == expected_id,\
                     f"{test_summary} returned expected ID {expected_id} as top result"
 
+                # Test the preferred label if there is one.
+                if test_row.PreferredLabel:
+                    assert top_result['label'] == test_row.PreferredLabel, f"{test_summary} returned expected preferred label {test_row.PreferredLabel}"
+
                 # Additionally, test the biolink_class_exclude field if there is one.
                 if biolink_class_exclude:
                     assert biolink_class_exclude not in top_result['types'],\
