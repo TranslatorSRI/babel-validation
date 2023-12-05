@@ -38,7 +38,8 @@ def test_normalization(target_info, test_row, test_category):
         }
         if test_row.Conflations:
             leftover_conflations = test_row.Conflations
-            leftover_conflations.remove('')
+            if '' in leftover_conflations:
+                leftover_conflations.remove('')
             if 'gene_protein' in test_row.Conflations:
                 request['conflate'] = 'true'
                 leftover_conflations.remove('gene_protein')
