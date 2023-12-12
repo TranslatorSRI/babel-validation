@@ -57,11 +57,11 @@ def test_label(target_info, test_row, test_category):
                         exclude_prefixes.append(prefix[1:])
                     else:
                         only_prefixes.append(prefix)
-                request['only_prefixes'] = "|".join(list(test_row.Prefixes))
-                request['exclude_prefixes'] = "|".join(list(test_row.Prefixes))
+                request['only_prefixes'] = "|".join(only_prefixes)
+                request['exclude_prefixes'] = "|".join(exclude_prefixes)
 
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
-            response = requests.get(nameres_url_lookup, request)
+            response = requests.get(nameres_url_lookup, params=request)
 
             assert response.ok, f"Could not send request {request} to GET {nameres_url_lookup}: {response}"
             results = response.json()
@@ -87,7 +87,7 @@ def test_label(target_info, test_row, test_category):
             # There are three possible responses:
             if not results:
                 # 1. We got back no results.
-                pytest.fail(f"No results for {test_summary} from {source_info}")
+                pytest.fail(f"No results for {test_summary} from {source_info}: {request}")
             elif expected_id == '':
                 pytest.fail(f"No expected CURIE for {test_summary} from {source_info}: best result is {results[0]}")
             elif results[0]['curie'] == expected_id:
