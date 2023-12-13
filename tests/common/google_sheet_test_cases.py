@@ -45,7 +45,7 @@ class TestRow:
             PreferredLabel=row.get('Preferred Label', ''),
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
             Conflations=set(row.get('Conflations', '').split('|')),
-            BiolinkClasses=row.get('Biolink Classes', '').split('|'),
+            BiolinkClasses=set(row.get('Biolink Classes', '').split('|')),
             Prefixes=set(row.get('Prefixes', '').split('|')),
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),

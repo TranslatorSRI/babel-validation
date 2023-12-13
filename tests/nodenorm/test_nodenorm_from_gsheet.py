@@ -37,7 +37,7 @@ def test_normalization(target_info, test_row, test_category):
             "curie": [query_id]
         }
         if test_row.Conflations:
-            leftover_conflations = test_row.Conflations
+            leftover_conflations = set(test_row.Conflations)
             if '' in leftover_conflations:
                 leftover_conflations.remove('')
             if 'gene_protein' in test_row.Conflations:
@@ -48,7 +48,7 @@ def test_normalization(target_info, test_row, test_category):
                 leftover_conflations.remove('drug_chemical')
             assert leftover_conflations == set(), f"Unknown conflations in for {test_row}: {leftover_conflations}"
 
-        test_summary = f"Queried {query_id} ({preferred_label}) on {nodenorm_url_lookup}"
+        test_summary = f"Queried {query_id} ({preferred_label}) on {nodenorm_url_lookup} with test_row {test_row}"
         response = requests.get(nodenorm_url_lookup, request)
 
         assert response.ok, f"Could not send request {request} to GET {nodenorm_url_lookup}: {response}"
