@@ -24,7 +24,7 @@ def test_label(target_info, test_row, test_category):
     biolink_classes = test_row.BiolinkClasses
     # Make sure we test this without Biolink classes as well
     if '' not in biolink_classes:
-        biolink_classes.append('')
+        biolink_classes.update('')
 
     expected_id = test_row.PreferredID
     query_labels = {test_row.QueryLabel}
