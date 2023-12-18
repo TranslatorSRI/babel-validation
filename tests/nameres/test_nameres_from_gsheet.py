@@ -24,7 +24,7 @@ def test_label(target_info, test_row, test_category):
     biolink_classes = test_row.BiolinkClasses
     # Make sure we test this without Biolink classes as well
     if '' not in biolink_classes:
-        biolink_classes.append('')
+        biolink_classes.update('')
 
     expected_id = test_row.PreferredID
     query_labels = {test_row.QueryLabel}
@@ -50,10 +50,18 @@ def test_label(target_info, test_row, test_category):
                 "limit": limit
             }
             if test_row.Prefixes:
-                request['only_prefixes'] = "|".join(list(test_row.Prefixes))
+                only_prefixes = []
+                exclude_prefixes = []
+                for prefix in test_row.Prefixes:
+                    if prefix.startswith('^'):
+                        exclude_prefixes.append(prefix[1:])
+                    else:
+                        only_prefixes.append(prefix)
+                request['only_prefixes'] = "|".join(only_prefixes)
+                request['exclude_prefixes'] = "|".join(exclude_prefixes)
 
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
-            response = requests.get(nameres_url_lookup, request)
+            response = requests.get(nameres_url_lookup, params=request)
 
             assert response.ok, f"Could not send request {request} to GET {nameres_url_lookup}: {response}"
             results = response.json()
@@ -79,13 +87,17 @@ def test_label(target_info, test_row, test_category):
             # There are three possible responses:
             if not results:
                 # 1. We got back no results.
-                pytest.fail(f"No results for {test_summary} from {source_info}")
+                pytest.fail(f"No results for {test_summary} from {source_info}: {request}")
             elif expected_id == '':
                 pytest.fail(f"No expected CURIE for {test_summary} from {source_info}: best result is {results[0]}")
             elif results[0]['curie'] == expected_id:
                 top_result = results[0]
                 assert top_result['curie'] == expected_id,\
                     f"{test_summary} returned expected ID {expected_id} as top result"
+
+                # Test the preferred label if there is one.
+                if test_row.PreferredLabel:
+                    assert top_result['label'] == test_row.PreferredLabel, f"{test_summary} returned expected preferred label {test_row.PreferredLabel}"
 
                 # Additionally, test the biolink_class_exclude field if there is one.
                 if biolink_class_exclude:
