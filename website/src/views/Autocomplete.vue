@@ -1,5 +1,5 @@
 <template>
-  <small><a href="/">Return to front page</a></small>
+  <small><router-link to="/">Return to front page</router-link></small>
 
   <h1>Autocomplete</h1>
   <p>
@@ -41,7 +41,7 @@
           <b-form-input
             type="search"
             id="query"
-            v-model.lazy.trim="query"
+            v-model.trim="query"
             autocomplete="off"
           />
           <b-input-group-append>
@@ -66,8 +66,12 @@
         <b-form-input id="biolink-type-filter" type="text" v-model="biolinkTypeFilter" />
       </b-form-group>
 
-      <b-form-group label="Filter to prefixes separated by pipe ('|') (optional):" label-for="prefix-filter">
-        <b-form-input id="prefix-filter" type="text" v-model="prefixFilter" />
+      <b-form-group label="Filter to prefixes to include separated by pipe ('|') (optional):" label-for="prefix-filter">
+        <b-form-input id="prefix-filter" type="text" v-model="prefixIncludeFilter" />
+      </b-form-group>
+
+      <b-form-group label="Filter to prefixes to exclude separated by pipe ('|') (optional):" label-for="prefix-filter">
+        <b-form-input id="prefix-filter" type="text" v-model="prefixExcludeFilter" />
       </b-form-group>
     </b-card-body>
   </b-card>
@@ -118,9 +122,10 @@ export default {
       currentEndpoint: "NameRes-RENCI-dev",
       query: "",
       biolinkTypeFilter: "",
-      prefixFilter: "",
+      prefixIncludeFilter: "",
+      prefixExcludeFilter: "",
       limit: 10,
-      autocompleteFields: ["CURIE", "Label", "Synonyms", "Types", "URL", "Synopsis"],
+      autocompleteFields: ["CURIE", "Label", "Synonyms", "Types", "URL", "Score", "Synopsis"],
       results: [],
       autocompleteResults: [],
       autocompleteError: "",
@@ -130,7 +135,8 @@ export default {
   },
   watch: {
     query() {
-      this.doAutocomplete();
+      // It would be neat to actually run this as an autocomplete, but that is buggy.
+      // this.doAutocomplete();
     }
   },
   methods: {
@@ -147,10 +153,12 @@ export default {
         this.limit,
         ", Biolink type filter: ",
         this.biolinkTypeFilter,
-        ", prefix filter: ",
-        this.prefixFilter
+        ", prefix include filter: ",
+        this.prefixIncludeFilter,
+        ", prefix exclude filter: ",
+        this.prefixExcludeFilter
       );
-      this.autocompleteError = `Query in progress for '${this.query}' with limit ${this.limit}, Biolink type filter: ${this.biolinkTypeFilter}, prefix filter: ${this.prefixFilter}.`;
+      this.autocompleteError = `Query in progress for '${this.query}' with limit ${this.limit}, Biolink type filter: ${this.biolinkTypeFilter}, prefix filter: ${this.prefixIncludeFilter}.`;
 
       const currentEndpoint = this.nameResEndpoints[this.currentEndpoint];
       const url =
@@ -160,7 +168,9 @@ export default {
         "&biolink_type=" +
         this.biolinkTypeFilter +
         "&only_prefixes=" +
-        this.prefixFilter +
+        this.prefixIncludeFilter +
+        "&exclude_prefixes=" +
+        this.prefixExcludeFilter +
         "&string=" +
         query;
 
@@ -200,6 +210,7 @@ export default {
                 Types: res["types"].join(", "),
                 Synonyms: res["synonyms"].join(", "),
                 URL: url,
+                Score: res["score"],
                 Synopsis: synopsis,
               };
             });
