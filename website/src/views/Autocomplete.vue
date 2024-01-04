@@ -10,7 +10,7 @@
 
   <ul>
     <li>The ability to switch between different NameRes instances.</li>
-    <li></li>
+    <li>Try different flags and settings.</li>
   </ul>
 
   <p>
