@@ -1,5 +1,5 @@
 <template>
-  <small><a href="/">Return to front page</a></small>
+  <small><a href="/babel-validation/">Return to front page</a></small>
 
   <h1>Name Resolver Validation</h1>
   <p>

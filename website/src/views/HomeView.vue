@@ -9,9 +9,9 @@
   </p>
 
   <ul>
-    <li><a href="/nodenorm">Node Normalization Validator</a></li>
-    <li><a href="/nameres">Name Resolver Validator</a></li>
-    <li><a href="/autocomplete">Autocomplete Validator</a></li>
+    <li><a href="/babel-validation/nodenorm">Node Normalization Validator</a></li>
+    <li><a href="/babel-validation/nameres">Name Resolver Validator</a></li>
+    <li><a href="/babel-validation/autocomplete">Autocomplete Validator</a></li>
   </ul>
 </template>
 

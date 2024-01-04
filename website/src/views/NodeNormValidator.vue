@@ -1,5 +1,5 @@
 <template>
-  <small><a href="/">Return to front page</a></small>
+  <small><a href="/babel-validation/">Return to front page</a></small>
   <h1>Node Normalization Validation</h1>
   <p>
     <a href="https://github.com/TranslatorSRI/babel">Babel</a> is the program that generates the datasets of
