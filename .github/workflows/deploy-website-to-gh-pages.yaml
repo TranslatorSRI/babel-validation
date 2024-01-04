@@ -1,5 +1,6 @@
 name: Publish Vue app in Website to GitHub Pages
 on:
+  push:
   release:
     types: [released]
 permissions:
