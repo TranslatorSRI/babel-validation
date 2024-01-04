@@ -1,5 +1,5 @@
 <template>
-  <small><a href="/babel-validation/">Return to front page</a></small>
+  <small><router-link to="/">Return to front page</router-link></small>
 
   <h1>Name Resolver Validation</h1>
   <p>
@@ -49,9 +49,10 @@ import Papa from 'papaparse';
 import TextWithURLs from "@/components/TextWithURLs.vue";
 import { NameResTest } from '@/models/NameResTest';
 import TestResult from "@/components/TestResult.vue";
+import {RouterLink} from "vue-router";
 
 export default {
-  components: {TestResult, BTable, TextWithURLs},
+  components: {TestResult, BTable, TextWithURLs, RouterLink},
   data () {
     return {
       nameResEndpoints: {

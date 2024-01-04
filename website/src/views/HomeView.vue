@@ -9,11 +9,16 @@
   </p>
 
   <ul>
-    <li><a href="/babel-validation/nodenorm">Node Normalization Validator</a></li>
-    <li><a href="/babel-validation/nameres">Name Resolver Validator</a></li>
-    <li><a href="/babel-validation/autocomplete">Autocomplete Validator</a></li>
+    <li><router-link to="/nodenorm">Node Normalization Validator</router-link></li>
+    <li><router-link to="/nameres">Name Resolver Validator</router-link></li>
+    <li><router-link to="/autocomplete">Autocomplete Validator</router-link></li>
   </ul>
 </template>
 
-<script setup>
+<script>
+import {RouterLink} from "vue-router";
+
+export default {
+  components: {RouterLink},
+}
 </script>
