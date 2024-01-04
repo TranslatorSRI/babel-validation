@@ -11,22 +11,22 @@ const router = createRouter({
     {
       path: "/",
       name: "home",
-      component: HomeView,
+      component: () => import("../views/HomeView.vue"),
     },
     {
       path: "/nodenorm",
       name: "Node Normalization Validator",
-      component: NodeNormValidator,
+      component: () => import("../views/NodeNormValidator.vue"),
     },
     {
       path: "/nameres",
       name: "Name Resolver Validator",
-      component: NameResValidator,
+      component: () => import("../views/NameResValidator.vue"),
     },
     {
       path: "/autocomplete",
       name: "Autocomplete Validator",
-      component: AutocompleteValidator,
+      component: () => import("../views/AutocompleteValidator.vue"),
     },
     {
       path: "/about",
