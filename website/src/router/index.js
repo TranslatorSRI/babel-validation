@@ -6,6 +6,7 @@ import AutocompleteValidator from "@/views/AutocompleteValidator.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  base: import.meta.env.BASE_URL,
   routes: [
     {
       path: "/",
