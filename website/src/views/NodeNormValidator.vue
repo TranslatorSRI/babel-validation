@@ -1,5 +1,5 @@
 <template>
-  <small><a href="/babel-validation/">Return to front page</a></small>
+  <small><router-link to="/">Return to front page</router-link></small>
   <h1>Node Normalization Validation</h1>
   <p>
     <a href="https://github.com/TranslatorSRI/babel">Babel</a> is the program that generates the datasets of
@@ -48,9 +48,10 @@ import Papa from 'papaparse';
 import TextWithURLs from "@/components/TextWithURLs.vue";
 import { NodeNormTest } from '@/models/NodeNormTest';
 import TestResult from "@/components/TestResult.vue";
+import {RouterLink} from "vue-router";
 
 export default {
-  components: {TestResult, BTable, TextWithURLs},
+  components: {TestResult, BTable, TextWithURLs, RouterLink},
   data () {
     return {
       nodeNormEndpoints: {

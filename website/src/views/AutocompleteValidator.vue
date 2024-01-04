@@ -1,5 +1,5 @@
 <template>
-  <small><a href="/babel-validation/">Return to front page</a></small>
+  <small><router-link to="/">Return to front page</router-link></small>
 
   <h1>Autocomplete Validation</h1>
   <p>
@@ -92,6 +92,7 @@ import Bottleneck from "bottleneck";
 import TextWithURLs from "@/components/TextWithURLs.vue";
 import TestResult from "@/components/TestResult.vue";
 import { lookupNameRes } from "@/models/NameResTest";
+import {RouterLink} from "vue-router";
 
 const nameResBottleneck = new Bottleneck({
   maxConcurrent: 10,
@@ -99,7 +100,7 @@ const nameResBottleneck = new Bottleneck({
 });
 
 export default {
-  components: {TestResult, BTable, TextWithURLs},
+  components: {TestResult, BTable, TextWithURLs, RouterLink},
   props: {
     minimumAutocompleteChars: {
       type: Number,
