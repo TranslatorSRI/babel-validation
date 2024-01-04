@@ -11,7 +11,8 @@
   <ul>
     <li><router-link to="/nodenorm/">Node Normalization Validator</router-link></li>
     <li><router-link to="/nameres/">Name Resolver Validator</router-link></li>
-    <li><router-link to="/autocomplete/">Autocomplete Validator</router-link></li>
+    <li><router-link to="/autocomplete/">Autocomplete with Name Resolver</router-link></li>
+    <li><router-link to="/autocomplete-bulk/">Autocomplete Validator</router-link></li>
   </ul>
 </template>
 

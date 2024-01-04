@@ -1,9 +1,9 @@
 <template>
   <small><router-link to="/">Return to front page</router-link></small>
 
-  <h1>Autocomplete Validation</h1>
+  <h1>Autocomplete Bulk Validation</h1>
   <p>
-    Autocomplete validation uses the <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a> service,
+    Autocomplete bulk validation uses the <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a> service,
     but checks to ensure that autocompletion works as expected, i.e. after the minimum character count (currently {{minimumAutocompleteChars}}),
     every additional character should bring the correct match closer to the top of the list. Because this requires many more
     queries than the <a href="/nameres">Name Resolution validator</a>, we will only test a single endpoint at a time.
