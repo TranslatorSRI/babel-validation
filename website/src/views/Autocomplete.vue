@@ -103,6 +103,8 @@ function getURLForCURIE(curie) {
       return "http://purl.obolibrary.org/obo/HP_" + suffix;
     case 'UBERON':
       return "http://purl.obolibrary.org/obo/UBERON_" + suffix;
+    case 'PUBCHEM.COMPOUND':
+      return "https://pubchem.ncbi.nlm.nih.gov/compound/" + suffix;
     default:
       return "";
   }
@@ -130,21 +132,20 @@ export default {
       autocompleteResults: [],
       autocompleteError: "",
       autocompleteQuery: "",
-      searchInProgress: false,
+      searchInProgress: "",
     };
   },
   watch: {
     query() {
       // It would be neat to actually run this as an autocomplete, but that is buggy.
-      // this.doAutocomplete();
-    }
+      this.doAutocomplete();
+    },
   },
   methods: {
     doAutocomplete() {
-      if (this.searchInProgress) return;
-      this.searchInProgress = true;
-
+      // if (this.searchInProgress) return;
       const query = this.query;
+      this.searchInProgress = query;
 
       console.log(
         "Query in progress for ",
@@ -175,16 +176,21 @@ export default {
         query;
 
       fetch(url).then(response => {
+        if (this.searchInProgress !== query) {
+          // Oops, our query is no longer relevant. Forget about it!
+          console.log(`Skipping outdated query '${query}'`);
+          return;
+        }
         if (!response.ok) {
           this.autocompleteError = `Could not retrieve ${url}: ${response}.`;
-          this.searchInProgress = false;
+          this.searchInProgress = "";
           return;
         }
         return response
           .json()
           .catch((err) => {
             this.autocompleteError = `Could not retrieve ${url}: ${err}.`;
-            this.searchInProgress = false;
+            this.searchInProgress = "";
           })
           .then((results) => {
             this.results = results;
@@ -215,7 +221,7 @@ export default {
               };
             });
             this.autocompleteError = "";
-            this.searchInProgress = false;
+            this.searchInProgress = "";
             this.autocompleteQuery = query;
           });
       });
