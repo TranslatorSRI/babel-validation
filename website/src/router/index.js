@@ -14,22 +14,22 @@ const router = createRouter({
       component: () => import("../views/HomeView.vue"),
     },
     {
-      path: "/nodenorm",
+      path: "/nodenorm/",
       name: "Node Normalization Validator",
       component: () => import("../views/NodeNormValidator.vue"),
     },
     {
-      path: "/nameres",
+      path: "/nameres/",
       name: "Name Resolver Validator",
       component: () => import("../views/NameResValidator.vue"),
     },
     {
-      path: "/autocomplete",
+      path: "/autocomplete/",
       name: "Autocomplete Validator",
       component: () => import("../views/AutocompleteValidator.vue"),
     },
     {
-      path: "/about",
+      path: "/about/",
       name: "about",
       // route level code-splitting
       // this generates a separate chunk (About.[hash].js) for this route
