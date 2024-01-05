@@ -40,19 +40,31 @@ export default {
   data() { return {
     testResult: null,
     displayDetailed: false,
+    testR: null,
   }},
   created() {
-    const testR = this.test.test(this.endpoint);
-    if (!testR) {
-      console.log(`Unable to set up test Promise in ${this.description}`);
-      return;
-    }
-    console.log("Returned testR: ", testR);
+    this.testR = this.test.test(this.endpoint);
+  },
+  watch: {
+    test() {
+      this.testResult = null;
+      this.testR = this.test.test(this.endpoint);
+    },
+    testR() {
+      const testR = this.testR;
+      if (!testR) {
+        console.log(`Test Promise not set in ${this.description}`);
+        return;
+      }
+      console.log("Returned testR: ", testR);
 
-    testR.then(result => {
-      console.log("Got result:", result);
-      this.testResult = result;
-    });
+      this.testResult = null;
+
+      testR.then(result => {
+        console.log("Got result:", result);
+        this.testResult = result;
+      });
+    },
   },
   computed: {
     testStatus() {

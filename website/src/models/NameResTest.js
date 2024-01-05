@@ -170,9 +170,8 @@ export class NameResTest extends Test {
 
         // Look for tests in this row.
         const tests = [];
-        if('Query label' in row) { // || 'Preferred label' in row) {
-            const query_label = row['Query label'];
-            // const preferred_label = row.get('Preferred label', '');
+        if('Query Label' in row) { // || 'Preferred label' in row) {
+            const query_label = row['Query Label'];
 
             if (query_label !== '') {
                 // To begin with, let's just return the results as-is.
@@ -180,6 +179,25 @@ export class NameResTest extends Test {
                     return lookupNameRes(nameResURL, query_label);
                 }));
             }
+
+            const preferred_label = row['Preferred Label'];
+            if (preferred_label !== '') {
+                // To begin with, let's just return the results as-is.
+                tests.push(new NameResTest(`Lookup "${preferred_label}"`, {}, source, source_url, (nameResURL) => {
+                    return lookupNameRes(nameResURL, preferred_label);
+                }));
+            }
+
+
+            const additional_labels = row['Additional Labels'].split('|');
+            additional_labels.forEach(additional_label => {
+                if (!additional_label) return;
+
+                // To begin with, let's just return the results as-is.
+                tests.push(new NameResTest(`Lookup "${additional_label}"`, {}, source, source_url, (nameResURL) => {
+                    return lookupNameRes(nameResURL, additional_label);
+                }));
+            });
 
         } else {
             tests.push(TestResult.failure(`Could not understand row`, 'json', row));
