@@ -16,9 +16,9 @@
       </b-form-group>
     </b-card-body>
 
-      <b-form-group label="Choose NodeNorm endpoints:" label-for="current-endpoints">
-        <b-form-select id="current-endpoints" multiple v-model="currentEndpoints" :options="nodeNormEndpointsAsList" />
-      </b-form-group>
+    <b-form-group label="Choose NodeNorm endpoints:" label-for="current-endpoints">
+      <b-form-select id="current-endpoints" multiple v-model="currentEndpoints" :options="nodeNormEndpointsAsList" />
+    </b-form-group>
 
     <b-card-footer>
       <b-button @click="loadGoogleSheet()">Reload Google Sheet</b-button>
@@ -103,7 +103,13 @@ export default {
         if ('Category' in row) return row['Category'];
         return '(undefined)';
       });
-      return [...new Set(categories)].sort();
+
+      let counts = {};
+      categories.forEach(category => {
+        counts[category] = counts[category] ? counts[category] + 1 : 1;
+      });
+
+      return Object.entries(counts).map(([key, value]) => ({value: key, text: `${key} (${value})`}));
     },
   },
   methods: {
