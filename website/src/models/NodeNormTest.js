@@ -188,8 +188,8 @@ export class NodeNormTest extends Test {
                 });
             }
 
-            if(row['Biolink classes']) {
-                const biolink_classes = row['Biolink classes'].split(/\s*\|\s*/);
+            if(row['Biolink Classes']) {
+                const biolink_classes = row['Biolink Classes'].split(/\s*\|\s*/);
                 biolink_classes.forEach(biolink_class => {
                     tests.push(createBiolinkClassTest(query_id, biolink_class));
                 });
