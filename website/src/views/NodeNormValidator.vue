@@ -9,7 +9,21 @@
     This page will test several instances of the Node Normalization service.
   </p>
 
-  <b-button @click="loadGoogleSheet()">Reload</b-button>
+  <b-card title="Filter">
+    <b-card-body>
+      <b-form-group label="Choose categories:" label-for="selected-categories">
+        <b-form-select id="selected-categories" multiple v-model="selectedCategories" :options="googleSheetCategories" />
+      </b-form-group>
+    </b-card-body>
+
+      <b-form-group label="Choose NodeNorm endpoints:" label-for="current-endpoints">
+        <b-form-select id="current-endpoints" multiple v-model="currentEndpoints" :options="nodeNormEndpointsAsList" />
+      </b-form-group>
+
+    <b-card-footer>
+      <b-button @click="loadGoogleSheet()">Reload Google Sheet</b-button>
+    </b-card-footer>
+  </b-card>
 
   <h2>Tests</h2>
 
@@ -24,7 +38,7 @@
       <tr>
         <th>Test</th>
         <th>Source</th>
-        <th v-for="endpoint in Object.keys(nodeNormEndpoints)">
+        <th v-for="endpoint in currentEndpoints">
           <a target="_blank" :href="nodeNormEndpoints[endpoint] + '/docs'">{{endpoint}}</a>
         </th>
       </tr>
@@ -33,7 +47,7 @@
       <tr v-for="test in tests">
         <td><TextWithURLs :text="test.description" :urls="test.urls"></TextWithURLs></td>
         <td><TextWithURLs :text="test.source" :urls="{'URL': test.source_url}"></TextWithURLs></td>
-        <td v-for="endpoint in Object.keys(nodeNormEndpoints)">
+        <td v-for="endpoint in currentEndpoints">
           <TestResult :test="test" :endpoint="nodeNormEndpoints[endpoint]" :description="test.description + ':' + test.source + ':' + nodeNormEndpoints[endpoint]"></TestResult>
         </td>
       </tr>
@@ -61,6 +75,8 @@ export default {
         "NodeNorm-ITRB-test": "https://nodenorm.test.transltr.io",
         "NodeNorm-ITRB-prod": "https://nodenorm.transltr.io"
       },
+      currentEndpoints: ["NodeNorm-RENCI-dev", "NodeNorm-ITRB-test"],
+      selectedCategories: ["Unit Tests"],
       testData: [],
       testDataErrors: [],
       testDataIncomplete: true,
@@ -73,9 +89,21 @@ export default {
     tests() {
       if (this.testDataIncomplete) return [];
       return this.testData.flatMap(row => {
-        if(row['Ignore?'] && row['Ignore?'] == 'y') return [];
-        return NodeNormTest.convertRowToTests(row)
+        if ('Category' in row && this.selectedCategories.includes(row['Category'])) {
+          return NodeNormTest.convertRowToTests(row);
+        }
+        return [];
       });
+    },
+    nodeNormEndpointsAsList() {
+      return Object.entries(this.nodeNormEndpoints).map(([name, endpointURL]) => ({ "value": name, "text": `${name} (${endpointURL})` }));
+    },
+    googleSheetCategories() {
+      const categories = this.testData.map(row => {
+        if ('Category' in row) return row['Category'];
+        return '(undefined)';
+      });
+      return [...new Set(categories)].sort();
     },
   },
   methods: {
