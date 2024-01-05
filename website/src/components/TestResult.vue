@@ -81,6 +81,8 @@ export default {
         case 'json':
         case 'NodeNorm':
           return this.testResult.result;
+        case 'NameRes':
+          return this.testResult.result;
       }
     },
     testResultAsJson() {
