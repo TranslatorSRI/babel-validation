@@ -1,16 +1,15 @@
 <template>
   <b-card title="Query">
-    <b-card-body>
-      <b-form-group label="Choose NameRes endpoint:" label-for="current-endpoint">
-        <b-dropdown id="current-endpoint" :text="currentEndpoint">
-          <b-dropdown-item
-            v-for="endpoint in Object.keys(nameResEndpoints)"
-            :key="endpoint"
-            @click="currentEndpoint = endpoint"
-          >{{ endpoint }}</b-dropdown-item
-          >
-        </b-dropdown>
-      </b-form-group>
+    <div class="form-group">
+      <label for="current-endpoint" class="form-label">Choose NameRes endpoint:</label>
+      <select id="current-endpoint" class="form-select" aria-label="Current endpoint">
+        <option v-for="endpoint in Object.keys(nameResEndpoints)"
+              :key="endpoint"
+              :selected="currentEndpoint === endpoint"
+              @click="currentEndpoint = endpoint">{{endpoint}} ({{nameResEndpoints[endpoint]}})</option>
+      </select>
+      <p>(You can access this endpoint directly at <a target="current-endpoint-docs" :href="nameResEndpoints[currentEndpoint] + '/docs'">{{nameResEndpoints[currentEndpoint] + '/docs'}}</a>)</p>
+    </div>
 
       <b-form-group
         label="Search for a term:"
@@ -52,7 +51,6 @@
       <b-form-group label="Filter to prefixes to exclude separated by pipe ('|') (optional):" label-for="prefix-filter">
         <b-form-input id="prefix-filter" type="text" v-model="prefixExcludeFilter" />
       </b-form-group>
-    </b-card-body>
   </b-card>
 
   <b-card :title="'Results (' + autocompleteQuery + ', ' + autocompleteResults.length + ')'" class="mt-2">
@@ -74,6 +72,9 @@ import { stringify } from "csv-stringify/browser/esm";
 import pkg from "file-saver";
 const { saveAs } = pkg;
 
+// Bootstrap components
+import BCard from "./bootstrap/BCard.vue";
+
 function getURLForCURIE(curie) {
   const [prefix, suffix] = curie.split(':', 2);
   switch (prefix) {
@@ -91,6 +92,9 @@ function getURLForCURIE(curie) {
 }
 
 export default {
+  components: {
+    BCard,
+  },
   data() {
     return {
       nameResEndpoints: {
