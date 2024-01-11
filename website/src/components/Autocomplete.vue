@@ -1,6 +1,6 @@
 <template>
   <b-card title="Query">
-    <div class="form-group">
+    <div class="mb-3">
       <label for="current-endpoint" class="form-label">Choose NameRes endpoint:</label>
       <select id="current-endpoint" class="form-select" aria-label="Current endpoint">
         <option v-for="endpoint in Object.keys(nameResEndpoints)"
@@ -11,49 +11,41 @@
       <p>(You can access this endpoint directly at <a target="current-endpoint-docs" :href="nameResEndpoints[currentEndpoint] + '/docs'">{{nameResEndpoints[currentEndpoint] + '/docs'}}</a>)</p>
     </div>
 
-      <b-form-group
-        label="Search for a term:"
-        label-for="query"
-        >
-        <b-input-group>
-          <b-form-input
-            type="search"
-            id="query"
-            v-model.trim="query"
-            autocomplete="off"
-          />
-          <b-input-group-append>
-            <b-button
-              variant="success"
-              @click="
-                this.autocompleteResults = [];
-                this.searchInProgress = false;
-                doAutocomplete();
-              "
-              >Search</b-button
-            >
-          </b-input-group-append>
-        </b-input-group>
-      </b-form-group>
+    <div class="mb-3">
+      <label for="query" class="form-label">Search for a term:</label>
+      <div class="input-group mb-3">
+        <input id="query" type="search" class="form-control" v-model.trim="query" autocomplete="off" />
+        <button class="btn btn-success" type="button" id="query-submit"
+          @click="
+              this.autocompleteResults = [];
+              this.searchInProgress = false;
+              doAutocomplete();"
+        >Search</button>
+      </div>
+    </div>
 
-      <b-form-group label="Number of results to return:" label-for="limit">
-        <b-form-input id="limit" type="number" v-model="limit" />
-      </b-form-group>
+    <div class="mb-3">
+      <label for="limit" class="form-label">Number of results to return:</label>
+      <input id="limit" type="number" class="form-control" v-model="limit" />
+    </div>
 
-      <b-form-group label="Filter to Biolink type (optional):" label-for="biolink-type-filter">
-        <b-form-input id="biolink-type-filter" type="text" v-model="biolinkTypeFilter" />
-      </b-form-group>
+    <div class="mb-3">
+      <label for="biolink-type-filter" class="form-label">Filter to Biolink type (optional):</label>
+      <input id="biolink-type-filter" class="form-control" type="text" v-model="biolinkTypeFilter" />
+    </div>
 
-      <b-form-group label="Filter to prefixes to include separated by pipe ('|') (optional):" label-for="prefix-filter">
-        <b-form-input id="prefix-filter" type="text" v-model="prefixIncludeFilter" />
-      </b-form-group>
+    <div class="mb-3">
+      <label for="prefix-include-filter" class="form-label">Filter to prefixes to include separated by pipe ('|') (optional):</label>
+      <input id="prefix-include-filter" class="form-control" type="text" v-model="prefixIncludeFilter" />
+    </div>
 
-      <b-form-group label="Filter to prefixes to exclude separated by pipe ('|') (optional):" label-for="prefix-filter">
-        <b-form-input id="prefix-filter" type="text" v-model="prefixExcludeFilter" />
-      </b-form-group>
+    <div class="mb-3">
+      <label for="prefix-exclude-filter" class="form-label">Filter to prefixes to exclude separated by pipe ('|') (optional):</label>
+      <input id="prefix-exclude-filter" class="form-control" type="text" v-model="prefixExcludeFilter" />
+    </div>
   </b-card>
 
-  <b-card :title="'Results (' + autocompleteQuery + ', ' + autocompleteResults.length + ')'" class="mt-2">
+  <b-card :title="'Results (' + autocompleteQuery + ', ' + autocompleteResults.length + ')'">
     {{autocompleteError}}
     <b-table
       striped
