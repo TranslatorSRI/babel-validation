@@ -1,5 +1,5 @@
 <template>
-  <b-card title="Query">
+  <b-card title="Query" classes="text-dark bg-light">
     <div class="mb-3">
       <label for="current-endpoint" class="form-label">Choose NameRes endpoint:</label>
       <select id="current-endpoint" class="form-select" aria-label="Current endpoint">
@@ -45,8 +45,30 @@
     </div>
   </b-card>
 
-  <b-card :title="'Results (' + autocompleteQuery + ', ' + autocompleteResults.length + ')'">
-    {{autocompleteError}}
+  <b-card :title="'Results (' + autocompleteQuery + ', ' + autocompleteResults.length + ')'" classes="text-dark bg-light my-2">
+    <p>{{autocompleteError}}</p>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th v-for="autocompleteField in autocompleteFields" :key="autocompleteField">{{autocompleteField}}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="autocompleteResult in autocompleteResults" :key="autocompleteResult['Synopsis']">
+          <td v-for="field in autocompleteFields" :key="autocompleteResult['Synopsis'] + ':' + field">
+            <template v-if="autocompleteResult[field].toString().startsWith('http')">
+              <a target="autocomplete-link" :href="autocompleteResult[field]">{{ autocompleteResult[field] }}</a>
+            </template>
+            <template v-else>
+              {{ autocompleteResult[field] }}
+            </template>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+
     <b-table
       striped
       hover
@@ -55,7 +77,7 @@
       :fields="autocompleteFields"
       :items="autocompleteResults"
     />
-    <b-button @click="exportAsCSV()" variant="secondary">Export as CSV</b-button>
+    <button class="btn btn-primary" @click="exportAsCSV()">Export as CSV</button>
   </b-card>
 </template>
 
@@ -79,7 +101,7 @@ function getURLForCURIE(curie) {
     case 'PUBCHEM.COMPOUND':
       return "https://pubchem.ncbi.nlm.nih.gov/compound/" + suffix;
     default:
-      return "";
+      return "https://bioregistry.io/" + curie;
   }
 }
 
@@ -101,7 +123,7 @@ export default {
       query: "",
       biolinkTypeFilter: "",
       prefixIncludeFilter: "",
-      prefixExcludeFilter: "",
+      prefixExcludeFilter: "UMLS",
       limit: 10,
       autocompleteFields: ["CURIE", "Label", "Synonyms", "Types", "URL", "Score", "Synopsis"],
       results: [],
