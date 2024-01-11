@@ -11,11 +11,15 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.4.1",
+    "@astrojs/vue": "^4.0.8",
     "@popperjs/core": "^2.11.8",
     "@types/bootstrap": "^5.2.10",
     "astro": "^4.1.1",
     "astro-bootstrap": "^0.6.2",
     "bootstrap": "^5.3.2",
-    "typescript": "^5.3.3"
+    "csv-stringify": "^6.4.5",
+    "file-saver": "^2.0.5",
+    "typescript": "^5.3.3",
+    "vue": "^3.4.8"
   }
 }
