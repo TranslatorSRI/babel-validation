@@ -1,4 +1,4 @@
-name: Publish Vue app in Website to GitHub Pages
+name: Publish Astro site in `website` to GitHub Pages
 on:
   release:
     types: [released]
