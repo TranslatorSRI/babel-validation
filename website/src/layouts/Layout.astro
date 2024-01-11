@@ -1,10 +1,14 @@
 ---
+// Load properties
 interface Props {
 	title: string;
 	description: string;
 }
 
 const { title, description } = Astro.props;
+
+// Load Bootstrap
+import 'bootstrap/dist/css/bootstrap.css'
 ---
 
 <!doctype html>
@@ -18,8 +22,12 @@ const { title, description } = Astro.props;
 		<title>{title}</title>
 	</head>
 	<body>
-		<slot />
+		<div class="container-fluid">
+			<slot />
+		</div>
 	</body>
 </html>
 <style is:global>
+	body {
+	}
 </style>
