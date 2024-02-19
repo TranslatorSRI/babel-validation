@@ -59,6 +59,8 @@ def test_label(target_info, test_row, test_category):
                         only_prefixes.append(prefix)
                 request['only_prefixes'] = "|".join(only_prefixes)
                 request['exclude_prefixes'] = "|".join(exclude_prefixes)
+            if test_row.OnlyTaxa:
+                request['only_taxa'] = '|'.join(list(test_row.OnlyTaxa))
 
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
             response = requests.get(nameres_url_lookup, params=request)
