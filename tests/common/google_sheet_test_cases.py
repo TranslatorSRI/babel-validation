@@ -30,6 +30,7 @@ class TestRow:
     Conflations: set[str]
     BiolinkClasses: set[str]
     Prefixes: set[str]
+    OnlyTaxa: set[str]
     Source: str
     SourceURL: str
     Notes: str
@@ -59,6 +60,7 @@ class TestRow:
             Conflations=set(row.get('Conflations', '').split('|')),
             BiolinkClasses=set(row.get('Biolink Classes', '').split('|')),
             Prefixes=set(row.get('Prefixes', '').split('|')),
+            OnlyTaxa=set(row.get('Only Taxa', '').split('|')),
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),
             Notes=row.get('Notes', '')
