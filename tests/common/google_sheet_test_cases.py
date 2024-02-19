@@ -18,7 +18,8 @@ class TestRow:
     A TestRow models a single row from a GoogleSheet.
     """
     Category: str
-    ExpectPass: bool
+    ExpectPassInNodeNorm: bool
+    ExpectPassInNameRes: bool
     Flags: set[str]
     QueryLabel: str
     PreferredLabel: str
@@ -27,7 +28,7 @@ class TestRow:
     PreferredID: str
     AdditionalIDs: list[str]
     Conflations: set[str]
-    BiolinkClasses: list[str]
+    BiolinkClasses: set[str]
     Prefixes: set[str]
     Source: str
     SourceURL: str
@@ -46,7 +47,8 @@ class TestRow:
     def from_data_row(row):
         return TestRow(
             Category=row.get('Category', ''),
-            ExpectPass=row.get('Expect Pass', '') == 'y',
+            ExpectPassInNodeNorm=row.get('Passes in NodeNorm', '') == 'y',
+            ExpectPassInNameRes=row.get('Passes in NameRes', '') == 'y',
             Flags=set(row.get('Flags', '').split('|')),
             QueryLabel=row.get('Query Label', ''),
             QueryID=row.get('Query ID', ''),
@@ -88,8 +90,7 @@ class GoogleSheetTestCases:
             for row in reader:
                 self.rows.append(row)
 
-    @property
-    def test_rows(self) -> list[ParameterSet]:
+    def test_rows(self, test_nodenorm: bool = False, test_nameres: bool = False) -> list[ParameterSet]:
         """
         self.rows is the raw list of rows we got back from the Google Sheets. This method transforms that into
         a list of TestRows.
@@ -107,15 +108,29 @@ class GoogleSheetTestCases:
             if has_nonempty_value(row):
                 tr = TestRow.from_data_row(row)
 
-                if tr.ExpectPass:
-                    trows.append(pytest.param(tr))
-                else:
-                    trows.append(pytest.param(
-                        tr,
-                        marks=pytest.mark.xfail(
-                            reason=f"Test row {count + 2} is marked as not expected to pass in the Google Sheet: {tr}",
-                            strict=True)
-                    ))
+                if test_nodenorm:
+                    if tr.ExpectPassInNodeNorm:
+                        trows.append(pytest.param(tr))
+                    else:
+                        trows.append(pytest.param(
+                            tr,
+                            marks=pytest.mark.xfail(
+                                reason=f"Test row {count + 2} is marked as not expected to pass NodeNorm in the "
+                                       f"Google Sheet: {tr}",
+                                strict=True)
+                        ))
+
+                if test_nameres:
+                    if tr.ExpectPassInNameRes:
+                        trows.append(pytest.param(tr))
+                    else:
+                        trows.append(pytest.param(
+                            tr,
+                            marks=pytest.mark.xfail(
+                                reason=f"Test row {count + 2} is marked as not expected to pass NameRes in the "
+                                       f"Google Sheet: {tr}",
+                                strict=True)
+                        ))
 
         return trows
 

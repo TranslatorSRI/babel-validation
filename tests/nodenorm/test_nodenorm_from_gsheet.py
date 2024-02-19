@@ -8,7 +8,7 @@ from common.google_sheet_test_cases import GoogleSheetTestCases, TestRow
 gsheet = GoogleSheetTestCases()
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows)
+@pytest.mark.parametrize("test_row", gsheet.test_rows(test_nodenorm=True, test_nameres=False))
 def test_normalization(target_info, test_row, test_category):
     nodenorm_url = target_info['NodeNormURL']
 
