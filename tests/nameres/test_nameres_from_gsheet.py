@@ -35,6 +35,7 @@ def test_label(target_info, test_row, test_category):
     query_labels.update(test_row.AdditionalLabels)
 
     # Test these labels against NameRes
+    count_tested_labels = 0
     for query_label in query_labels:
         label = query_label.strip()
         if not label:
@@ -64,7 +65,11 @@ def test_label(target_info, test_row, test_category):
                 request['exclude_prefixes'] = "|".join(exclude_prefixes)
 
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
+            if not test_row.PreferredID:
+                pytest.xfail(f"Test {test_summary} cannot be tested without a preferred ID, skipping.")
+
             response = requests.get(nameres_url_lookup, params=request, timeout=NAMERES_TIMEOUT)
+            count_tested_labels += 1
 
             assert response.ok, f"Could not send request {request} to GET {nameres_url_lookup}: {response}"
             results = response.json()
@@ -85,7 +90,7 @@ def test_label(target_info, test_row, test_category):
                 else:
                     assert expected_id not in all_curies, f"Negative test {test_summary} did not find expected ID {expected_id} in top {limit} results."
 
-                return
+                continue
 
             # There are three possible responses:
             if not results:
@@ -119,3 +124,6 @@ def test_label(target_info, test_row, test_category):
                     pytest.fail(fail_message)
             else:
                 pytest.fail(f"{test_summary} but expected result {expected_id} not found: {results}")
+
+    if count_tested_labels == 0:
+        pytest.fail(f"No labels were tested for test row: {test_row}")
