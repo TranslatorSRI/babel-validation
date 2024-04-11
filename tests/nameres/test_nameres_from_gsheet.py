@@ -3,6 +3,9 @@ import requests
 import pytest
 from common.google_sheet_test_cases import GoogleSheetTestCases, TestRow
 
+# Configuration options
+NAMERES_TIMEOUT = 10 # If we don't get a response in 10 seconds, that's a fail.
+
 # We generate a set of tests from the GoogleSheetTestCases.
 gsheet = GoogleSheetTestCases()
 
@@ -61,7 +64,7 @@ def test_label(target_info, test_row, test_category):
                 request['exclude_prefixes'] = "|".join(exclude_prefixes)
 
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
-            response = requests.get(nameres_url_lookup, params=request)
+            response = requests.get(nameres_url_lookup, params=request, timeout=NAMERES_TIMEOUT)
 
             assert response.ok, f"Could not send request {request} to GET {nameres_url_lookup}: {response}"
             results = response.json()
