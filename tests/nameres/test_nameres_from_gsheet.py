@@ -106,7 +106,7 @@ def test_label(target_info, test_row, test_category):
                 # Test the preferred label if there is one.
                 if test_row.PreferredLabel:
                     assert top_result['label'] == test_row.PreferredLabel, f"{test_summary} returned preferred " + \
-                        f"label {label} instead of {test_row.PreferredLabel}."
+                        f"label {top_result['label']} instead of {test_row.PreferredLabel}."
 
                 # Additionally, test the biolink_class_exclude field if there is one.
                 if biolink_class_exclude:
