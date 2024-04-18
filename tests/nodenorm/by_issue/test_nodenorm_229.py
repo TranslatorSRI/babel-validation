@@ -460,7 +460,17 @@ def test_nodenorm_229(target_info):
                 },
                 {
                     "node_bindings": {
-                        "n0": [{"id": "PUBCHEM.COMPOUND:9847164"}],
+                        "n0": [{
+                            "id": "CHEBI:6541",
+                            "attributes": [
+                                {
+                                    "attribute_type_id": "biolink:has_numeric_value",
+                                    "value": 90.9,
+                                    "value_type_id": "EDAM:data_0006",
+                                    "original_attribute_name": "information_content",
+                                }
+                            ],
+                        }],
                         "n1": [
                             {
                                 "id": "MONDO:0001134",
