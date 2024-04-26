@@ -62,6 +62,8 @@ def test_normalization(target_info, test_row, test_category):
                 assert not result, f"{test_summary} not found in NodeNorm as expected."
             else:
                 assert result, f"{test_summary} but NodeNorm could not normalize {query_id} and returned null"
+            # Can't do later tests without results, so skip them.
+            continue
 
         assert 'id' in result, f"{test_summary} but no 'id' in result: {result}"
 
