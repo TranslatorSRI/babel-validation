@@ -9,7 +9,7 @@ from common.google_sheet_test_cases import GoogleSheetTestCases, TestRow
 gsheet = GoogleSheetTestCases()
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows)
+@pytest.mark.parametrize("test_row", gsheet.test_rows(test_nodenorm=True, test_nameres=False))
 def test_normalization(target_info, test_row, test_category):
     """
     Test normalization on NodeNorm.
@@ -48,8 +48,9 @@ def test_normalization(target_info, test_row, test_category):
             "curie": [query_id]
         }
         if test_row.Conflations:
-            leftover_conflations = test_row.Conflations
-            leftover_conflations.remove('')
+            leftover_conflations = set(test_row.Conflations)
+            if '' in leftover_conflations:
+                leftover_conflations.remove('')
             if 'gene_protein' in test_row.Conflations:
                 request['conflate'] = 'true'
                 leftover_conflations.remove('gene_protein')
@@ -58,7 +59,7 @@ def test_normalization(target_info, test_row, test_category):
                 leftover_conflations.remove('drug_chemical')
             assert leftover_conflations == set(), f"Unknown conflations in for {test_row}: {leftover_conflations}"
 
-        test_summary = f"Queried {query_id} ({preferred_label}) on {nodenorm_url_lookup}"
+        test_summary = f"Queried {query_id} ({preferred_label}) on {nodenorm_url_lookup} with test_row {test_row}"
         response = requests.get(nodenorm_url_lookup, request)
         count_queries += 1
 
@@ -73,6 +74,8 @@ def test_normalization(target_info, test_row, test_category):
                 assert not result, f"{test_summary} not found in NodeNorm as expected."
             else:
                 assert result, f"{test_summary} but NodeNorm could not normalize {query_id} and returned null"
+            # Can't do later tests without results, so skip them.
+            continue
 
         assert 'id' in result, f"{test_summary} but no 'id' in result: {result}"
 

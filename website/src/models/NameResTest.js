@@ -21,14 +21,16 @@ function convertPrevNameResFormatToCurrent(response) {
 
 // A helper function that returns a Promise that evaluates to a JSON result object.
 // TODO: cache this.
-export function lookupNameRes(nameResEndpoint, query, limit=10) {
-    // TODO: once all current instances are upgraded to 1.3.2+, we can replace this with a GET request.
-    const url = nameResEndpoint + "/lookup?string=" + encodeURIComponent(query) + "&limit=" + encodeURIComponent(limit);
-    const request = new Request(
-        url, {
-            method: "POST"
-        }
-    );
+export function lookupNameRes(nameResEndpoint, query, expectedID="", limit=10, includePrefixes=[], excludePrefixes=[]) {
+    const url = new URL(nameResEndpoint + '/lookup');
+    url.search = new URLSearchParams({
+        'string': query,
+        'limit': limit,
+        'only_prefixes': includePrefixes,
+        'exclude_prefixes': excludePrefixes,
+    })
+
+    const request = new Request(url);
 
     return fetch(request).then(response => {
         if (!response.ok) return TestResult.failure("Could not submit request to NameRes /lookup", 'text', response.statusText);
@@ -48,7 +50,25 @@ export function lookupNameRes(nameResEndpoint, query, limit=10) {
                     return TestResult.failure(`NameRes /lookup returned an unexpected response`, 'json', responseJson);
                 }
 
-                return TestResult.success(`NameRes /lookup returned ${results.length} results`, 'NameRes', results);
+                // Is the expectedID in the results?
+                if (!expectedID) {
+                    return TestResult.success(`NameRes /lookup returned ${results.length} results, no expected ID`, 'NameRes', results);
+                }
+                if (results.length < 1) {
+                    return TestResult.failure(`NameRes /lookup returned NO results`, 'NameRes', results);
+                }
+
+                const topID = results[0]['curie'];
+                if (topID === expectedID) {
+                    return TestResult.success(`NameRes /lookup returned ${results.length} results with expected ID ${expectedID} at top`, 'NameRes', results);
+                }
+
+                const resultIDs = results.map(r => r['curie']);
+                if (resultIDs.includes(expectedID)) {
+                    return TestResult.success(`NameRes /lookup returned ${results.length} results with expected ID ${expectedID} at position ${resultIDs.indexOf(expectedID) + 1}`, 'NameRes', results);
+                }
+
+                return TestResult.failure(`NameRes /lookup returned ${results.length} results but missed expected ID ${expectedID}`, 'NameRes', results);
             });
     });
 }
@@ -62,7 +82,7 @@ export class NameResTest extends Test {
     /**
      * Convert a single row into zero or more tests.
      */
-    static convertRowToTests(row) {
+    static convertRowToTests(row, limit=10) {
         const source = row['Source'];
         const source_url = row['Source URL'];
 
@@ -168,18 +188,55 @@ export class NameResTest extends Test {
             });
         }
 
+        // Do we have a preferred ID?
+        let expectedID = '';
+        if ('Preferred ID' in row) {
+            expectedID = row['Preferred ID'];
+        }
+
+        // Are there prefixes to include or exclude?
+        const prefixes = (row['Prefixes'] ? row['Prefixes'] : "").split('|');
+        const includePrefixes = [];
+        const excludePrefixes = [];
+        prefixes.forEach(prefix => {
+            if (!prefix) return;
+            if (prefix.startsWith('^')) {
+                excludePrefixes.push(prefix.substring(1));
+            } else {
+                includePrefixes.push(prefix);
+            }
+        })
+
         // Look for tests in this row.
         const tests = [];
-        if('Query label' in row) { // || 'Preferred label' in row) {
-            const query_label = row['Query label'];
-            // const preferred_label = row.get('Preferred label', '');
+        if('Query Label' in row) { // || 'Preferred label' in row) {
+            const query_label = row['Query Label'];
 
             if (query_label !== '') {
                 // To begin with, let's just return the results as-is.
                 tests.push(new NameResTest(`Lookup "${query_label}"`, {}, source, source_url, (nameResURL) => {
-                    return lookupNameRes(nameResURL, query_label);
+                    return lookupNameRes(nameResURL, query_label, expectedID, limit, includePrefixes, excludePrefixes);
                 }));
             }
+
+            const preferred_label = row['Preferred Label'];
+            if (preferred_label !== '') {
+                // To begin with, let's just return the results as-is.
+                tests.push(new NameResTest(`Lookup "${preferred_label}"`, {}, source, source_url, (nameResURL) => {
+                    return lookupNameRes(nameResURL, preferred_label, expectedID, limit, includePrefixes, excludePrefixes);
+                }));
+            }
+
+
+            const additional_labels = row['Additional Labels'].split('|');
+            additional_labels.forEach(additional_label => {
+                if (!additional_label) return;
+
+                // To begin with, let's just return the results as-is.
+                tests.push(new NameResTest(`Lookup "${additional_label}"`, {}, source, source_url, (nameResURL) => {
+                    return lookupNameRes(nameResURL, additional_label, expectedID, limit, includePrefixes, excludePrefixes);
+                }));
+            });
 
         } else {
             tests.push(TestResult.failure(`Could not understand row`, 'json', row));

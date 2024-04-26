@@ -5,11 +5,14 @@ import requests
 import pytest
 from common.google_sheet_test_cases import GoogleSheetTestCases, TestRow
 
+# Configuration options
+NAMERES_TIMEOUT = 10 # If we don't get a response in 10 seconds, that's a fail.
+
 # We generate a set of tests from the GoogleSheetTestCases.
 gsheet = GoogleSheetTestCases()
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows)
+@pytest.mark.parametrize("test_row", gsheet.test_rows(test_nodenorm=False, test_nameres=True))
 def test_label(target_info, test_row, test_category):
     """
     :param target_info: The target_info object (really a config object).
@@ -36,7 +39,7 @@ def test_label(target_info, test_row, test_category):
     biolink_classes = test_row.BiolinkClasses
     # Make sure we test this without Biolink classes as well
     if '' not in biolink_classes:
-        biolink_classes.append('')
+        biolink_classes.update('')
 
     expected_id = test_row.PreferredID
     query_labels = {test_row.QueryLabel}
@@ -44,6 +47,7 @@ def test_label(target_info, test_row, test_category):
     query_labels.update(test_row.AdditionalLabels)
 
     # Test these labels against NameRes
+    count_tested_labels = 0
     for query_label in query_labels:
         label = query_label.strip()
         if not label:
@@ -62,11 +66,22 @@ def test_label(target_info, test_row, test_category):
                 "limit": limit
             }
             if test_row.Prefixes:
-                request['only_prefixes'] = "|".join(list(test_row.Prefixes))
+                only_prefixes = []
+                exclude_prefixes = []
+                for prefix in test_row.Prefixes:
+                    if prefix.startswith('^'):
+                        exclude_prefixes.append(prefix[1:])
+                    else:
+                        only_prefixes.append(prefix)
+                request['only_prefixes'] = "|".join(only_prefixes)
+                request['exclude_prefixes'] = "|".join(exclude_prefixes)
 
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
-            response = requests.get(nameres_url_lookup, request)
-            count_queries += 1
+            if not test_row.PreferredID:
+                pytest.xfail(f"Test {test_summary} cannot be tested without a preferred ID, skipping.")
+
+            response = requests.get(nameres_url_lookup, params=request, timeout=NAMERES_TIMEOUT)
+            count_tested_labels += 1
 
             assert response.ok, f"Could not send request {request} to GET {nameres_url_lookup}: {response}"
             results = response.json()
@@ -92,13 +107,18 @@ def test_label(target_info, test_row, test_category):
             # There are three possible responses:
             if not results:
                 # 1. We got back no results.
-                pytest.fail(f"No results for {test_summary} from {source_info}")
+                pytest.fail(f"No results for {test_summary} from {source_info}: {request}")
             elif expected_id == '':
                 pytest.fail(f"No expected CURIE for {test_summary} from {source_info}: best result is {results[0]}")
             elif results[0]['curie'] == expected_id:
                 top_result = results[0]
                 assert top_result['curie'] == expected_id, \
                     f"{test_summary} returned expected ID {expected_id} as top result"
+
+                # Test the preferred label if there is one.
+                if test_row.PreferredLabel:
+                    assert top_result['label'] == test_row.PreferredLabel, f"{test_summary} returned preferred " + \
+                        f"label {top_result['label']} instead of {test_row.PreferredLabel}."
 
                 # Additionally, test the biolink_class_exclude field if there is one.
                 if biolink_class_exclude:
@@ -116,7 +136,10 @@ def test_label(target_info, test_row, test_category):
                     pytest.fail(fail_message)
             else:
                 pytest.fail(f"{test_summary} but expected result {expected_id} not found: {results}")
-
+                
+    if count_tested_labels == 0:
+        pytest.fail(f"No labels were tested for test row: {test_row}")
+               
     return count_queries
 
 
@@ -157,3 +180,4 @@ def test_query_rates(target_info, category_and_expected_times):
 
     if 'expected_time_per_query' in category_and_expected_times:
         assert time_per_query < category_and_expected_times['expected_time_per_query']
+

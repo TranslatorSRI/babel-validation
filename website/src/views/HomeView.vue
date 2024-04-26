@@ -9,11 +9,17 @@
   </p>
 
   <ul>
-    <li><a href="/nodenorm">Node Normalization Validator</a></li>
-    <li><a href="/nameres">Name Resolver Validator</a></li>
-    <li><a href="/autocomplete">Autocomplete Validator</a></li>
+    <li><router-link to="/nodenorm/">Node Normalization Validator</router-link></li>
+    <li><router-link to="/nameres/">Name Resolver Validator</router-link></li>
+    <li><router-link to="/autocomplete/">Autocomplete with Name Resolver</router-link></li>
+    <li><router-link to="/autocomplete-bulk/">Autocomplete Validator</router-link></li>
   </ul>
 </template>
 
-<script setup>
+<script>
+import {RouterLink} from "vue-router";
+
+export default {
+  components: {RouterLink},
+}
 </script>

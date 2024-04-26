@@ -1,9 +1,9 @@
 <template>
-  <small><a href="/">Return to front page</a></small>
+  <small><router-link to="/">Return to front page</router-link></small>
 
-  <h1>Autocomplete Validation</h1>
+  <h1>Autocomplete Bulk Validation</h1>
   <p>
-    Autocomplete validation uses the <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a> service,
+    Autocomplete bulk validation uses the <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a> service,
     but checks to ensure that autocompletion works as expected, i.e. after the minimum character count (currently {{minimumAutocompleteChars}}),
     every additional character should bring the correct match closer to the top of the list. Because this requires many more
     queries than the <a href="/nameres">Name Resolution validator</a>, we will only test a single endpoint at a time.
@@ -48,11 +48,13 @@
       </tr>
     </thead>
     <tbody>
-      <template v-for="row in rowsHead(2)">
+      <template v-for="row in rows">
         <tr>
           <td :rowspan="generateAutocompleteTexts(row['Query label']).length + 1">{{row['Query label']}}</td>
           <td :rowspan="generateAutocompleteTexts(row['Query label']).length + 1">{{row['Query ID']}}</td>
-          <td>{{row['Query label']}}</td>
+          <td>{{row['Query label']}}<br/>
+            <small><a target="autocomplete-examine" :href="nameResEndpoints[currentEndpoint] + '/lookup?string=' + encodeURIComponent(row['Query label']) + '&limit=' + limit">Lookup</a></small>
+          </td>
           <td>
             <ul>
               <li v-for="res in getNameResResults(currentEndpoint, row['Query label'])">
@@ -63,7 +65,10 @@
         </tr>
         <template v-for="text in generateAutocompleteTexts(row['Query label'])">
           <tr>
-            <td>{{text}}</td>
+            <td>
+              {{text}}<br/>
+              <small><a target="autocomplete-examine" :href="nameResEndpoints[currentEndpoint] + '/lookup?string=' + encodeURIComponent(text) + '&limit=' + limit">Lookup</a></small>
+            </td>
             <td>
               <ul>
                 <li v-for="res in getNameResResults(currentEndpoint, text)">
@@ -87,6 +92,7 @@ import Bottleneck from "bottleneck";
 import TextWithURLs from "@/components/TextWithURLs.vue";
 import TestResult from "@/components/TestResult.vue";
 import { lookupNameRes } from "@/models/NameResTest";
+import {RouterLink} from "vue-router";
 
 const nameResBottleneck = new Bottleneck({
   maxConcurrent: 10,
@@ -94,11 +100,11 @@ const nameResBottleneck = new Bottleneck({
 });
 
 export default {
-  components: {TestResult, BTable, TextWithURLs},
+  components: {TestResult, BTable, TextWithURLs, RouterLink},
   props: {
     minimumAutocompleteChars: {
       type: Number,
-      default: 3
+      default: 2, // As per https://github.com/NCATSTranslator/Feedback/issues/315#issuecomment-1604515810
     },
   },
   data () {
@@ -116,6 +122,7 @@ export default {
       testDataErrors: [],
       testDataIncomplete: true,
       nameResResults: {},
+      limit: 10,
     }
   },
   created() {
@@ -168,7 +175,7 @@ export default {
       this.currentEndpoint = endpoint;
       console.log("this.currentEndpoint is now", this.currentEndpoint);
       // Start loading NameRes results for every text for every row.
-      this.rowsHead(2).forEach(row => {
+      this.rows.forEach(row => {
         const query = row['Query label'];
 
         this.loadNameResResults(endpoint, query, 10)
@@ -180,12 +187,12 @@ export default {
         });
       });
     },
-    async loadNameResResults(endpoint, query, limit = 10) {
+    async loadNameResResults(endpoint, query) {
       // Don't load a query that has already been cached.
       if (endpoint in this.nameResResults && query in this.nameResResults[endpoint]) return;
 
       // Use the nameResBottleneck to make queries at a suitable rate.
-      return await nameResBottleneck.schedule(() => lookupNameRes(this.nameResEndpoints[endpoint], query, limit)
+      return await nameResBottleneck.schedule(() => lookupNameRes(this.nameResEndpoints[endpoint], query, this.limit)
           .then(tr => {
             console.info(`Found results in ${endpoint} (${this.currentEndpoint}) for query ${query} with result`, tr.result);
 
