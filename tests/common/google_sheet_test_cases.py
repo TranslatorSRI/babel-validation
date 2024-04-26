@@ -7,7 +7,9 @@ import io
 from dataclasses import dataclass
 from collections import Counter
 
+import pytest
 import requests
+from _pytest.mark import ParameterSet
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,8 @@ class TestRow:
     A TestRow models a single row from a GoogleSheet.
     """
     Category: str
+    ExpectPassInNodeNorm: bool
+    ExpectPassInNameRes: bool
     Flags: set[str]
     QueryLabel: str
     PreferredLabel: str
@@ -24,7 +28,7 @@ class TestRow:
     PreferredID: str
     AdditionalIDs: list[str]
     Conflations: set[str]
-    BiolinkClasses: list[str]
+    BiolinkClasses: set[str]
     Prefixes: set[str]
     Source: str
     SourceURL: str
@@ -33,10 +37,18 @@ class TestRow:
     # Mark as not a test despite starting with TestRow.
     __test__ = False
 
+    # A string representation of this test row.
+    def __str__(self):
+        return f"TestRow of category {self.Category} for preferred {self.PreferredID} ({self.PreferredLabel}) with " + \
+            f"query {self.QueryID} ({self.QueryLabel}) from source {self.Source} ({self.SourceURL})"
+
+
     @staticmethod
     def from_data_row(row):
         return TestRow(
             Category=row.get('Category', ''),
+            ExpectPassInNodeNorm=row.get('Passes in NodeNorm', '') == 'y',
+            ExpectPassInNameRes=row.get('Passes in NameRes', '') == 'y',
             Flags=set(row.get('Flags', '').split('|')),
             QueryLabel=row.get('Query Label', ''),
             QueryID=row.get('Query ID', ''),
@@ -78,8 +90,7 @@ class GoogleSheetTestCases:
             for row in reader:
                 self.rows.append(row)
 
-    @property
-    def test_rows(self) -> list[TestRow]:
+    def test_rows(self, test_nodenorm: bool = False, test_nameres: bool = False) -> list[ParameterSet]:
         """
         self.rows is the raw list of rows we got back from the Google Sheets. This method transforms that into
         a list of TestRows.
@@ -89,7 +100,39 @@ class GoogleSheetTestCases:
         def has_nonempty_value(d: dict):
             return not all(not s for s in d.values())
 
-        return list(map(TestRow.from_data_row, filter(has_nonempty_value, self.rows)))
+        trows = []
+        for count, row in enumerate(self.rows):
+            # Note that count is off by two: presumably one for the header row and one because we count from zero
+            # but Google Sheets counts from one.
+
+            if has_nonempty_value(row):
+                tr = TestRow.from_data_row(row)
+
+                if test_nodenorm:
+                    if tr.ExpectPassInNodeNorm:
+                        trows.append(pytest.param(tr))
+                    else:
+                        trows.append(pytest.param(
+                            tr,
+                            marks=pytest.mark.xfail(
+                                reason=f"Test row {count + 2} is marked as not expected to pass NodeNorm in the "
+                                       f"Google Sheet: {tr}",
+                                strict=True)
+                        ))
+
+                if test_nameres:
+                    if tr.ExpectPassInNameRes:
+                        trows.append(pytest.param(tr))
+                    else:
+                        trows.append(pytest.param(
+                            tr,
+                            marks=pytest.mark.xfail(
+                                reason=f"Test row {count + 2} is marked as not expected to pass NameRes in the "
+                                       f"Google Sheet: {tr}",
+                                strict=True)
+                        ))
+
+        return trows
 
     def categories(self):
         """ Return a dict of all the categories of tests available with their counts. """
