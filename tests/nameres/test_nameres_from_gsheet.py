@@ -47,9 +47,15 @@ def test_label(target_info, test_row, test_category):
                 biolink_class_exclude = biolink_class[1:]
                 biolink_class = ''
 
+            # Only turn on autocomplete if the autocomplete flag is on.
+            autocomplete_flag = 'false'
+            if 'autocomplete' in test_row.Flags:
+                autocomplete_flag = 'true'
+
             nameres_url_lookup = urllib.parse.urljoin(nameres_url, 'lookup')
             request = {
                 "string": label,
+                "autocomplete": autocomplete_flag,
                 "biolink_type": biolink_class,
                 "limit": limit
             }
