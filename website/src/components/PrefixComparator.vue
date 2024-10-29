@@ -2,7 +2,7 @@
 /*
  * SearchCAMs: search for CAMs with a set of criteria.
  */
-import {computed, ref, watch} from "vue";
+import {computed, ref, watch, onMounted} from "vue";
 import _ from "lodash";
 
 export interface Props {
@@ -15,17 +15,22 @@ const props = withDefaults(defineProps<Props>(), {
   prefix_json_url2: '/babel-validation/prefix_reports/prefix_report.json',
 });
 
+// Display
+const hideIdentical = ref(false);
+
 // Eventually, we will allow people to paste the JSON in directly.
-const report1 = ref('');
-const report2 = ref('');
+const report1 = ref('{}');
+const report2 = ref('{}');
 
-if (props.prefix_json_url1) {
-  fetch(props.prefix_json_url1).then(res => res.json()).then(report => report1.value = JSON.stringify(report, null, 2))
-}
+onMounted(() => {
+  if (props.prefix_json_url1) {
+    fetch(props.prefix_json_url1).then(res => res.json()).then(report => report1.value = JSON.stringify(report, null, 2))
+  }
 
-if (props.prefix_json_url2) {
-  fetch(props.prefix_json_url2).then(res => res.json()).then(report => report2.value = JSON.stringify(report, null, 2))
-}
+  if (props.prefix_json_url2) {
+    fetch(props.prefix_json_url2).then(res => res.json()).then(report => report2.value = JSON.stringify(report, null, 2))
+  }
+});
 
 // For each report, calculate a stream of by_clique triples.
 class CliqueCount {
@@ -43,6 +48,8 @@ class CliqueCount {
 }
 
 function report_to_clique_counts(report) {
+  if (!("by_clique" in report)) return [];
+
   return Object.entries(report.by_clique)
       .flatMap(clique_items => {
         if (clique_items[0].startsWith('count_')) return [];
@@ -81,9 +88,10 @@ function add_clique_count_to_grouped(name: string, clique_counts: list[CliqueCou
     }
     grouped[c.clique_leader_prefix][c.filename][c.prefix][name] += c.prefix_count;
 
-    // console.log(c);
-    console.log(c, grouped[c.clique_leader_prefix][c.filename][c.prefix]);
+    // console.log(c, grouped[c.clique_leader_prefix][c.filename][c.prefix]);
   });
+
+  console.log(grouped);
 }
 
 const three_level_grouping = computed(() => {
@@ -93,10 +101,6 @@ const three_level_grouping = computed(() => {
   add_clique_count_to_grouped("c2", clique_counts2.value, grouped);
 
   return grouped;
-});
-
-watch([report1, report2], () => {
-  // Reparse?
 });
 </script>
 
@@ -115,6 +119,9 @@ watch([report1, report2], () => {
           <textarea class="form-control" style="height: 10em" placeholder="Paste a second prefix report here." id="prefixReport2" v-model="report2"></textarea>
           <label for="floatingTextarea">Prefix Report 2</label>
         </div>
+        <div>
+          <input type="checkbox" @click="hideIdentical = !hideIdentical">Hide identical</input>
+        </div>
       </div>
     </div>
 
@@ -129,22 +136,29 @@ watch([report1, report2], () => {
             <th>Clique leader</th>
             <th>Filename</th>
             <th>Prefix</th>
-            <th>c1</th>
-            <th>c2</th>
+            <th>2024oct24</th>
+            <th>2024oct1</th>
+            <th>Diff</th>
           </tr>
           </thead>
           <tbody>
-            <tr v-for="clique_leader_prefix in three_level_grouping" :key="clique_leader_prefix">
-              <template v-for="filename in three_level_grouping[clique_leader_prefix]" :key="filename">
-                <template v-for="prefix in three_level_grouping[clique_leader_prefix][filename]" :key="prefix">
-                  <td>{{clique_leader_prefix}}</td>
-                  <td>{{filename}}</td>
-                  <td>{{prefix}}</td>
-                  <td>{{three_level_grouping[clique_leader_prefix][filename]["c1"]}}</td>
-                  <td>{{three_level_grouping[clique_leader_prefix][filename]["c2"]}}</td>
-                </template>
+            <template v-for="clique_leader_prefix in Object.keys(three_level_grouping)" :key="clique_leader_prefix">
+              <template v-for="filename in Object.keys(three_level_grouping[clique_leader_prefix])" :key="filename">
+                <tr v-for="prefix in Object.keys(three_level_grouping[clique_leader_prefix][filename])" :key="prefix">
+                  <template v-if="hideIdentical && (three_level_grouping[clique_leader_prefix][filename][prefix]['c1'] || 0) != (three_level_grouping[clique_leader_prefix][filename][prefix]['c2'] || 0)">
+                    <td>{{clique_leader_prefix}}</td>
+                    <td>{{filename}}</td>
+                    <td>{{prefix}}</td>
+                    <td>{{three_level_grouping[clique_leader_prefix][filename][prefix]["c2"]}}</td>
+                    <td>{{three_level_grouping[clique_leader_prefix][filename][prefix]["c1"]}}</td>
+                    <td>{{
+                        three_level_grouping[clique_leader_prefix][filename][prefix]["c2"] -
+                        three_level_grouping[clique_leader_prefix][filename][prefix]["c1"]
+                      }}</td>
+                  </template>
+                </tr>
               </template>
-            </tr>
+            </template>
           </tbody>
         </table>
       </div>
