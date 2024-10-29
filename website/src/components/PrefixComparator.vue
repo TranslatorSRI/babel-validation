@@ -2,8 +2,7 @@
 /*
  * SearchCAMs: search for CAMs with a set of criteria.
  */
-import {computed, ref, watch, onMounted} from "vue";
-import _ from "lodash";
+import {computed, ref, onMounted} from "vue";
 
 export interface Props {
   prefix_json_url1?: string,
@@ -16,7 +15,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // Display
-const hideIdentical = ref(false);
+const showIdentical = ref(true);
 
 // Eventually, we will allow people to paste the JSON in directly.
 const report1 = ref('{}');
@@ -120,7 +119,7 @@ const three_level_grouping = computed(() => {
           <label for="floatingTextarea">Prefix Report 2</label>
         </div>
         <div>
-          <input type="checkbox" @click="hideIdentical = !hideIdentical">Hide identical</input>
+          <input type="checkbox" :value="showIdentical" @click="showIdentical = !showIdentical" /> Show identical
         </div>
       </div>
     </div>
@@ -145,7 +144,7 @@ const three_level_grouping = computed(() => {
             <template v-for="clique_leader_prefix in Object.keys(three_level_grouping)" :key="clique_leader_prefix">
               <template v-for="filename in Object.keys(three_level_grouping[clique_leader_prefix])" :key="filename">
                 <tr v-for="prefix in Object.keys(three_level_grouping[clique_leader_prefix][filename])" :key="prefix">
-                  <template v-if="hideIdentical && (three_level_grouping[clique_leader_prefix][filename][prefix]['c1'] || 0) != (three_level_grouping[clique_leader_prefix][filename][prefix]['c2'] || 0)">
+                  <template v-if="!showIdentical || (three_level_grouping[clique_leader_prefix][filename][prefix]['c1'] || 0) != (three_level_grouping[clique_leader_prefix][filename][prefix]['c2'] || 0)">
                     <td>{{clique_leader_prefix}}</td>
                     <td>{{filename}}</td>
                     <td>{{prefix}}</td>
