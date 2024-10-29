@@ -3,6 +3,7 @@
  * SearchCAMs: search for CAMs with a set of criteria.
  */
 import {computed, ref, watch} from "vue";
+import _ from "lodash";
 
 export interface Props {
   prefix_json_url1?: string,
@@ -52,7 +53,7 @@ function report_to_clique_counts(report) {
                 const filename = by_file_items[0];
                 return Object.entries(by_file_items[1]).map(
                   clique_item => {
-                    console.log(clique_leader, filename, clique_item[0], clique_item[1]);
+                    // console.log(clique_leader, filename, clique_item[0], clique_item[1]);
                     return new CliqueCount(clique_leader, filename, clique_item[0], clique_item[1])
                   }
                 )
@@ -64,13 +65,35 @@ function report_to_clique_counts(report) {
 }
 
 const clique_counts1 = computed(() => {
-  console.log(report_to_clique_counts(JSON.parse(report1.value)));
   return report_to_clique_counts(JSON.parse(report1.value))
 });
 const clique_counts2 = computed(() => {
   return report_to_clique_counts(JSON.parse(report2.value))
 })
 
+function add_clique_count_to_grouped(name: string, clique_counts: list[CliqueCount], grouped: dict) {
+  clique_counts.forEach(c => {
+    grouped[c.clique_leader_prefix] = grouped[c.clique_leader_prefix] || {};
+    grouped[c.clique_leader_prefix][c.filename] = grouped[c.clique_leader_prefix][c.filename] || {};
+    grouped[c.clique_leader_prefix][c.filename][c.prefix] = grouped[c.clique_leader_prefix][c.filename][c.prefix] || {};
+    if (!(name in grouped[c.clique_leader_prefix][c.filename][c.prefix])) {
+      grouped[c.clique_leader_prefix][c.filename][c.prefix][name] = 0;
+    }
+    grouped[c.clique_leader_prefix][c.filename][c.prefix][name] += c.prefix_count;
+
+    // console.log(c);
+    console.log(c, grouped[c.clique_leader_prefix][c.filename][c.prefix]);
+  });
+}
+
+const three_level_grouping = computed(() => {
+  const grouped = {};
+
+  add_clique_count_to_grouped("c1", clique_counts1.value, grouped);
+  add_clique_count_to_grouped("c2", clique_counts2.value, grouped);
+
+  return grouped;
+});
 
 watch([report1, report2], () => {
   // Reparse?
@@ -106,15 +129,21 @@ watch([report1, report2], () => {
             <th>Clique leader</th>
             <th>Filename</th>
             <th>Prefix</th>
-            <th>Prefix count</th>
+            <th>c1</th>
+            <th>c2</th>
           </tr>
           </thead>
           <tbody>
-            <tr v-for="c in clique_counts1" :key="c.clique_leader_prefix">
-              <td>{{c.clique_leader_prefix}}</td>
-              <td>{{c.filename}}</td>
-              <td>{{c.prefix}}</td>
-              <td>{{c.prefix_count}}</td>
+            <tr v-for="clique_leader_prefix in three_level_grouping" :key="clique_leader_prefix">
+              <template v-for="filename in three_level_grouping[clique_leader_prefix]" :key="filename">
+                <template v-for="prefix in three_level_grouping[clique_leader_prefix][filename]" :key="prefix">
+                  <td>{{clique_leader_prefix}}</td>
+                  <td>{{filename}}</td>
+                  <td>{{prefix}}</td>
+                  <td>{{three_level_grouping[clique_leader_prefix][filename]["c1"]}}</td>
+                  <td>{{three_level_grouping[clique_leader_prefix][filename]["c2"]}}</td>
+                </template>
+              </template>
             </tr>
           </tbody>
         </table>
