@@ -212,23 +212,23 @@
     "ENSEMBL": {
       "by_file": {
         "Gene": {
-          "ENSEMBL": 3345921
+          "ENSEMBL": 1993526
         },
         "Protein": {
           "ENSEMBL": 1190436
         }
       },
-      "count_cliques": 4536357,
-      "count_curies": 4536357
+      "count_cliques": 3183962,
+      "count_curies": 3183962
     },
     "FB": {
       "by_file": {
         "Gene": {
-          "FB": 30242
+          "FB": 12383
         }
       },
-      "count_cliques": 30242,
-      "count_curies": 30242
+      "count_cliques": 12383,
+      "count_curies": 12383
     },
     "GO": {
       "by_file": {
@@ -277,12 +277,12 @@
     "HGNC": {
       "by_file": {
         "Gene": {
-          "HGNC": 6726,
-          "UMLS": 6609
+          "HGNC": 903,
+          "UMLS": 894
         }
       },
-      "count_cliques": 6726,
-      "count_curies": 13335
+      "count_cliques": 903,
+      "count_curies": 1797
     },
     "HGNC.FAMILY": {
       "by_file": {
@@ -377,11 +377,11 @@
     "MGI": {
       "by_file": {
         "Gene": {
-          "MGI": 79699
+          "MGI": 21974
         }
       },
-      "count_cliques": 79699,
-      "count_curies": 79699
+      "count_cliques": 21974,
+      "count_curies": 21974
     },
     "MONDO": {
       "by_file": {
@@ -410,15 +410,22 @@
     "NCBIGene": {
       "by_file": {
         "Gene": {
-          "ENSEMBL": 42036,
-          "HGNC": 37200,
-          "NCBIGene": 80051,
-          "OMIM": 17261,
-          "UMLS": 37017
+          "ENSEMBL": 11586926,
+          "FB": 17872,
+          "HGNC": 43031,
+          "MGI": 58252,
+          "NCBIGene": 56808544,
+          "OMIM": 17269,
+          "RGD": 47215,
+          "SGD": 6471,
+          "UMLS": 42732,
+          "WormBase": 28785,
+          "ZFIN": 26901,
+          "dictyBase": 13892
         }
       },
-      "count_cliques": 80051,
-      "count_curies": 213565
+      "count_cliques": 56808544,
+      "count_curies": 68697890
     },
     "NCBITaxon": {
       "by_file": {
@@ -467,11 +474,11 @@
           "UMLS": 549
         },
         "Gene": {
-          "OMIM": 193
+          "OMIM": 192
         }
       },
-      "count_cliques": 862,
-      "count_curies": 1560
+      "count_cliques": 861,
+      "count_curies": 1559
     },
     "PANTHER.FAMILY": {
       "by_file": {
@@ -568,11 +575,11 @@
     "RGD": {
       "by_file": {
         "Gene": {
-          "RGD": 61332
+          "RGD": 14270
         }
       },
-      "count_cliques": 61332,
-      "count_curies": 61332
+      "count_cliques": 14270,
+      "count_curies": 14270
     },
     "RHEA": {
       "by_file": {
@@ -606,11 +613,11 @@
     "SGD": {
       "by_file": {
         "Gene": {
-          "SGD": 7167
+          "SGD": 696
         }
       },
-      "count_cliques": 7167,
-      "count_curies": 7167
+      "count_cliques": 696,
+      "count_curies": 696
     },
     "SMPDB": {
       "by_file": {
@@ -769,20 +776,20 @@
     "WormBase": {
       "by_file": {
         "Gene": {
-          "WormBase": 48777
+          "WormBase": 19992
         }
       },
-      "count_cliques": 48777,
-      "count_curies": 48777
+      "count_cliques": 19992,
+      "count_curies": 19992
     },
     "ZFIN": {
       "by_file": {
         "Gene": {
-          "ZFIN": 38003
+          "ZFIN": 11152
         }
       },
-      "count_cliques": 38003,
-      "count_curies": 38003
+      "count_cliques": 11152,
+      "count_curies": 11152
     },
     "orphanet": {
       "by_file": {
@@ -900,20 +907,20 @@
       }
     },
     "ENSEMBL": {
-      "clique_distinct_count": 13730386,
-      "curie_count": 23987101,
-      "curie_distinct_count": 23987101,
+      "clique_distinct_count": 23922881,
+      "curie_count": 34179596,
+      "curie_distinct_count": 34179596,
       "filenames": {
-        "Gene": 3387957,
+        "Gene": 13580452,
         "Protein": 20599144
       }
     },
     "FB": {
-      "clique_distinct_count": 30242,
-      "curie_count": 30242,
-      "curie_distinct_count": 30242,
+      "clique_distinct_count": 30255,
+      "curie_count": 30255,
+      "curie_distinct_count": 30255,
       "filenames": {
-        "Gene": 30242
+        "Gene": 30255
       }
     },
     "FBbt": {
@@ -946,11 +953,11 @@
       }
     },
     "HGNC": {
-      "clique_distinct_count": 43926,
-      "curie_count": 43926,
-      "curie_distinct_count": 43926,
+      "clique_distinct_count": 43934,
+      "curie_count": 43934,
+      "curie_distinct_count": 43934,
       "filenames": {
-        "Gene": 43926
+        "Gene": 43934
       }
     },
     "HGNC.FAMILY": {
@@ -1064,11 +1071,11 @@
       }
     },
     "MGI": {
-      "clique_distinct_count": 79699,
-      "curie_count": 79699,
-      "curie_distinct_count": 79699,
+      "clique_distinct_count": 80226,
+      "curie_count": 80226,
+      "curie_distinct_count": 80226,
       "filenames": {
-        "Gene": 79699
+        "Gene": 80226
       }
     },
     "MONDO": {
@@ -1088,11 +1095,11 @@
       }
     },
     "NCBIGene": {
-      "clique_distinct_count": 80051,
-      "curie_count": 80051,
-      "curie_distinct_count": 80051,
+      "clique_distinct_count": 56808544,
+      "curie_count": 56808544,
+      "curie_distinct_count": 56808544,
       "filenames": {
-        "Gene": 80051
+        "Gene": 56808544
       }
     },
     "NCBITaxon": {
@@ -1117,12 +1124,12 @@
       }
     },
     "OMIM": {
-      "clique_distinct_count": 27544,
-      "curie_count": 27568,
-      "curie_distinct_count": 27517,
+      "clique_distinct_count": 27551,
+      "curie_count": 27575,
+      "curie_distinct_count": 27524,
       "filenames": {
         "Disease": 10114,
-        "Gene": 17454
+        "Gene": 17461
       }
     },
     "OMIM.PS": {
@@ -1195,11 +1202,11 @@
       }
     },
     "RGD": {
-      "clique_distinct_count": 61332,
-      "curie_count": 61332,
-      "curie_distinct_count": 61332,
+      "clique_distinct_count": 61485,
+      "curie_count": 61485,
+      "curie_distinct_count": 61485,
       "filenames": {
-        "Gene": 61332
+        "Gene": 61485
       }
     },
     "RHEA": {
@@ -1335,11 +1342,19 @@
       }
     },
     "ZFIN": {
-      "clique_distinct_count": 38003,
-      "curie_count": 38003,
-      "curie_distinct_count": 38003,
+      "clique_distinct_count": 38053,
+      "curie_count": 38053,
+      "curie_distinct_count": 38053,
       "filenames": {
-        "Gene": 38003
+        "Gene": 38053
+      }
+    },
+    "dictyBase": {
+      "clique_distinct_count": 13892,
+      "curie_count": 13892,
+      "curie_distinct_count": 13892,
+      "filenames": {
+        "Gene": 13892
       }
     },
     "doi": {
@@ -1367,6 +1382,6 @@
       }
     }
   },
-  "count_cliques": 423966250,
-  "count_curies": 599897268
+  "count_cliques": 479151771,
+  "count_curies": 666832906
 }
