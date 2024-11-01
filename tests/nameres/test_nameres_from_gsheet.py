@@ -10,7 +10,7 @@ NAMERES_TIMEOUT = 10 # If we don't get a response in 10 seconds, that's a fail.
 gsheet = GoogleSheetTestCases()
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows(test_nodenorm=False, test_nameres=True))
+@pytest.mark.parametrize("test_row", gsheet.test_rows('test_nameres_from_gsheet.test_label', test_nodenorm=False, test_nameres=True))
 def test_label(target_info, test_row, test_category):
     nameres_url = target_info['NameResURL']
     limit = target_info['NameResLimit']
