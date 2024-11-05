@@ -34,7 +34,8 @@ def test_normalization(target_info, test_row, test_category):
 
         nodenorm_url_lookup = urllib.parse.urljoin(nodenorm_url, 'get_normalized_nodes')
         request = {
-            "curie": [query_id]
+            "curie": [query_id],
+            "conflate": 'false'
         }
         if test_row.Conflations:
             leftover_conflations = set(test_row.Conflations)
