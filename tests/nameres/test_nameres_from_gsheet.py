@@ -50,7 +50,7 @@ def test_label(target_info, test_row, test_category):
             nameres_url_lookup = urllib.parse.urljoin(nameres_url, 'lookup')
             request = {
                 "string": label,
-                "biolink_type": biolink_class,
+                "biolink_type": [biolink_class],
                 "limit": limit
             }
             if test_row.Prefixes:
