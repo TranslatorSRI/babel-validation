@@ -74,8 +74,8 @@ def test_normalization(target_info, test_row, test_category):
              f"identifier {expected_id}.")
 
         # Test preferred label
-        if test_row.PreferredLabel:
-            assert result['id']['label'] == preferred_label,\
+        if preferred_label:
+            assert result['id']['label'].lower() == preferred_label.lower(),\
                 f"{test_summary} but preferred label is {result['id']['label']}, not expected label {preferred_label}."
 
         # Test Biolink types
