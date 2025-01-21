@@ -135,8 +135,8 @@ const three_level_grouping = computed(() => {
             <th>Clique leader</th>
             <th>Filename</th>
             <th>Prefix</th>
-            <th>2024oct24</th>
-            <th>2024oct1</th>
+            <th>Prefix Report 1</th>
+            <th>Prefix Report 2</th>
             <th>Diff</th>
           </tr>
           </thead>
