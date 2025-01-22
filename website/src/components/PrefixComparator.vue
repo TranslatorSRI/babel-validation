@@ -180,13 +180,15 @@ const clique_count_rows = computed(() => {
             c1: c1,
             c2: c2,
             diff: diff,
+            absolute_diff: Math.abs(diff),
+            percentage_diff: (diff / c1) * 100,
           });
         }
       }
     }
   }
 
-  return rows.sort((a, b) => a['diff'] - b['diff']);
+  return rows.sort((a, b) => b.absolute_diff - a.absolute_diff);
 });
 
 </script>
@@ -223,9 +225,10 @@ const clique_count_rows = computed(() => {
             <th>Clique leader</th>
             <th>Filename</th>
             <th>Prefix</th>
-            <th style="text-align: right">Prefix Report 1</th>
-            <th style="text-align: right">Prefix Report 2</th>
+            <th style="text-align: right">Prefix Report 1 (contains {{(JSON.parse(report1).count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
+            <th style="text-align: right">Prefix Report 2 (contains {{(JSON.parse(report2).count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
             <th style="text-align: right">Diff</th>
+            <th style="text-align: right">% Diff</th>
           </tr>
           </thead>
           <tbody>
@@ -236,6 +239,7 @@ const clique_count_rows = computed(() => {
               <td style="text-align: right">{{row.c1.toLocaleString()}}</td>
               <td style="text-align: right">{{row.c2.toLocaleString()}}</td>
               <td style="text-align: right">{{(row.diff > 0 ? '+' : '') + row.diff.toLocaleString()}}</td>
+              <td style="text-align: right">{{row.percentage_diff.toFixed(2) + '%'}}</td>
             </tr>
           </tbody>
         </table>
