@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /*
- * SearchCAMs: search for CAMs with a set of criteria.
+ * PrefixComparator: compare prefix reports from two versions of NodeNorm.
  */
 import {computed, ref, onMounted} from "vue";
 
@@ -46,21 +46,36 @@ class CliqueCount {
   }
 }
 
-function report_to_clique_counts(report) {
+
+/**
+ * Processes the `by_clique` property of the input report to generate a list of
+ * CliqueCount instances, summarizing file-related information for each clique.
+ *
+ * @param {Object} report - An object containing a `by_clique` property, where the data is organized
+ * into cliques and files. Each clique contains detailed information for individual files.
+ * @return {CliqueCount[]} An array of CliqueCount objects representing the processed data for
+ * each clique and its corresponding files. Returns an empty array if the `by_clique` property is missing.
+ */
+function report_to_clique_counts(report: dict): CliqueCount[] {
   if (!("by_clique" in report)) return [];
 
   return Object.entries(report.by_clique)
-      .flatMap(clique_items => {
-        if (clique_items[0].startsWith('count_')) return [];
-        if ("by_file" in clique_items[1]) {
-          const clique_leader = clique_items[0];
-          return Object.entries(clique_items[1].by_file)
+      .flatMap(kv => {
+        const key = kv[0];
+        const value: dict = kv[1];
+
+        if (key.startsWith('count_')) return [];
+        if ('by_file' in value) {
+          const clique_leader = key;
+          return Object.entries(value.by_file)
               .flatMap(by_file_items => {
                 const filename = by_file_items[0];
-                return Object.entries(by_file_items[1]).map(
-                  clique_item => {
-                    // console.log(clique_leader, filename, clique_item[0], clique_item[1]);
-                    return new CliqueCount(clique_leader, filename, clique_item[0], clique_item[1])
+                const by_file_values: dict = by_file_items[1];
+                return Object.entries(by_file_values).map(
+                  clique_item_kv => {
+                    // console.log(clique_leader, filename, clique_item_kv[0], clique_item_kv[1]);
+                    const prefix_count: number = clique_item_kv[1];
+                    return new CliqueCount(clique_leader, filename, clique_item_kv[0], prefix_count)
                   }
                 )
               });
