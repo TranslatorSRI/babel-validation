@@ -21,6 +21,7 @@ const showIdentical = ref(true);
 const report1 = ref('{}');
 const report2 = ref('{}');
 
+// Once this page has loaded, load up some default reports.
 onMounted(() => {
   if (props.prefix_json_url1) {
     fetch(props.prefix_json_url1).then(res => res.json()).then(report => report1.value = JSON.stringify(report, null, 2))
@@ -32,6 +33,29 @@ onMounted(() => {
 });
 
 // For each report, calculate a stream of by_clique triples.
+/**
+ * Represents a CliqueCount object that holds information about a clique leader prefix,
+ * a filename, a prefix, and a prefix count.
+ *
+ * The class is designed to store and represent data relevant to a community or set of cliques,
+ * along with their associated metadata.
+ *
+ * @class
+ *
+ * @property {string} clique_leader_prefix A string representing the prefix of the clique leader.
+ * @property {string} filename A string representing the name of the associated file.
+ * @property {string} prefix A string representing the prefix tied to the clique or community.
+ * @property {number} prefix_count An integer representing the count or frequency associated with the prefix.
+ *
+ * @constructor
+ * Initializes a new instance of the CliqueCount class with provided clique leader prefix,
+ * filename, prefix, and prefix count.
+ *
+ * @param {string} clique_leader_prefix The prefix associated with the clique leader.
+ * @param {string} filename The name of the relevant file.
+ * @param {string} prefix The defined prefix for the clique or group.
+ * @param {number} prefix_count The frequency or count associated with the given prefix.
+ */
 class CliqueCount {
   clique_leader_prefix: string;
   filename: string;
