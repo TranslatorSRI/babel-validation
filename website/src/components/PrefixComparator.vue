@@ -21,6 +21,9 @@ const showIdentical = ref(false);
 const report1 = ref('{}');
 const report2 = ref('{}');
 
+const report1_json = computed(() => { return JSON.parse(report1.value) });
+const report2_json = computed(() => { return JSON.parse(report2.value) })
+
 // Once this page has loaded, load up some default reports.
 onMounted(() => {
   if (props.prefix_json_url1) {
@@ -111,10 +114,10 @@ function report_to_clique_counts(report: dict): CliqueCount[] {
 
 // Generate clique count lists whenever the two reports change.
 const clique_counts1 = computed(() => {
-  return report_to_clique_counts(JSON.parse(report1.value))
+  return report_to_clique_counts(report1_json.value)
 });
 const clique_counts2 = computed(() => {
-  return report_to_clique_counts(JSON.parse(report2.value))
+  return report_to_clique_counts(report2_json.value)
 })
 
 /**
@@ -191,6 +194,69 @@ const clique_count_rows = computed(() => {
   return rows.sort((a, b) => b.absolute_diff - a.absolute_diff);
 });
 
+// Calculate the clique counts per filename to display in the table.
+const filename_count_rows = computed(() => {
+  const rows = [];
+
+  const three_level_grouping_value = three_level_grouping.value;
+  const counts_by_filename = {};
+
+  // console.log('three_level_grouping_value = ', three_level_grouping_value, ', keys = ', Object.keys(three_level_grouping_value));
+
+  for (const clique_leader_prefix of Object.keys(three_level_grouping_value)) {
+    // console.log('filenames to consider for ', clique_leader_prefix, ': ', three_level_grouping_value[clique_leader_prefix]);
+    for (const filename of Object.keys(three_level_grouping_value[clique_leader_prefix])) {
+      // console.log('prefixes to consider: ', three_level_grouping_value[clique_leader_prefix][filename]);
+      for (const prefix of Object.keys(three_level_grouping_value[clique_leader_prefix][filename])) {
+        const c1 = three_level_grouping_value[clique_leader_prefix][filename][prefix]["c1"] || 0;
+        const c2 = three_level_grouping_value[clique_leader_prefix][filename][prefix]["c2"] || 0;
+
+        counts_by_filename[filename] = counts_by_filename[filename] || {c1: 0, c2: 0};
+        counts_by_filename[filename].c1 += c1;
+        counts_by_filename[filename].c2 += c2;
+      }
+    }
+  }
+
+  const filename_rows = Object.keys(counts_by_filename).sort().map(filename => {
+    const c1 = counts_by_filename[filename].c1;
+    const c2 = counts_by_filename[filename].c2;
+    const diff = c2 - c1;
+
+    return {
+      filename: filename,
+      c1: c1,
+      c2: c2,
+      diff: diff,
+      absolute_diff: Math.abs(diff),
+      percentage_diff: (diff / c1) * 100,
+    };
+  });
+
+  const diff_curies = report2_json.value.count_curies - report1_json.value.count_curies;
+  const diff_cliques = report2_json.value.count_cliques - report1_json.value.count_cliques;
+
+  return [
+    {
+      filename: 'Count of CURIEs in all files',
+      c1: report1_json.value.count_curies || 0,
+      c2: report2_json.value.count_curies || 0,
+      diff: diff_curies,
+      absolute_diff: Math.abs(diff_curies),
+      percentage_diff: (diff_curies/report1_json.value.count_curies) * 100,
+    },
+    {
+      filename: 'Count of cliques in all files',
+      c1: report1_json.value.count_cliques || 0,
+      c2: report2_json.value.count_cliques || 0,
+      diff: report2_json.value.count_cliques - report1_json.value.count_cliques,
+      absolute_diff: Math.abs(diff_cliques),
+      percentage_diff: (diff_cliques/report1_json.value.count_cliques) * 100,
+    },
+    ...filename_rows
+  ];
+});
+
 </script>
 
 <template>
@@ -216,7 +282,35 @@ const clique_count_rows = computed(() => {
 
     <div class="card my-2">
       <div class="card-header">
-        <strong>Differences</strong>
+        <strong>Overall differences</strong>
+      </div>
+      <div class="card-body p-0">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Filename</th>
+              <th style="text-align: right">Prefix Report 1</th>
+              <th style="text-align: right">Prefix Report 2</th>
+              <th style="text-align: right">Diff</th>
+              <th style="text-align: right">% Diff</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in filename_count_rows">
+              <td>{{row.filename}}</td>
+              <td style="text-align: right">{{row.c1.toLocaleString()}}</td>
+              <td style="text-align: right">{{row.c2.toLocaleString()}}</td>
+              <td style="text-align: right">{{(row.diff > 0 ? '+' : '') + row.diff.toLocaleString()}}</td>
+              <td style="text-align: right">{{row.percentage_diff.toFixed(2) + '%'}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card my-2">
+      <div class="card-header">
+        <strong>Differences by clique prefixes</strong>
       </div>
       <div class="card-body p-0">
         <table class="table">
@@ -225,8 +319,8 @@ const clique_count_rows = computed(() => {
             <th>Clique leader</th>
             <th>Filename</th>
             <th>Prefix</th>
-            <th style="text-align: right">Prefix Report 1 (contains {{(JSON.parse(report1).count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
-            <th style="text-align: right">Prefix Report 2 (contains {{(JSON.parse(report2).count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
+            <th style="text-align: right">Prefix Report 1 (contains {{(report1_json.count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
+            <th style="text-align: right">Prefix Report 2 (contains {{(report2_json.count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
             <th style="text-align: right">Diff</th>
             <th style="text-align: right">% Diff</th>
           </tr>
