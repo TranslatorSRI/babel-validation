@@ -109,6 +109,7 @@ function report_to_clique_counts(report: dict): CliqueCount[] {
       })
 }
 
+// Generate clique count lists whenever the two reports change.
 const clique_counts1 = computed(() => {
   return report_to_clique_counts(JSON.parse(report1.value))
 });
@@ -116,7 +117,20 @@ const clique_counts2 = computed(() => {
   return report_to_clique_counts(JSON.parse(report2.value))
 })
 
-function add_clique_count_to_grouped(name: string, clique_counts: list[CliqueCount], grouped: dict) {
+/**
+ * Adds clique count data to a grouped object under the specified name.
+ *
+ * We group by:
+ * - Clique leader prefix
+ * - Filename
+ * - Prefix
+ *
+ * @param {string} name - The key under which the clique count will be added in the grouped object.
+ * @param {CliqueCount[]} clique_counts - An array of clique count objects.
+ * @param {dict} grouped - An object where the clique count data will be added in groups.
+ * @return {void} Does not return a value. The function modifies the `grouped` object in place.
+ */
+function add_clique_count_to_grouped(name: string, clique_counts: CliqueCount[], grouped: dict) {
   clique_counts.forEach(c => {
     grouped[c.clique_leader_prefix] = grouped[c.clique_leader_prefix] || {};
     grouped[c.clique_leader_prefix][c.filename] = grouped[c.clique_leader_prefix][c.filename] || {};
@@ -132,6 +146,7 @@ function add_clique_count_to_grouped(name: string, clique_counts: list[CliqueCou
   console.log(grouped);
 }
 
+// Calculate a grouped list of clique counts.
 const three_level_grouping = computed(() => {
   const grouped = {};
 
