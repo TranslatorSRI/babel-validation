@@ -15,7 +15,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // Display
-const showIdentical = ref(true);
+const showIdentical = ref(false);
 
 // Eventually, we will allow people to paste the JSON in directly.
 const report1 = ref('{}');
@@ -155,6 +155,40 @@ const three_level_grouping = computed(() => {
 
   return grouped;
 });
+
+// Calculate the clique counts to display in the table.
+const clique_count_rows = computed(() => {
+  const rows = [];
+
+  const three_level_grouping_value = three_level_grouping.value;
+
+  // console.log('three_level_grouping_value = ', three_level_grouping_value, ', keys = ', Object.keys(three_level_grouping_value));
+
+  for (const clique_leader_prefix of Object.keys(three_level_grouping_value)) {
+    // console.log('filenames to consider for ', clique_leader_prefix, ': ', three_level_grouping_value[clique_leader_prefix]);
+    for (const filename of Object.keys(three_level_grouping_value[clique_leader_prefix])) {
+      // console.log('prefixes to consider: ', three_level_grouping_value[clique_leader_prefix][filename]);
+      for (const prefix of Object.keys(three_level_grouping_value[clique_leader_prefix][filename])) {
+        const c1 = three_level_grouping_value[clique_leader_prefix][filename][prefix]["c1"] || 0;
+        const c2 = three_level_grouping_value[clique_leader_prefix][filename][prefix]["c2"] || 0;
+        const diff = c2 - c1;
+        if (showIdentical.value || (diff != 0)) {
+          rows.push({
+            clique_leader_prefix: clique_leader_prefix,
+            filename: filename,
+            prefix: prefix,
+            c1: c1,
+            c2: c2,
+            diff: diff,
+          });
+        }
+      }
+    }
+  }
+
+  return rows.sort((a, b) => a['diff'] - b['diff']);
+});
+
 </script>
 
 <template>
@@ -173,7 +207,7 @@ const three_level_grouping = computed(() => {
           <label for="floatingTextarea">Prefix Report 2</label>
         </div>
         <div>
-          <input type="checkbox" :value="showIdentical" @click="showIdentical = !showIdentical" /> Show identical
+          <input type="checkbox" v-model="showIdentical" /> Show prefix counts that don't differ between the two versions.
         </div>
       </div>
     </div>
@@ -183,35 +217,26 @@ const three_level_grouping = computed(() => {
         <strong>Differences</strong>
       </div>
       <div class="card-body p-0">
-        <table class="table table-bordered ">
+        <table class="table">
           <thead>
           <tr>
             <th>Clique leader</th>
             <th>Filename</th>
             <th>Prefix</th>
-            <th>Prefix Report 1</th>
-            <th>Prefix Report 2</th>
-            <th>Diff</th>
+            <th style="text-align: right">Prefix Report 1</th>
+            <th style="text-align: right">Prefix Report 2</th>
+            <th style="text-align: right">Diff</th>
           </tr>
           </thead>
           <tbody>
-            <template v-for="clique_leader_prefix in Object.keys(three_level_grouping)" :key="clique_leader_prefix">
-              <template v-for="filename in Object.keys(three_level_grouping[clique_leader_prefix])" :key="filename">
-                <tr v-for="prefix in Object.keys(three_level_grouping[clique_leader_prefix][filename])" :key="prefix">
-                  <template v-if="!showIdentical || (three_level_grouping[clique_leader_prefix][filename][prefix]['c1'] || 0) != (three_level_grouping[clique_leader_prefix][filename][prefix]['c2'] || 0)">
-                    <td>{{clique_leader_prefix}}</td>
-                    <td>{{filename}}</td>
-                    <td>{{prefix}}</td>
-                    <td>{{three_level_grouping[clique_leader_prefix][filename][prefix]["c2"]}}</td>
-                    <td>{{three_level_grouping[clique_leader_prefix][filename][prefix]["c1"]}}</td>
-                    <td>{{
-                        three_level_grouping[clique_leader_prefix][filename][prefix]["c2"] -
-                        three_level_grouping[clique_leader_prefix][filename][prefix]["c1"]
-                      }}</td>
-                  </template>
-                </tr>
-              </template>
-            </template>
+            <tr v-for="row in clique_count_rows">
+              <td>{{row.clique_leader_prefix}}</td>
+              <td>{{row.filename}}</td>
+              <td>{{row.prefix}}</td>
+              <td style="text-align: right">{{row.c1.toLocaleString()}}</td>
+              <td style="text-align: right">{{row.c2.toLocaleString()}}</td>
+              <td style="text-align: right">{{(row.diff > 0 ? '+' : '') + row.diff.toLocaleString()}}</td>
+            </tr>
           </tbody>
         </table>
       </div>
