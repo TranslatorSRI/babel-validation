@@ -24,8 +24,8 @@ const report2 = ref('{}');
 const report1_json = computed(() => { return JSON.parse(report1.value) });
 const report2_json = computed(() => { return JSON.parse(report2.value) });
 
-const prefix_report_1_name = computed(() => report1.value['name'] || 'Prefix Report 1')
-const prefix_report_2_name = computed(() => report2.value['name'] || 'Prefix Report 2')
+const prefix_report_1_name = computed(() => report1_json.value['name'] || 'Prefix Report 1')
+const prefix_report_2_name = computed(() => report2_json.value['name'] || 'Prefix Report 2')
 
 // Once this page has loaded, load up some default reports.
 onMounted(() => {
