@@ -22,7 +22,10 @@ const report1 = ref('{}');
 const report2 = ref('{}');
 
 const report1_json = computed(() => { return JSON.parse(report1.value) });
-const report2_json = computed(() => { return JSON.parse(report2.value) })
+const report2_json = computed(() => { return JSON.parse(report2.value) });
+
+const prefix_report_1_name = computed(() => report1.value['name'] || 'Prefix Report 1')
+const prefix_report_2_name = computed(() => report2.value['name'] || 'Prefix Report 2')
 
 // Once this page has loaded, load up some default reports.
 onMounted(() => {
@@ -289,8 +292,8 @@ const filename_count_rows = computed(() => {
           <thead>
             <tr>
               <th>Filename</th>
-              <th style="text-align: right">Prefix Report 1</th>
-              <th style="text-align: right">Prefix Report 2</th>
+              <th style="text-align: right">{{prefix_report_1_name}}</th>
+              <th style="text-align: right">{{prefix_report_2_name}}</th>
               <th style="text-align: right">Diff</th>
               <th style="text-align: right">% Diff</th>
             </tr>
@@ -319,8 +322,8 @@ const filename_count_rows = computed(() => {
             <th>Clique leader</th>
             <th>Filename</th>
             <th>Prefix</th>
-            <th style="text-align: right">Prefix Report 1 (contains {{(report1_json.count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
-            <th style="text-align: right">Prefix Report 2 (contains {{(report2_json.count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
+            <th style="text-align: right">{{prefix_report_1_name}} (contains {{(report1_json.count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
+            <th style="text-align: right">{{prefix_report_2_name}} (contains {{(report2_json.count_curies || 0).toLocaleString()}}&nbsp;CURIEs)</th>
             <th style="text-align: right">Diff</th>
             <th style="text-align: right">% Diff</th>
           </tr>
