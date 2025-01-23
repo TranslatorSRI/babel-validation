@@ -10,8 +10,8 @@ export interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  prefix_json_url1: '/babel-validation/prefix_reports/prefix_report-2024oct1-maybe.json',
-  prefix_json_url2: '/babel-validation/prefix_reports/prefix_report.json',
+  prefix_json_url1: '/babel-validation/prefix_reports/prefix_report-2024oct24.json',
+  prefix_json_url2: '/babel-validation/prefix_reports/prefix_report-dev-2025jan23.json',
 });
 
 // Display
