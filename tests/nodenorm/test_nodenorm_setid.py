@@ -17,7 +17,7 @@ def test_setid_empty(nodenorm_url):
     """
     Make sure we get a sensible response if we call setid without any parameters.
     """
-    response = requests.get(nodenorm_url + "/get_setid")
+    response = requests.get(nodenorm_url + "get_setid")
     result = response.json()
     assert result == {
         "detail":
@@ -36,7 +36,7 @@ def test_setid_incorrect_conflation(nodenorm_url):
     """
     Make sure we get a sensible response if we call setid without any parameters.
     """
-    response = requests.get(nodenorm_url + "/get_setid", params={
+    response = requests.get(nodenorm_url + "get_setid", params={
         'curie': ['DOID:3812', 'MONDO:0005002', 'MONDO:0005003'],
         'conflation': ['GeneProtein', 'DrugChemic']
     })
@@ -77,7 +77,7 @@ def test_setid_basic(nodenorm_url):
     ]
 
     for expected_setid in expected_setids:
-        response = requests.get(nodenorm_url + "/get_setid", params={
+        response = requests.get(nodenorm_url + "get_setid", params={
             'curie': expected_setid['curie'],
             'conflation': expected_setid['conflation'],
         })
@@ -90,7 +90,7 @@ def test_setid_basic(nodenorm_url):
 
     # Test all of them at once using the 'POST' interface.
     setid_query = [{'curies': e['curie'], 'conflations': e['conflation']} for e in expected_setids]
-    response = requests.post(nodenorm_url + "/get_setid", json=setid_query)
+    response = requests.post(nodenorm_url + "get_setid", json=setid_query)
     results = response.json()
     for index, result in enumerate(results):
         expected_setid = expected_setids[index]
@@ -108,7 +108,7 @@ def test_setid_long(nodenorm_url):
     # Generate up to a hundred rubbish IDs (between RUBBISH:10000 and RUBBISH:99999).
     # rubbish_ids = [f'RUBBISH:{random.randint(10000, 99999)}' for _ in range(100)]
     rubbish_ids = ["RUBBISH:47029", "RUBBISH:11782", "RUBBISH:19841", "RUBBISH:74772", "RUBBISH:50159", "RUBBISH:72510", "RUBBISH:71390", "RUBBISH:93274", "RUBBISH:54177", "RUBBISH:11018", "RUBBISH:75654", "RUBBISH:82342", "RUBBISH:58851", "RUBBISH:37847", "RUBBISH:39315", "RUBBISH:95403", "RUBBISH:87724", "RUBBISH:76080", "RUBBISH:62554", "RUBBISH:11207", "RUBBISH:24788", "RUBBISH:97930", "RUBBISH:98994", "RUBBISH:10111", "RUBBISH:46486", "RUBBISH:42114", "RUBBISH:97410", "RUBBISH:71911", "RUBBISH:10444", "RUBBISH:71057", "RUBBISH:16589", "RUBBISH:79128", "RUBBISH:32169", "RUBBISH:76813", "RUBBISH:13051", "RUBBISH:75665", "RUBBISH:33554", "RUBBISH:73285", "RUBBISH:79791", "RUBBISH:99397", "RUBBISH:36508", "RUBBISH:81324", "RUBBISH:27651", "RUBBISH:60525", "RUBBISH:13237", "RUBBISH:21080", "RUBBISH:21874", "RUBBISH:94750", "RUBBISH:95994", "RUBBISH:35060", "RUBBISH:15816", "RUBBISH:65196", "RUBBISH:74530", "RUBBISH:61006", "RUBBISH:97287", "RUBBISH:29972", "RUBBISH:36823", "RUBBISH:31799", "RUBBISH:68589", "RUBBISH:68594", "RUBBISH:63257", "RUBBISH:81351", "RUBBISH:38292", "RUBBISH:84666", "RUBBISH:50607", "RUBBISH:52926", "RUBBISH:48712", "RUBBISH:14093", "RUBBISH:88546", "RUBBISH:29904", "RUBBISH:75316", "RUBBISH:68679", "RUBBISH:99691", "RUBBISH:59711", "RUBBISH:57302", "RUBBISH:18425", "RUBBISH:71720", "RUBBISH:37939", "RUBBISH:23971", "RUBBISH:64822", "RUBBISH:69092", "RUBBISH:73348", "RUBBISH:56239", "RUBBISH:17439", "RUBBISH:80884", "RUBBISH:36822", "RUBBISH:11304", "RUBBISH:18228", "RUBBISH:59644", "RUBBISH:15815", "RUBBISH:93668", "RUBBISH:84725", "RUBBISH:40687", "RUBBISH:95196", "RUBBISH:12572", "RUBBISH:98753", "RUBBISH:52910", "RUBBISH:27338", "RUBBISH:28744", "RUBBISH:70919"]
-    response = requests.get(nodenorm_url + "/get_setid", params={
+    response = requests.get(nodenorm_url + "get_setid", params={
         'curie': rubbish_ids
     })
     result = response.json()
