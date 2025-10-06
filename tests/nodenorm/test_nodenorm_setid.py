@@ -19,6 +19,16 @@ def test_setid_empty(nodenorm_url):
     """
     response = requests.get(nodenorm_url + "get_setid")
     result = response.json()
+
+    # Check for NodeNorm ES:
+    if response.status_code == 400:
+        assert result == {
+            'code': 400,
+            'error': 'Bad Request',
+            'success': False,
+        }
+        return
+
     assert result == {
         "detail":
             [
