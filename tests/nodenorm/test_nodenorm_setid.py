@@ -1,7 +1,11 @@
 #
 # Tests for the NodeNorm API setid methods.
 # These tests are intended to ensure that all the API setid endpoints on NodeNorm are working as intended.
+# Copied and modified from https://github.com/NCATSTranslator/NodeNormalization/blob/d697af9f2ff99f16ebfe0c9a8e375b9d440c8f98/tests/test_setid.py
+# Note that since this depends on normalization, these examples may need to be updated if any of the CURIEs we
+# reference here have different preferred identifiers in a future release.
 #
+
 import pytest
 import requests
 
