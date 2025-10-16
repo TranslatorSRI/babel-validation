@@ -35,6 +35,50 @@ def test_unconflated_biolink_types(nodenorm_url):
             "biolink:ThingWithTaxon",
             "biolink:NamedThing"
         ],
+        "NCBIGene:22059": [
+            'biolink:Gene',
+            'biolink:GeneOrGeneProduct',
+            'biolink:GenomicEntity',
+            'biolink:ChemicalEntityOrGeneOrGeneProduct',
+            'biolink:PhysicalEssence',
+            'biolink:OntologyClass',
+            'biolink:BiologicalEntity',
+            'biolink:ThingWithTaxon',
+            'biolink:NamedThing',
+            'biolink:PhysicalEssenceOrOccurrent',
+            'biolink:MacromolecularMachineMixin'
+        ],
+        "UNII:K16AIQ8CTM": [
+            'biolink:ChemicalEntity',
+            'biolink:PhysicalEssence',
+            'biolink:ChemicalOrDrugOrTreatment',
+            'biolink:ChemicalEntityOrGeneOrGeneProduct',
+            'biolink:ChemicalEntityOrProteinOrPolypeptide',
+            'biolink:NamedThing',
+            'biolink:PhysicalEssenceOrOccurrent'
+        ],
+        "PR:000001379": [
+            'biolink:Protein',
+            'biolink:GeneProductMixin',
+            'biolink:Polypeptide',
+            'biolink:ChemicalEntityOrGeneOrGeneProduct',
+            'biolink:ChemicalEntityOrProteinOrPolypeptide',
+            'biolink:BiologicalEntity',
+            'biolink:ThingWithTaxon',
+            'biolink:NamedThing',
+            'biolink:GeneOrGeneProduct',
+            'biolink:MacromolecularMachineMixin'
+        ],
+        "GO:0003990": [
+            'biolink:MolecularActivity',
+            'biolink:Occurrent',
+            'biolink:OntologyClass',
+            'biolink:BiologicalProcessOrActivity',
+            'biolink:BiologicalEntity',
+            'biolink:ThingWithTaxon',
+            'biolink:NamedThing',
+            'biolink:PhysicalEssenceOrOccurrent'
+        ]
     }
 
     response = requests.post(nodenorm_url + "get_normalized_nodes", json={
