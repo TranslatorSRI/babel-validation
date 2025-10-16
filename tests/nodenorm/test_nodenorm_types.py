@@ -57,7 +57,7 @@ def test_unconflated_biolink_types(nodenorm_url):
             'biolink:NamedThing',
             'biolink:PhysicalEssenceOrOccurrent'
         ],
-        "PR:000001379": [
+        "PR:Q9Y6J0": [
             'biolink:Protein',
             'biolink:GeneProductMixin',
             'biolink:Polypeptide',
@@ -102,3 +102,66 @@ def test_unconflated_biolink_types(nodenorm_url):
         first_biolink_type = biolink_types[0]
         for equivalent_identifiers in result['equivalent_identifiers']:
             assert equivalent_identifiers['type'] == first_biolink_type
+
+
+def test_geneprotein_conflated_biolink_types(nodenorm_url):
+    """
+    Check a few Biolink types with GeneProtein conflation turned on.
+    """
+    curies_and_expected_results = {
+        "NCBIGene:22059": [
+            'biolink:Gene',
+            'biolink:GeneOrGeneProduct',
+            'biolink:GenomicEntity',
+            'biolink:ChemicalEntityOrGeneOrGeneProduct',
+            'biolink:PhysicalEssence',
+            'biolink:OntologyClass',
+            'biolink:BiologicalEntity',
+            'biolink:ThingWithTaxon',
+            'biolink:NamedThing',
+            'biolink:PhysicalEssenceOrOccurrent',
+            'biolink:MacromolecularMachineMixin',
+            'biolink:Protein',
+            'biolink:GeneProductMixin',
+            'biolink:Polypeptide',
+            'biolink:ChemicalEntityOrProteinOrPolypeptide'
+        ],
+        "PR:Q9Y6J0": [
+            'biolink:Gene',
+            'biolink:GeneOrGeneProduct',
+            'biolink:GenomicEntity',
+            'biolink:ChemicalEntityOrGeneOrGeneProduct',
+            'biolink:PhysicalEssence',
+            'biolink:OntologyClass',
+            'biolink:BiologicalEntity',
+            'biolink:ThingWithTaxon',
+            'biolink:NamedThing',
+            'biolink:PhysicalEssenceOrOccurrent',
+            'biolink:MacromolecularMachineMixin',
+            'biolink:Protein',
+            'biolink:GeneProductMixin',
+            'biolink:Polypeptide',
+            'biolink:ChemicalEntityOrProteinOrPolypeptide',
+        ]
+    }
+
+    response = requests.post(nodenorm_url + "get_normalized_nodes", json={
+        "curies": list(curies_and_expected_results.keys()),
+        "conflate": True,
+        "description": False,
+        "drug_chemical_conflate": False,
+        "individual_types": True,
+    })
+    results = response.json()
+
+    # Pull out each Biolink types list and compare to expected results.
+    for query_curie in curies_and_expected_results.keys():
+        result = results[query_curie]
+
+        # Compare Biolink types with expected results.
+        biolink_types = result['type']
+        assert biolink_types == curies_and_expected_results[query_curie]
+
+        # Check the individual types, which -- with GeneProtein conflation -- should be either 'biolink:Gene' or 'biolink:Protein'.
+        for equivalent_identifiers in result['equivalent_identifiers']:
+            assert equivalent_identifiers['type'] in {'biolink:Gene', 'biolink:Protein'}
