@@ -3,15 +3,14 @@
 This repository has several tools for validating the outputs from
 [Babel](https://github.com/TranslatorSRI/Babel) runs, which are the
 underlying data used for the Translator
-[Node Normalization](https://nodenorm.transltr.io/1.3/docs) and
+[Node Normalization](https://nodenorm.transltr.io/docs) and
 [Name Resolver](https://name-lookup.transltr.io/docs) services.
 
 ## PyTest
 
 The best tests in this repository are Python tests stored in the [`./tests`](./tests/) folder.
 This includes both unit tests as well as "Google Sheet"-based tests, which uses
-a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?gid=0#gid=0)
-which contains facts that we can test a NodeNorm instance.
+a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?gid=0#gid=0) containing facts that we can use to test a NodeNorm instance.
 
 To run these tests, you need to set up a Python environment:
 
@@ -69,13 +68,18 @@ ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss
 ======================================================= 41 passed, 1965 skipped, 4 xfailed in 10.11s ========================================================
 ```
 
+## Log Analysis
+
+The Jupyter Notebook in `log-analysis/` contains some basic analysis of the
+logs from NodeNorm (and, someday, NameRes) instances.
+
 ## The Babel Validator Vue Application
 
 The easiest way to validate Babel results on NodeNorm is by running the
 Vue app.
 
 ```shell
-$ cd website
+$ cd website-vue3-vite
 $ npm install
 $ npm run dev
 ```
@@ -84,7 +88,14 @@ This will start a local web application and report the URL for accessing it. Thi
 retrieves tests from [a Google Sheet document](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?usp=sharing)
 and displays their results across multiple NodeNorm (and, someday, NameRes) endpoints.
 
-## Subcommands supported by Babel Validator
+A new website is in development at `website/` and is currently deployed to https://translatorsri.github.io/babel-validation/.
+
+## The Babel Validator in Scala
+
+An initial version of the Babel Validator was written in Scala, but this is no longer being maintained.
+It is available in the `scala-validation/` directory.
+
+### Subcommands supported by Babel Validator
 
 The main Babel Validator 
 
