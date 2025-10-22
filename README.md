@@ -12,16 +12,9 @@ The best tests in this repository are Python tests stored in the [`./tests`](./t
 This includes both unit tests as well as "Google Sheet"-based tests, which uses
 a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?gid=0#gid=0) containing facts that we can use to test a NodeNorm instance.
 
-To run these tests, you need to set up a Python environment:
-
-```shell
-$ python -m venv venv
-$ source venv/bin/activate
-$ pip install -r requirements.txt
-```
-
-The file [`tests/targets.ini`](./tests/targets.ini) allows you to control which NodeNorm
-instance is tested. The `[DEFAULT]` section applies defaults for all the environments.
+To run these tests, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
+You can then use `uv` to run the tests. The file [`tests/targets.ini`](./tests/targets.ini) allows you to
+control which NodeNorm instance is tested. The `[DEFAULT]` section applies defaults for all the environments.
 For example, to run all the tests on the `dev` instance, you can use `--target`:
 
 ```shell
