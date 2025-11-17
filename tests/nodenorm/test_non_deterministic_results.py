@@ -25,7 +25,7 @@ def test_non_deterministic_results(target_info, non_deterministic_query, repeat_
     """
     Test a list of non-deterministic queries by ensuring that repeated requests
     to the normalization endpoint return consistent results. The first response
-    for each query is assumed to be the "correct" result, and any differences 
+    for each query is assumed to be the "correct" result, and any differences
     in subsequent responses are noted.
 
     :param target_info: Dictionary containing information about the target API.
@@ -68,7 +68,7 @@ def test_non_deterministic_results(target_info, non_deterministic_query, repeat_
         diffs.append(deepdiff.DeepDiff(first_response, response, ignore_order=True))
 
     any_failures = any(diffs)
-    if any_failures:
+    if not any_failures:
         assert True, f"All {repeat_count} queries of {non_deterministic_query} returned the same results."
     else:
         assert diffs == [{} for _ in range(repeat_count - 1)]
