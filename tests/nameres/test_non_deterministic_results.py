@@ -18,10 +18,23 @@ non_deterministic_queries = [
 @pytest.mark.parametrize("non_deterministic_query", non_deterministic_queries)
 def test_non_deterministic_results(target_info, non_deterministic_query, repeat_count=100):
     """
+    Tests non-deterministic query results by executing a query multiple times and comparing
+    responses for consistency. The test assumes that the first response is the "correct" one
+    and compares all subsequent results to it. Successful execution implies consistent
+    responses across all repeated queries.
 
-    :param target_info:
-    :param repeat_count:
-    :return:
+    :param target_info: Dictionary containing the target environment configuration. Must
+        include a 'NameResURL' key specifying the base URL for the name resolution service.
+    :type target_info: dict
+
+    :param non_deterministic_query: Query string to be tested for determinism in results.
+    :type non_deterministic_query: str
+
+    :param repeat_count: Number of times the query should be repeated for comparison.
+        Defaults to 100.
+    :type repeat_count: int
+
+    :return: None. Asserts if all responses match the first one or fail otherwise.
     """
     nameres_lookup_url = target_info['NameResURL'] + 'lookup'
     nameres_query = {
@@ -51,4 +64,4 @@ def test_non_deterministic_results(target_info, non_deterministic_query, repeat_
     if not any_failures:
         assert True, f"All {repeat_count} queries of '{non_deterministic_query}' returned the same results."
     else:
-        assert diffs == [[] for _ in range(repeat_count)]
+        assert diffs == [{} for _ in range(repeat_count - 1)]
