@@ -94,6 +94,13 @@ def pytest_generate_tests(metafunc):
     if "target_info" in metafunc.fixturenames:
         metafunc.parametrize("target_info", map(lambda target: get_target(metafunc.config, target), targets), ids=targets)
 
+@pytest.fixture
+def categories_include(request):
+    return set(request.config.getoption('--category'))
+
+@pytest.fixture
+def categories_exclude(request):
+    return set(request.config.getoption('--category-exclude'))
 
 @pytest.fixture
 def test_category(request):

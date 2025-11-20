@@ -80,7 +80,7 @@ blocklist_entries = load_blocklist_from_gsheet()
 
 
 @pytest.mark.parametrize("blocklist_entry", blocklist_entries)
-def test_check_blocklist_entry(target_info, blocklist_entry, test_category):
+def test_check_blocklist_entry(target_info, blocklist_entry, categories_include, categories_exclude):
     """
     Test whether a NameRes instance has blocked every item from a blocklist.
 
@@ -90,8 +90,8 @@ def test_check_blocklist_entry(target_info, blocklist_entry, test_category):
     nameres_url_reverse_lookup = nameres_url + 'reverse_lookup'
 
     # If there is any test category provided, this test is not relevant and we can skip it.
-    if test_category:
-        pytest.skip(f"Skipping blocklist entry as it is not part of any category and the category filter is set to '{test_category}'.")
+    if categories_include or categories_exclude:
+        pytest.skip(f"Skipping blocklist entry as it is not part of any category and the category filter is set to include {categories_include} and exclude {categories_exclude}.")
         return
 
     # Only "blocked" entries are considered, since most of the spreadsheet is things we decided _not_ to block.
