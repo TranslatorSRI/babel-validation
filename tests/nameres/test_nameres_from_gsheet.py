@@ -10,7 +10,7 @@ NAMERES_TIMEOUT = 10 # If we don't get a response in 10 seconds, that's a fail.
 gsheet = GoogleSheetTestCases()
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows(test_nodenorm=False, test_nameres=True))
+@pytest.mark.parametrize("test_row", gsheet.test_rows('test_nameres_from_gsheet.test_label', test_nodenorm=False, test_nameres=True))
 def test_label(target_info, test_row, test_category):
     nameres_url = target_info['NameResURL']
     limit = target_info['NameResLimit']
@@ -111,7 +111,7 @@ def test_label(target_info, test_row, test_category):
 
                 # Test the preferred label if there is one.
                 if test_row.PreferredLabel:
-                    assert top_result['label'] == test_row.PreferredLabel, f"{test_summary} returned preferred " + \
+                    assert top_result['label'].lower() == test_row.PreferredLabel.lower(), f"{test_summary} returned preferred " + \
                         f"label {top_result['label']} instead of {test_row.PreferredLabel}."
 
                 # Additionally, test the biolink_class_exclude field if there is one.

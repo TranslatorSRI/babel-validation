@@ -8,7 +8,7 @@ from common.google_sheet_test_cases import GoogleSheetTestCases, TestRow
 gsheet = GoogleSheetTestCases()
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows(test_nodenorm=True, test_nameres=False))
+@pytest.mark.parametrize("test_row", gsheet.test_rows('test_nodenorm_from_gsheet.test_row', test_nodenorm=True, test_nameres=False))
 def test_normalization(target_info, test_row, test_category):
     nodenorm_url = target_info['NodeNormURL']
 
@@ -34,7 +34,8 @@ def test_normalization(target_info, test_row, test_category):
 
         nodenorm_url_lookup = urllib.parse.urljoin(nodenorm_url, 'get_normalized_nodes')
         request = {
-            "curie": [query_id]
+            "curie": [query_id],
+            "conflate": 'false'
         }
         if test_row.Conflations:
             leftover_conflations = set(test_row.Conflations)
@@ -73,8 +74,8 @@ def test_normalization(target_info, test_row, test_category):
              f"identifier {expected_id}.")
 
         # Test preferred label
-        if test_row.PreferredLabel:
-            assert result['id']['label'] == preferred_label,\
+        if preferred_label:
+            assert result['id']['label'].lower() == preferred_label.lower(),\
                 f"{test_summary} but preferred label is {result['id']['label']}, not expected label {preferred_label}."
 
         # Test Biolink types

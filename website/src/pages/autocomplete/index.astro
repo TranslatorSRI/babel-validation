@@ -1,0 +1,34 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Autocomplete from '../../components/Autocomplete.vue';
+---
+<Layout title="Babel Validation: Autocomplete" description="Test NameRes Autocomplete on multiple instances.">
+    <main>
+        <small><a href=".">Return to front page</a></small>
+
+        <h1>Autocomplete</h1>
+        <p>
+            This implements a simple autocomplete in front of NameRes, allowing NameRes instances
+            to be tested in a manner similar to that used by the Translator UI. The main advantages
+            of this view are:
+        </p>
+
+        <ul>
+            <li>The ability to switch between different NameRes instances.</li>
+            <li>Try different flags and settings.</li>
+        </ul>
+
+        <!-- Hide non-working links.
+
+        <p>
+            You might prefer to look at the top result only in the
+            <a href="./test-sets/nodenorm/">NameRes validator</a> or look at the
+            character-by-character behavior in the autocomplete using the
+            <a href="./test-sets/nameres/character-by-character">NameRes Bulk Importer</a>.
+        </p>
+
+        -->
+
+        <Autocomplete client:only="vue" />
+    </main>
+</Layout>

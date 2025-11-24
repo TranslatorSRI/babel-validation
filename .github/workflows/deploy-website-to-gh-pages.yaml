@@ -1,4 +1,4 @@
-name: Publish Vue app in Website to GitHub Pages
+name: Publish Astro site in `website` to GitHub Pages
 on:
   release:
     types: [released]
@@ -17,6 +17,11 @@ jobs:
         run: |
           npm ci
           npm run build
+
+      - name: Create a `.nojekyll` file.
+        run: |
+          touch website/dist/.nojekyll
+
 
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4

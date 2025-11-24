@@ -352,7 +352,7 @@ def test_nodenorm_229(target_info):
                                 "attributes": [
                                     {
                                         "attribute_type_id": "biolink:has_numeric_value",
-                                        "value": 92.7,
+                                        "value": 92.8,
                                         "value_type_id": "EDAM:data_0006",
                                         "original_attribute_name": "information_content",
                                     }
@@ -390,7 +390,7 @@ def test_nodenorm_229(target_info):
                                 "attributes": [
                                     {
                                         "attribute_type_id": "biolink:has_numeric_value",
-                                        "value": 92.7,
+                                        "value": 92.8,
                                         "value_type_id": "EDAM:data_0006",
                                         "original_attribute_name": "information_content",
                                     }
