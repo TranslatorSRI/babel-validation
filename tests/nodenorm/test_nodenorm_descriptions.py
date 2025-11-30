@@ -1,5 +1,7 @@
 #
 # Tests for the NodeNorm descriptions
+# Note that these tests are for NodeNorm v2.3.28 onwards, as they assume a top-level `descriptions` key with a list
+# of all unique descriptions for a clique.
 #
 import pytest
 import requests
