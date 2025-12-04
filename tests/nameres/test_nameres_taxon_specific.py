@@ -5,7 +5,6 @@
 # (e.g. searching for `diabetes` should always return MONDO:0005015, even if `only_taxa=NCBITaxon:9606` is set.
 # see https://github.com/NCATSTranslator/NameResolution/issues/193 for more details). These tests check this
 # behavior.
-import urllib
 import requests
 
 
