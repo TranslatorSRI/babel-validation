@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass(frozen=True)
@@ -52,3 +53,17 @@ class TestRow:
             SourceURL=row.get('Source URL', ''),
             Notes=row.get('Notes', '')
         )
+
+class TestStatus(Enum):
+    Passed = "pass"
+    Failed = "fail"
+    Skipped = "skip"
+
+@dataclass
+class TestResult:
+    status: TestStatus
+    message: str = ""
+    github_issue_test: 'GitHubIssueTest' = None
+
+
+
