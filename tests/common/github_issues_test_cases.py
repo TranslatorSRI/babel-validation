@@ -11,7 +11,15 @@ from tests.common.testrow import TestRow, TestResult, TestStatus
 from github import Github, Auth, Issue
 from tqdm import tqdm
 
+cached_nodenorms = {}
+
 class CachedNodeNorm:
+    @staticmethod
+    def for_url(nodenorm_url: str) -> 'CachedNodeNorm':
+        if nodenorm_url not in cached_nodenorms:
+            cached_nodenorms[nodenorm_url] = CachedNodeNorm(nodenorm_url)
+        return cached_nodenorms[nodenorm_url]
+
     def __init__(self, nodenorm_url: str):
         self.nodenorm_url = nodenorm_url
         self.logger = logging.getLogger(str(self))
@@ -226,31 +234,34 @@ class GitHubIssuesTestCases:
 
         return testrows
 
-    def get_test_issues(self, github_repositories = None, include_issues_without_tests = False) -> Iterator[GitHubIssueTest]:
-        """
-        Get a list of test rows from one or more repositories.
-
-        :param github_repositories: A list of GitHub repositories to search for test cases. If none is provided,
-            we default to the list specified when creating this GitHubIssuesTestCases class.
-        :param include_issues_without_tests: If true, include issues that do not contain any test cases. Default: false.
-        :return: A list of TestRows to process.
-        """
+    def get_all_issues(self, github_repositories = None) -> Iterator[Issue.Issue]:
         if github_repositories is None:
             github_repositories = self.github_repositories
 
         for repo_id in github_repositories:
             self.logger.info(f"Looking up issues in GitHub repository {repo_id}")
             repo = self.github.get_repo(repo_id)
+            yield from repo.get_issues(state='all', sort='updated')
 
-            issue_count = 0
-            for issue in tqdm(repo.get_issues(state='all', sort='updated'), desc=f"Processing issues in {repo_id}"):
-                issue_count += 1
-                test_issues = self.get_test_issues_from_issue(issue)
+    def get_test_issues(self, repo_id, include_issues_without_tests = False) -> Iterator[GitHubIssueTest]:
+        """
+        Get a list of test rows from one or more repositories.
 
-                if not include_issues_without_tests and not test_issues:
-                    continue
+        :param repo_id: The GitHub repository ID to search for test cases, in the format "Organization/Repository".
+        :param include_issues_without_tests: If true, include issues that do not contain any test cases. Default: false.
+        :return: A list of TestRows to process.
+        """
 
-                for test_issue in test_issues:
-                    yield test_issue
+        repo = self.github.get_repo(repo_id)
 
-            self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")
+        issue_count = 0
+        for issue in tqdm(repo.get_issues(state='all', sort='updated'), desc=f"Processing issues in {repo_id}"):
+            test_issues = self.get_test_issues_from_issue(issue)
+
+            if not include_issues_without_tests and not test_issues:
+                continue
+
+            for test_issue in test_issues:
+                yield test_issue
+
+        self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")

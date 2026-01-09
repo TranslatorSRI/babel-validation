@@ -59,11 +59,16 @@ class TestStatus(Enum):
     Failed = "fail"
     Skipped = "skip"
 
+    # Mark as not a test despite starting with TestRow.
+    __test__ = False
+
 @dataclass
 class TestResult:
     status: TestStatus
     message: str = ""
     github_issue_test: 'GitHubIssueTest' = None
 
+    # Mark as not a test despite starting with TestRow.
+    __test__ = False
 
 
