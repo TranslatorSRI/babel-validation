@@ -83,6 +83,7 @@ class GitHubIssueTest:
         return f"{self.github_issue.repository.organization.name}/{self.github_issue.repository.name}#{self.github_issue.number}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
 
     def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
+        yielded_values = False
         match self.assertion.lower():
             case "resolves":
                 if not self.param_sets:
@@ -92,7 +93,6 @@ class GitHubIssueTest:
                 nodenorm.normalize_curies(curies_to_resolve)
 
                 # Enumerate curies.
-                yielded_values = False
                 for index, curies in enumerate(self.param_sets):
                     if not curies:
                         return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
@@ -106,9 +106,6 @@ class GitHubIssueTest:
                             yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}")
                             yielded_values = True
 
-                if not yielded_values:
-                    return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
-
             case "doesnotresolve":
                 if not self.param_sets:
                     return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
@@ -117,7 +114,6 @@ class GitHubIssueTest:
                 nodenorm.normalize_curies(curies_to_resolve)
 
                 # Enumerate curies.
-                yielded_values = False
                 for index, curies in enumerate(self.param_sets):
                     if not curies:
                         return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
@@ -141,7 +137,6 @@ class GitHubIssueTest:
                 curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
 
-                yielded_values = False
                 for curies in self.param_sets:
                     results = nodenorm.normalize_curies(curies)
 
@@ -173,6 +168,26 @@ class GitHubIssueTest:
                 if not yielded_values:
                     return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
 
+            case "resolveswithtype":
+                if not self.param_sets:
+                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
+
+                for index, params in enumerate(self.param_sets):
+                    if len(params) < 2:
+                        return TestResult(status=TestStatus.Failed, message=f"Too few parameters provided in param set {index} in {self}: {params}")
+                    expected_biolink_type = params[0]
+                    curies = params[1:]
+
+                    results = nodenorm.normalize_curies(curies)
+                    for curie in curies:
+                        biolink_types = results[curie]['type']
+                        if expected_biolink_type in biolink_types:
+                            yield TestResult(status=TestStatus.Passed, message=f"Biolink types {biolink_types} for CURIE {curie} includes expected Biolink type {expected_biolink_type}")
+                            yielded_values = True
+                        else:
+                            yield TestResult(status=TestStatus.Failed, message=f"Biolink types {biolink_types} for CURIE {curie} does not include expected Biolink type {expected_biolink_type}")
+                            yielded_values = True
+
             # These are NameRes tests, not NodeNorm tests.
             case "searchbyname":
                 return
@@ -183,6 +198,9 @@ class GitHubIssueTest:
 
             case _:
                 raise ValueError(f"Unknown assertion type for {self}: {self.assertion}")
+
+        if not yielded_values:
+            return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
 
     def test_with_nameres(self) -> TestResult:
         match self.assertion.lower():
