@@ -78,7 +78,7 @@ class GitHubIssueTest:
                 if not self.param_sets:
                     return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
 
-                curies_to_resolve = [params[0] for params in self.param_sets]
+                curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
 
                 # Enumerate params.
@@ -103,7 +103,7 @@ class GitHubIssueTest:
                 if not self.param_sets:
                     return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
 
-                curies_to_resolve = [params[0] for params in self.param_sets]
+                curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
 
                 # Enumerate params.
@@ -170,8 +170,12 @@ class GitHubIssueTest:
                 if not yielded_values:
                     return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
 
+            # These are NameRes tests, not NodeNorm tests.
+            case "searchbyname":
+                return
+
             case _:
-                raise ValueError(f"Unknown assertion type: {self.assertion}")
+                raise ValueError(f"Unknown assertion type for {self}: {self.assertion}")
 
     def test_with_nameres(self) -> TestResult:
         match self.assertion.lower():
@@ -250,7 +254,12 @@ class GitHubIssuesTestCases:
         :return: An iterator over TestRows.
         """
 
-        github_issue_id = f"{github_issue.repository.organization.name}/{github_issue.repository.name}#{github_issue.number}"
+        github_issue_id = f"{github_issue.number}"
+            # Ideally, we would use:
+            #   f"{github_issue.repository.organization.name}/{github_issue.repository.name}#{github_issue.number}"
+            # But that is very slow.
+            # TODO: Wrap Issue.Issue so that we can store orgName and repoName locally so we don't need to call out
+            # to figure it out.
         self.logger.debug(f"Looking for tests in issue {github_issue_id}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
 
         # Is there an issue body at all?

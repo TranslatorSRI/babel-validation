@@ -40,8 +40,13 @@ def test_github_issue(target_info, github_issue, selected_github_issues):
             return
 
     # Test this issue.
+    print(f"Testing issue {str(github_issue)}")
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
     tests = github_issues_test_cases.get_test_issues_from_issue(github_issue)
+    if not tests:
+        pytest.skip(f"No tests found in issue {github_issue}")
+        return
+
     for test_issue in tests:
         results = test_issue.test_with_nodenorm(nodenorm)
 
