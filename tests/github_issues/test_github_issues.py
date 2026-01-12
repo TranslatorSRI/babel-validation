@@ -51,19 +51,13 @@ def test_github_issue(target_info, github_issue, selected_github_issues):
         pytest.skip(f"No tests found in issue {github_issue}")
         return
 
-    # Is this test open or closed?
-    github_issue_open = (github_issue.state == 'open')
-
     for test_issue in tests:
         results = test_issue.test_with_nodenorm(nodenorm)
 
         for result in results:
             match result:
                 case TestResult(status=TestStatus.Passed, message=message):
-                    if github_issue_open:
-                        assert False, f"{get_github_issue_id(github_issue)} ({github_issue.state}) CAN BE CLOSED: {message}"
-                    else:
-                        assert True, f"{get_github_issue_id(github_issue)} ({github_issue.state}): {message}"
+                    assert True, f"{get_github_issue_id(github_issue)} ({github_issue.state}): {message}"
 
                 case TestResult(status=TestStatus.Failed, message=message):
                     assert False, f"{get_github_issue_id(github_issue)} ({github_issue.state}): {message}"
