@@ -177,6 +177,10 @@ class GitHubIssueTest:
             case "searchbyname":
                 return
 
+            # This is a special assertion to remind ourselves that we need to add tests here.
+            case "needed":
+                return TestResult(status=TestStatus.Failed, message=f"Test needed for issue")
+
             case _:
                 raise ValueError(f"Unknown assertion type for {self}: {self.assertion}")
 

@@ -45,12 +45,14 @@ def test_github_issue(target_info, github_issue, selected_github_issues):
             return
 
     # Test this issue.
-    print(f"Testing issue {str(github_issue)}")
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
     tests = github_issues_test_cases.get_test_issues_from_issue(github_issue)
     if not tests:
         pytest.skip(f"No tests found in issue {github_issue}")
         return
+
+    # Is this test open or closed?
+    github_issue_open = (github_issue.state == 'open')
 
     for test_issue in tests:
         results = test_issue.test_with_nodenorm(nodenorm)
@@ -58,10 +60,19 @@ def test_github_issue(target_info, github_issue, selected_github_issues):
         for result in results:
             match result:
                 case TestResult(status=TestStatus.Passed, message=message):
-                    assert True, message
+                    if github_issue_open:
+                        pytest.xfail(f"{get_github_issue_id(github_issue)} CAN BE CLOSED: {message}")
+                    else:
+                        assert True, message
+
                 case TestResult(status=TestStatus.Failed, message=message):
-                    assert False, f"{get_github_issue_id(github_issue)}: {message}"
+                    if github_issue_open:
+                        pytest.xfail(f"{get_github_issue_id(github_issue)} NOT YET PASSING: {message}")
+                    else:
+                        assert False, f"{get_github_issue_id(github_issue)}: {message}"
+
                 case TestResult(status=TestStatus.Skipped, message=message):
                     pytest.skip(f"{get_github_issue_id(github_issue)}: {message}")
+
                 case _:
                     assert False, f"Unknown result from {get_github_issue_id(github_issue)}: {result}"
