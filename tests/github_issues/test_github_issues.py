@@ -17,9 +17,25 @@ github_issues_test_cases = GitHubIssuesTestCases(github_token, [
 ])
 
 @pytest.mark.parametrize("test_issue", github_issues_test_cases.get_test_issues())
-def test_github_issue_testrow(target_info, test_issue):
-    print(f"Test issue: {test_issue}")
+def test_github_issue(target_info, test_issue, github_issues):
+    # If github_issues is provided, we can skip all others.
+    if github_issues:
+        # Come up with the three possible ways in which this issue might be specified.
+        github_issue = test_issue.github_issue
+        possible_issue_strings = set([
+            str(github_issue.number),
+            f"{test_issue.github_issue.repository.name}#{github_issue.number}",
+            f"{test_issue.github_issue.repository.organization.name}/{test_issue.github_issue.repository.name}#{github_issue.number}"
+        ])
 
+        if possible_issue_strings & set(github_issues):
+            # This issue is one of those that should be tested.
+            pass
+        else:
+            pytest.skip(f"GitHub Issue {str(test_issue)} not included in list of GitHub issues to be tested: {github_issues}.")
+            return
+
+    # Test this issue.
     nodenorm = CachedNodeNorm(target_info['NodeNormURL'])
     results = test_issue.test_with_nodenorm(nodenorm)
 

@@ -47,6 +47,14 @@ def pytest_addoption(parser):
         help="The categories of tests to exclude."
     )
 
+    # The issue option is only used by
+    parser.addoption(
+        '--issue',
+        default=[],
+        action='append',
+        help="One or more GitHub issues to test. Should be specified as either 'organization/repo#110', 'repo#110' or '110'"
+    )
+
 
 def read_targets(config_path):
     cp = configparser.ConfigParser()
@@ -120,3 +128,8 @@ def test_category(request):
             return True
 
     return category_test
+
+# Issue is only used by the GitHub issue tests (tests/github_issues/*)
+@pytest.fixture
+def github_issues(pytestconfig):
+    return pytestconfig.getoption('issue')
