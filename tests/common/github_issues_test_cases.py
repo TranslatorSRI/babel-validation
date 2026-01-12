@@ -177,14 +177,16 @@ class GitHubIssuesTestCases:
         ```
 
         We currently support the following assertions:
-        - Resolves: Test whether param1 (CURIE) resolves to anything.
-        - ResolvesWith: Test whether param1 (CURIE) resolves to param2 (CURIE).
+        - Resolves: Test whether any of the parameters can be resolved.
+        - DoesNotResolve: Ensure that the parameters do not resolve.
+        - ResolvesWith: Test whether all the parameters resolve together.
 
         :param github_issue: A single GitHub issue to extract test cases from.
         :return: An iterator over TestRows.
         """
 
-        self.logger.debug(f"Looking for tests in issue #{github_issue.number}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
+        github_issue_id = f"{github_issue.repository.organization.name}/{github_issue.repository.name}#{github_issue.number}"
+        self.logger.debug(f"Looking for tests in issue {github_issue_id}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
 
         # Is there an issue body at all?
         if not github_issue.body or github_issue.body.strip() == '':
@@ -196,7 +198,7 @@ class GitHubIssuesTestCases:
         babeltest_matches = re.findall(self.babeltest_pattern, github_issue.body)
         if babeltest_matches:
             for match in babeltest_matches:
-                self.logger.info(f"Found BabelTest in issue #{github_issue.number}: {match}")
+                self.logger.info(f"Found BabelTest in issue {github_issue_id}: {match}")
 
                 # Figure out parameters.
                 test_string = match
@@ -206,16 +208,16 @@ class GitHubIssuesTestCases:
                     test_string = test_string[:-2]
                 params = test_string.split("|")
                 if len(params) < 2:
-                    raise ValueError(f"Too few parameters found in BabelTest in issue #{github_issue.number}: {match}")
+                    raise ValueError(f"Too few parameters found in BabelTest in issue {github_issue_id}: {match}")
                 elif len(params) == 2:
-                    testrows.append(GitHubIssueTest(github_issue, params[1], [params[0]]))
+                    testrows.append(GitHubIssueTest(github_issue, params[0], [params]))
                 else:
-                    testrows.append(GitHubIssueTest(github_issue, params[1], [params[0], params[2:]]))
+                    testrows.append(GitHubIssueTest(github_issue, params[0], [params]))
 
         babeltest_yaml_matches = re.findall(self.babeltest_yaml_pattern, github_issue.body)
         if babeltest_yaml_matches:
             for match in babeltest_yaml_matches:
-                self.logger.info(f"Found BabelTest YAML in issue #{github_issue.number}: {match}")
+                self.logger.info(f"Found BabelTest YAML in issue {github_issue_id}: {match}")
 
                 # Parse string as YAML.
                 if match.startswith("```yaml"):

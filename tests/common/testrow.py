@@ -24,7 +24,7 @@ class TestRow:
     SourceURL: str
     Notes: str
 
-    # Mark as not a test despite starting with TestRow.
+    # Mark as not a test despite starting with Test*.
     __test__ = False
 
     # A string representation of this test row.
@@ -59,11 +59,15 @@ class TestStatus(Enum):
     Failed = "fail"
     Skipped = "skip"
 
+    # Mark as not a test despite starting with Test*.
+    __test__ = False
+
 @dataclass
 class TestResult:
     status: TestStatus
     message: str = ""
     github_issue_test: 'GitHubIssueTest' = None
 
-
+    # Mark as not a test despite starting with Test*.
+    __test__ = False
 
