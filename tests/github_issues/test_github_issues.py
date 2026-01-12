@@ -50,20 +50,20 @@ def test_github_issue(target_info, github_issue, selected_github_issues):
     if not tests:
         pytest.skip(f"No tests found in issue {github_issue}")
         return
-
+    
     for test_issue in tests:
         results = test_issue.test_with_nodenorm(nodenorm)
 
         for result in results:
             match result:
                 case TestResult(status=TestStatus.Passed, message=message):
-                    assert True, message
+                    assert True, f"{get_github_issue_id(github_issue)} ({github_issue.state}): {message}"
 
                 case TestResult(status=TestStatus.Failed, message=message):
-                    assert False, f"{get_github_issue_id(github_issue)}: {message}"
+                    assert False, f"{get_github_issue_id(github_issue)} ({github_issue.state}): {message}"
 
                 case TestResult(status=TestStatus.Skipped, message=message):
-                    pytest.skip(f"{get_github_issue_id(github_issue)}: {message}")
+                    pytest.skip(f"{get_github_issue_id(github_issue)} ({github_issue.state}): {message}")
 
                 case _:
                     assert False, f"Unknown result from {get_github_issue_id(github_issue)}: {result}"
