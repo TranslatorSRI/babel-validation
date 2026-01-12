@@ -11,6 +11,8 @@ from tests.common.testrow import TestRow, TestResult, TestStatus
 from github import Github, Auth, Issue
 from tqdm import tqdm
 
+cached_node_norms_by_url = {}
+
 class CachedNodeNorm:
     def __init__(self, nodenorm_url: str):
         self.nodenorm_url = nodenorm_url
@@ -20,7 +22,13 @@ class CachedNodeNorm:
     def __str__(self):
         return f"CachedNodeNorm({self.nodenorm_url})"
 
-    def normalize_curies(self, curies: list[str], **params) -> str:
+    @staticmethod
+    def from_url(nodenorm_url: str) -> 'CachedNodeNorm':
+        if nodenorm_url not in cached_node_norms_by_url:
+            cached_node_norms_by_url[nodenorm_url] = CachedNodeNorm(nodenorm_url)
+        return cached_node_norms_by_url[nodenorm_url]
+
+    def normalize_curies(self, curies: list[str], **params) -> dict[str, dict]:
         time_started = time.time_ns()
         curies_set = set(curies)
         cached_curies = curies_set & self.cache.keys()
@@ -62,48 +70,105 @@ class GitHubIssueTest:
         self.logger.info(f"Creating GitHubIssueTest for {github_issue.html_url} {assertion}({param_sets})")
 
     def __str__(self):
-        return f"{self.github_issue.repository.organization.name}/{self.github_issue.repository.name}#{self.github_issue.number}: {self.assertion}({json.dumps(self.param_sets)})"
-
-    def expect_param_count(self, params: list[str], expected_count: int):
-        if len(params) != expected_count:
-            raise ValueError(f"Expected {expected_count} parameters for assertion {self.assertion}, but got {len(params)}")
+        return f"{self.github_issue.repository.organization.name}/{self.github_issue.repository.name}#{self.github_issue.number}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
 
     def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
         match self.assertion.lower():
             case "resolves":
+                if not self.param_sets:
+                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
+
                 curies_to_resolve = [params[0] for params in self.param_sets]
                 nodenorm.normalize_curies(curies_to_resolve)
 
-                for params in self.param_sets:
-                    self.expect_param_count(params, 1)
-                    curie = params[0]
+                # Enumerate params.
+                yielded_values = False
+                for index, params in enumerate(self.param_sets):
+                    if not params:
+                        return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
 
-                    # Make sure we can resolve this CURIE.
-                    result = nodenorm.normalize_curie(curie)
-                    if not result:
-                        yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
-                    else:
-                        yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}")
+                    for curie in params:
+                        result = nodenorm.normalize_curie(curie)
+                        if not result:
+                            yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
+                            yielded_values = True
+                        else:
+                            yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}")
+                            yielded_values = True
+
+                if not yielded_values:
+                    return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
+
+            case "doesnotresolve":
+                if not self.param_sets:
+                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
+
+                curies_to_resolve = [params[0] for params in self.param_sets]
+                nodenorm.normalize_curies(curies_to_resolve)
+
+                # Enumerate params.
+                yielded_values = False
+                for index, params in enumerate(self.param_sets):
+                    if not params:
+                        return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
+
+                    for curie in params:
+                        result = nodenorm.normalize_curie(curie)
+                        if not result:
+                            yield TestResult(status=TestStatus.Passed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm} as expected")
+                            yielded_values = True
+                        else:
+                            yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}, but expected not to resolve")
+                            yielded_values = True
+
+                if not yielded_values:
+                    return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
 
             case "resolveswith":
-                curies_to_test = set()
-                for params in self.param_sets:
-                    curies_to_test.add(params[0])
-                    curies_to_test.add(params[1])
+                if not self.param_sets:
+                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
 
-                nodenorm.normalize_curies(list(curies_to_test))
-                for params in self.param_sets:
-                    self.expect_param_count(params, 2)
-                    curie, expected_curie = params
+                curies_to_resolve = [params[0] for params in self.param_sets]
+                nodenorm.normalize_curies(curies_to_resolve)
 
-                    # Make sure we can resolve this CURIE.
-                    result = self.nodenorm.normalize_curie(curie)
-                    if not result:
-                        yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
-                    elif result['id']['identifier'] == expected_curie:
-                        yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm} as expected")
-                    else:
-                        yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}, but expected {expected_curie}")
+                nodenorm.normalize_curies(list(curies_to_resolve))
+
+                yielded_values = False
+                for params in self.param_sets:
+                    results = nodenorm.normalize_curies(params)
+
+                    # We expect there to be a single unique value here.
+                    unique_results = set([json.dumps(value, sort_keys=True) for value in results.values()])
+
+                    if len(unique_results) == 1 and len(results.values()) == len(params) and results.values()[0] is not None:
+                        return TestResult(status=TestStatus.Passed, message=f"All the CURIEs {params} resolved to the same result on {nodenorm}: {json.dumps(unique_results[0], indent=2, sort_keys=True)}")
+
+                    # Find the first good result.
+                    first_good_result = None
+                    for curie, result in results.items():
+                        if result is not None and first_good_result is None:
+                            first_good_result = curie
+                            break
+
+                    if first_good_result is None:
+                        return TestResult(status=TestStatus.Failed, message=f"None of the CURIEs {params} could be resolved on {nodenorm}")
+
+                    # Check all the results.
+                    for curie, result in results.items():
+                        if result is None:
+                            yield TestResult(status=TestStatus.Failed, message=f"CURIE {curie} could not be resolved, and so is not euqal to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
+                            yielded_values = True
+                            continue
+
+                        if json.dumps(first_good_result, sort_keys=True) == json.dumps(result, sort_keys=True):
+                            yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)}")
+                            yielded_values = True
+                        else:
+                            yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {json.dumps(result, indent=2, sort_keys=True)}, which is different from the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
+                            yielded_values = True
+
+                if not yielded_values:
+                    return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
 
             case _:
                 raise ValueError(f"Unknown assertion type: {self.assertion}")
@@ -231,7 +296,7 @@ class GitHubIssuesTestCases:
 
         return testrows
 
-    def get_test_issues(self, github_repositories = None, include_issues_without_tests = False) -> Iterator[GitHubIssueTest]:
+    def get_all_issues(self, github_repositories = None) -> Iterator[Issue.Issue]:
         """
         Get a list of test rows from one or more repositories.
 
@@ -245,17 +310,11 @@ class GitHubIssuesTestCases:
 
         for repo_id in github_repositories:
             self.logger.info(f"Looking up issues in GitHub repository {repo_id}")
-            repo = self.github.get_repo(repo_id)
+            repo = self.github.get_repo(repo_id, lazy=True)
 
             issue_count = 0
             for issue in tqdm(repo.get_issues(state='all', sort='updated'), desc=f"Processing issues in {repo_id}"):
                 issue_count += 1
-                test_issues = self.get_test_issues_from_issue(issue)
-
-                if not include_issues_without_tests and not test_issues:
-                    continue
-
-                for test_issue in test_issues:
-                    yield test_issue
+                yield issue
 
             self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")

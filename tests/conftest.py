@@ -131,5 +131,5 @@ def test_category(request):
 
 # Issue is only used by the GitHub issue tests (tests/github_issues/*)
 @pytest.fixture
-def github_issues(pytestconfig):
+def selected_github_issues(pytestconfig):
     return pytestconfig.getoption('issue')
