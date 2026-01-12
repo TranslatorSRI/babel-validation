@@ -44,7 +44,7 @@ class CachedNodeNorm:
         if curies_to_be_queried:
             params['curies'] = list(curies_to_be_queried)
 
-            print(f"Called NodeNorm {self} with params {params}")
+            self.logger.debug(f"Called NodeNorm {self} with params {params}")
             response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=params)
             response.raise_for_status()
             result = response.json()
@@ -158,7 +158,7 @@ class GitHubIssueTest:
                     # Check all the results.
                     for curie, result in results.items():
                         if result is None:
-                            yield TestResult(status=TestStatus.Failed, message=f"CURIE {curie} could not be resolved, and so is not euqal to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
+                            yield TestResult(status=TestStatus.Failed, message=f"CURIE {curie} could not be resolved, and so is not equal to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
                             yielded_values = True
                             continue
 
@@ -286,10 +286,8 @@ class GitHubIssuesTestCases:
                 params = test_string.split("|")
                 if len(params) < 2:
                     raise ValueError(f"Too few parameters found in BabelTest in issue {github_issue_id}: {match}")
-                elif len(params) == 2:
-                    testrows.append(GitHubIssueTest(github_issue, params[0], [params]))
                 else:
-                    testrows.append(GitHubIssueTest(github_issue, params[0], [params]))
+                    testrows.append(GitHubIssueTest(github_issue, params[0], [params[1:]]))
 
         babeltest_yaml_matches = re.findall(self.babeltest_yaml_pattern, github_issue.body)
         if babeltest_yaml_matches:

@@ -2,9 +2,14 @@ import os
 
 import dotenv
 import pytest
+from github import Issue
 
 from tests.common.github_issues_test_cases import GitHubIssuesTestCases, CachedNodeNorm
 from tests.common.testrow import TestResult, TestStatus
+
+# Helper functions
+def get_github_issue_id(github_issue: Issue.Issue):
+    return f"{github_issue.repository.organization.name}/{github_issue.repository.name}#{github_issue.number}"
 
 # Initialize the test.
 dotenv.load_dotenv()
@@ -55,8 +60,8 @@ def test_github_issue(target_info, github_issue, selected_github_issues):
                 case TestResult(status=TestStatus.Passed, message=message):
                     assert True, message
                 case TestResult(status=TestStatus.Failed, message=message):
-                    assert False, message
+                    assert False, f"{get_github_issue_id(github_issue)}: {message}"
                 case TestResult(status=TestStatus.Skipped, message=message):
-                    pytest.skip(message)
+                    pytest.skip(f"{get_github_issue_id(github_issue)}: {message}")
                 case _:
-                    assert False, f"Unknown result: {result}"
+                    assert False, f"Unknown result from {get_github_issue_id(github_issue)}: {result}"
