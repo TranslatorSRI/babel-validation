@@ -140,6 +140,9 @@ class GitHubIssuesTestCases:
         :param github_repositories: A list of GitHub repositories to pull issues from, specified as 'organization/repo'.
         """
         self.github_token = github_token
+        if not self.github_token or self.github_token.strip() == '':
+            raise ValueError("No GitHub authentication token provided.")
+
         self.github = Github(auth=Auth.Token(self.github_token))
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.info("Set up GitHub object ({self.github})")
