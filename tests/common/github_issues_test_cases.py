@@ -29,23 +29,31 @@ class CachedNodeNorm:
         return cached_node_norms_by_url[nodenorm_url]
 
     def normalize_curies(self, curies: list[str], **params) -> dict[str, dict]:
+        if not curies:
+            raise ValueError(f"curies must not be empty when calling normalize_curies({curies}, {params}) on {self}")
+        if not isinstance(curies, list):
+            raise ValueError(f"curies must be a list when calling normalize_curies({curies}, {params}) on {self}")
+
         time_started = time.time_ns()
         curies_set = set(curies)
         cached_curies = curies_set & self.cache.keys()
         curies_to_be_queried = curies_set - cached_curies
 
         # Make query.
-        params['curies'] = list(curies_to_be_queried)
+        result = {}
+        if curies_to_be_queried:
+            params['curies'] = list(curies_to_be_queried)
 
-        response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=params)
-        response.raise_for_status()
-        result = response.json()
+            print(f"Called NodeNorm {self} with params {params}")
+            response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=params)
+            response.raise_for_status()
+            result = response.json()
+
+            for curie in curies_to_be_queried:
+                self.cache[curie] = result.get(curie, None)
 
         for curie in cached_curies:
             result[curie] = self.cache[curie]
-
-        for curie in curies_to_be_queried:
-            self.cache[curie] = result.get(curie, None)
 
         time_taken_sec = (time.time_ns() - time_started) / 1E9
         self.logger.info(f"Normalizing {len(curies_to_be_queried)} CURIEs {curies_to_be_queried} (with {len(cached_curies)} CURIEs cached) with params {params} on {self} in {time_taken_sec:.3f}s")
@@ -65,6 +73,8 @@ class GitHubIssueTest:
         if param_sets is None:
             param_sets = []
         self.param_sets = param_sets
+        if not isinstance(self.param_sets, list):
+            raise ValueError(f"param_sets must be a list when creating a GitHubIssueTest({self.github_issue}, {self.assertion}, {self.param_sets})")
 
         self.logger = logging.getLogger(str(self))
         self.logger.info(f"Creating GitHubIssueTest for {github_issue.html_url} {assertion}({param_sets})")
@@ -81,13 +91,13 @@ class GitHubIssueTest:
                 curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
 
-                # Enumerate params.
+                # Enumerate curies.
                 yielded_values = False
-                for index, params in enumerate(self.param_sets):
-                    if not params:
+                for index, curies in enumerate(self.param_sets):
+                    if not curies:
                         return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
 
-                    for curie in params:
+                    for curie in curies:
                         result = nodenorm.normalize_curie(curie)
                         if not result:
                             yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
@@ -106,13 +116,13 @@ class GitHubIssueTest:
                 curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
 
-                # Enumerate params.
+                # Enumerate curies.
                 yielded_values = False
-                for index, params in enumerate(self.param_sets):
-                    if not params:
+                for index, curies in enumerate(self.param_sets):
+                    if not curies:
                         return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
 
-                    for curie in params:
+                    for curie in curies:
                         result = nodenorm.normalize_curie(curie)
                         if not result:
                             yield TestResult(status=TestStatus.Passed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm} as expected")
@@ -128,30 +138,22 @@ class GitHubIssueTest:
                 if not self.param_sets:
                     return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
 
-                curies_to_resolve = [params[0] for params in self.param_sets]
+                curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
 
-                nodenorm.normalize_curies(list(curies_to_resolve))
-
                 yielded_values = False
-                for params in self.param_sets:
-                    results = nodenorm.normalize_curies(params)
-
-                    # We expect there to be a single unique value here.
-                    unique_results = set([json.dumps(value, sort_keys=True) for value in results.values()])
-
-                    if len(unique_results) == 1 and len(results.values()) == len(params) and results.values()[0] is not None:
-                        return TestResult(status=TestStatus.Passed, message=f"All the CURIEs {params} resolved to the same result on {nodenorm}: {json.dumps(unique_results[0], indent=2, sort_keys=True)}")
+                for curies in self.param_sets:
+                    results = nodenorm.normalize_curies(curies)
 
                     # Find the first good result.
                     first_good_result = None
                     for curie, result in results.items():
                         if result is not None and first_good_result is None:
-                            first_good_result = curie
+                            first_good_result = result
                             break
 
                     if first_good_result is None:
-                        return TestResult(status=TestStatus.Failed, message=f"None of the CURIEs {params} could be resolved on {nodenorm}")
+                        return TestResult(status=TestStatus.Failed, message=f"None of the CURIEs {curies} could be resolved on {nodenorm}")
 
                     # Check all the results.
                     for curie, result in results.items():
@@ -163,6 +165,7 @@ class GitHubIssueTest:
                         if json.dumps(first_good_result, sort_keys=True) == json.dumps(result, sort_keys=True):
                             yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)}")
                             yielded_values = True
+
                         else:
                             yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {json.dumps(result, indent=2, sort_keys=True)}, which is different from the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
                             yielded_values = True
@@ -300,7 +303,15 @@ class GitHubIssuesTestCases:
                     match = match[:-3]
                 yaml_dict = yaml.safe_load(match)
 
-                for assertion, param_sets in yaml_dict['babel_tests'].items():
+                for assertion, original_param_sets in yaml_dict['babel_tests'].items():
+                    param_sets = []
+                    for param_set in original_param_sets:
+                        if isinstance(param_set, str):
+                            param_sets.append([param_set])
+                        elif isinstance(param_set, list):
+                            param_sets.append(param_set)
+                        else:
+                            raise RuntimeError(f"Unknown parameter set type {param_set} in issue {github_issue_id}")
                     testrows.append(GitHubIssueTest(github_issue, assertion, param_sets))
 
         return testrows
