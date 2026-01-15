@@ -1,10 +1,11 @@
+import itertools
 import os
 
 import dotenv
 import pytest
 from github import Issue
 
-from tests.common.github_issues_test_cases import GitHubIssuesTestCases, CachedNodeNorm
+from tests.common.github_issues_test_cases import GitHubIssuesTestCases, CachedNodeNorm, CachedNameRes
 from tests.common.testrow import TestResult, TestStatus
 
 # Helper functions
@@ -44,17 +45,19 @@ def test_github_issue(target_info, github_issue, selected_github_issues):
             pytest.skip(f"GitHub Issue {str(github_issue)} not included in list of GitHub issues to be tested: {selected_github_issues}.")
             return
 
-    # Test this issue.
+    # Test this issue with NodeNorm.
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
+    nameres = CachedNameRes.from_url(target_info['NameResURL'])
     tests = github_issues_test_cases.get_test_issues_from_issue(github_issue)
     if not tests:
         pytest.skip(f"No tests found in issue {github_issue}")
         return
 
     for test_issue in tests:
-        results = test_issue.test_with_nodenorm(nodenorm)
+        results_nodenorm = test_issue.test_with_nodenorm(nodenorm)
+        results_nameres = test_issue.test_with_nameres(nodenorm, nameres)
 
-        for result in results:
+        for result in itertools.chain(results_nodenorm, results_nameres):
             match result:
                 case TestResult(status=TestStatus.Passed, message=message):
                     assert True, f"{get_github_issue_id(github_issue)} ({github_issue.state}): {message}"

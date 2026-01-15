@@ -29,6 +29,7 @@ class CachedNodeNorm:
         return cached_node_norms_by_url[nodenorm_url]
 
     def normalize_curies(self, curies: list[str], **params) -> dict[str, dict]:
+        # TODO: eventually we'll need some way to cache the parameters along with the curie.
         if not curies:
             raise ValueError(f"curies must not be empty when calling normalize_curies({curies}, {params}) on {self}")
         if not isinstance(curies, list):
@@ -65,6 +66,80 @@ class CachedNodeNorm:
             return self.cache[curie]
         return self.normalize_curies([curie], **params)[curie]
 
+    def clear_curie(self, curie):
+        # This will be needed if you need to call a CURIE with different parameters.
+        if curie in self.cache:
+            del self.cache[curie]
+
+
+cached_nameres_by_url = {}
+
+class CachedNameRes:
+    # TODO: actually cache once we've implemented a param-based cache.
+    def __init__(self, nameres_url: str):
+        self.nameres_url = nameres_url
+        self.logger = logging.getLogger(str(self))
+        self.cache = {}
+
+    def __str__(self):
+        return f"CachedNameRes({self.nameres_url})"
+
+    @staticmethod
+    def from_url(nameres_url: str) -> 'CachedNameRes':
+        if nameres_url not in cached_nameres_by_url:
+            cached_nameres_by_url[nameres_url] = CachedNameRes(nameres_url)
+        return cached_nameres_by_url[nameres_url]
+
+    def bulk_lookup(self, queries: list[str], **params) -> dict[str, dict]:
+        if not queries:
+            raise ValueError(f"queries must not be empty when calling bulk_lookup({queries}, {params}) on {self}")
+        if not isinstance(queries, list):
+            raise ValueError(f"queries must be a list when calling normalize_curies({queries}, {params}) on {self}")
+
+        time_started = time.time_ns()
+        queries_set = set(queries)
+        cached_queries = queries_set & self.cache.keys()
+        queries_to_be_queried = queries_set - cached_queries
+
+        # Make query.
+        result = {}
+        if queries_to_be_queried:
+            params['strings'] = list(queries_to_be_queried)
+
+            self.logger.debug(f"Called NameRes {self} with params {params}")
+            response = requests.post(self.nameres_url + "bulk-lookup", json=params)
+            response.raise_for_status()
+            result = response.json()
+
+            for query in queries_to_be_queried:
+                self.cache[query] = result.get(query, None)
+
+        for query in cached_queries:
+            result[query] = self.cache[query]
+
+        time_taken_sec = (time.time_ns() - time_started) / 1E9
+        self.logger.info(f"Looked up {len(queries_to_be_queried)} queries {queries_to_be_queried} (with {len(cached_queries)} queries cached) with params {params} on {self} in {time_taken_sec:.3f}s")
+
+        return result
+
+    def lookup(self, query, **params):
+        if query in self.cache:
+            return self.cache[query]
+
+        params['string'] = query
+        self.logger.debug(f"Querying NameRes with params {params}")
+
+        response = requests.post(self.nameres_url + "lookup", params=params)
+        response.raise_for_status()
+        result = response.json()
+
+        self.cache[query] = result
+        return result
+
+    def delete_query(self, query):
+        if query in self.cache:
+            del self.cache[query]
+
 
 class GitHubIssueTest:
     def __init__(self, github_issue: Issue.Issue, assertion: str, param_sets: list[list[str]] = None):
@@ -87,7 +162,7 @@ class GitHubIssueTest:
         match self.assertion.lower():
             case "resolves":
                 if not self.param_sets:
-                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
+                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
 
                 curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
@@ -108,7 +183,7 @@ class GitHubIssueTest:
 
             case "doesnotresolve":
                 if not self.param_sets:
-                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
+                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
 
                 curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
@@ -116,7 +191,8 @@ class GitHubIssueTest:
                 # Enumerate curies.
                 for index, curies in enumerate(self.param_sets):
                     if not curies:
-                        return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
+                        yield TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
+                        continue
 
                     for curie in curies:
                         result = nodenorm.normalize_curie(curie)
@@ -128,11 +204,11 @@ class GitHubIssueTest:
                             yielded_values = True
 
                 if not yielded_values:
-                    return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
+                    return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
 
             case "resolveswith":
                 if not self.param_sets:
-                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
+                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
 
                 curies_to_resolve = [param for params in self.param_sets for param in params]
                 nodenorm.normalize_curies(curies_to_resolve)
@@ -148,7 +224,7 @@ class GitHubIssueTest:
                             break
 
                     if first_good_result is None:
-                        return TestResult(status=TestStatus.Failed, message=f"None of the CURIEs {curies} could be resolved on {nodenorm}")
+                        return [TestResult(status=TestStatus.Failed, message=f"None of the CURIEs {curies} could be resolved on {nodenorm}")]
 
                     # Check all the results.
                     for curie, result in results.items():
@@ -162,19 +238,20 @@ class GitHubIssueTest:
                             yielded_values = True
 
                         else:
-                            yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {json.dumps(result, indent=2, sort_keys=True)}, which is different from the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
+                            yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\"), but expected {first_good_result['id']['identifier']} ({first_good_result['type'][0]}, \"{first_good_result['id']['label']}\") on {nodenorm}")
                             yielded_values = True
 
                 if not yielded_values:
-                    return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
+                    return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
 
             case "resolveswithtype":
                 if not self.param_sets:
-                    return TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")
+                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
 
                 for index, params in enumerate(self.param_sets):
                     if len(params) < 2:
-                        return TestResult(status=TestStatus.Failed, message=f"Too few parameters provided in param set {index} in {self}: {params}")
+                        yield TestResult(status=TestStatus.Failed, message=f"Too few parameters provided in param set {index} in {self}: {params}")
+                        continue
                     expected_biolink_type = params[0]
                     curies = params[1:]
 
@@ -190,29 +267,85 @@ class GitHubIssueTest:
 
             # These are NameRes tests, not NodeNorm tests.
             case "searchbyname":
-                return
+                return []
 
             # This is a special assertion to remind ourselves that we need to add tests here.
             case "needed":
-                return TestResult(status=TestStatus.Failed, message=f"Test needed for issue")
+                return [TestResult(status=TestStatus.Failed, message=f"Test needed for issue")]
 
             case _:
                 raise ValueError(f"Unknown assertion type for {self}: {self.assertion}")
 
         if not yielded_values:
-            return TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")
+            return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
 
-    def test_with_nameres(self) -> TestResult:
+        return [
+            TestResult(status=TestStatus.Failed, message=f"Code malfunctioned in {self} -- code reached")
+        ]
+
+    def test_with_nameres(self, nodenorm: CachedNodeNorm, nameres: CachedNameRes, pass_if_found_in_top=5) -> Iterator[TestResult]:
+        yielded_values = False
         match self.assertion.lower():
-            case "resolves":
+            case "searchbyname":
+                if not self.param_sets:
+                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
+
+                for params in self.param_sets:
+                    if len(params) < 2:
+                        yield TestResult(status=TestStatus.Failed, message=f"Two parameters expected for SearchByName in {self}, but params = {params}")
+                        yielded_values = True
+                        continue
+
+                    [search_query, expected_curie_from_test, *args] = params
+                    expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test, drug_chemical_conflate='true')
+                    if not expected_curie_result:
+                        yield TestResult(status=TestStatus.Failed, message=f"Unable to normalize CURIE {expected_curie_from_test} in {self}")
+                        yielded_values = True
+                        continue
+                    expected_curie = expected_curie_result['id']['identifier']
+                    expected_curie_label = expected_curie_result['id']['label']
+                    expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
+
+                    # We're going to search for the search name and see if we can find the expected CURIE
+                    # in the first {pass_if_found_in_top} results.
+                    results = nameres.lookup(search_query, autocomplete='false', limit=(2*pass_if_found_in_top))
+                    if not results:
+                        yield TestResult(status=TestStatus.Failed, message=f"No results found for '{search_query}' on NameRes {nameres} ({expected_curie_string}")
+                        yielded_values = True
+                        continue
+
+                    curies = [result['curie'] for result in results]
+                    try:
+                        found_index = curies.index(expected_curie)
+                    except ValueError:
+                        yield TestResult(status=TestStatus.Failed, message=f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}: {json.dumps(results, indent=2, sort_keys=True)}")
+                        yielded_values = True
+                        continue
+
+                    if found_index <= pass_if_found_in_top:
+                        yield TestResult(status=TestStatus.Passed, message=f"{expected_curie_string} found at index {found_index + 1} on NameRes {nameres}")
+                    else:
+                        yield TestResult(status=TestStatus.Failed, message=f"{expected_curie_string} found at index {found_index + 1} which is greater than {pass_if_found_in_top} on NameRes {nameres}")
+                    yielded_values = True
+
+            # These are NodeNorm tests, not NameRes tests.
+            case "resolves" | "doesnotresolve" | "resolveswith" | "resolveswithtype":
                 # Nothing we can do about this with NameRes.
-                return TestResult(status=TestStatus.Skipped, message="Cannot test Resolves assertion with Name Resolution service")
-            case "resolveswith":
-                # Nothing we can do about this with NameRes.
-                return TestResult(status=TestStatus.Skipped, message="Cannot test Resolves assertion with Name Resolution service")
+                return []
+
+            # This is a special assertion to remind ourselves that we need to add tests here.
+            case "needed":
+                return [TestResult(status=TestStatus.Failed, message=f"Test needed for issue")]
+
             case _:
                 raise ValueError(f"Unknown assertion type: {self.assertion}")
 
+        if not yielded_values:
+            return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
+
+        return [
+            TestResult(status=TestStatus.Failed, message=f"Code malfunctioned in {self} -- code reached")
+        ]
 
 class GitHubIssuesTestCases:
     """
