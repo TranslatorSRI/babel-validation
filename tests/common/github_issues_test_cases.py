@@ -1,3 +1,4 @@
+import functools
 import json
 import logging
 import re
@@ -7,18 +8,15 @@ from typing import Iterator
 import requests
 import yaml
 
-from tests.common.testrow import TestRow, TestResult, TestStatus
+from tests.common.testrow import TestResult, TestStatus
 from github import Github, Auth, Issue
 from tqdm import tqdm
 
-cached_nodenorms = {}
-
-class CachedNodeNorm:
+class CachingNodeNorm:
     @staticmethod
-    def for_url(nodenorm_url: str) -> 'CachedNodeNorm':
-        if nodenorm_url not in cached_nodenorms:
-            cached_nodenorms[nodenorm_url] = CachedNodeNorm(nodenorm_url)
-        return cached_nodenorms[nodenorm_url]
+    @functools.cache
+    def for_url(nodenorm_url: str) -> 'CachingNodeNorm':
+        return CachingNodeNorm(nodenorm_url)
 
     def __init__(self, nodenorm_url: str):
         self.nodenorm_url = nodenorm_url
@@ -76,57 +74,62 @@ class GitHubIssueTest:
         if len(params) != expected_count:
             raise ValueError(f"Expected {expected_count} parameters for assertion {self.assertion}, but got {len(params)}")
 
-    def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
-        match self.assertion.lower():
-            case "resolves":
-                curies_to_resolve = [params[0] for params in self.param_sets]
-                nodenorm.normalize_curies(curies_to_resolve)
+    def test_with_nodenorm(self, nodenorm: CachingNodeNorm) -> Iterator[TestResult]:
+        try:
+            match self.assertion.lower():
+                case "resolves":
+                    curies_to_resolve = [params[0] for params in self.param_sets]
+                    nodenorm.normalize_curies(curies_to_resolve)
 
-                for params in self.param_sets:
-                    self.expect_param_count(params, 1)
-                    curie = params[0]
+                    for params in self.param_sets:
+                        self.expect_param_count(params, 1)
+                        curie = params[0]
 
-                    # Make sure we can resolve this CURIE.
-                    result = nodenorm.normalize_curie(curie)
-                    if not result:
-                        yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
-                    else:
-                        yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}")
+                        # Make sure we can resolve this CURIE.
+                        result = nodenorm.normalize_curie(curie)
+                        if not result:
+                            yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
+                        else:
+                            yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}")
 
-            case "resolveswith":
-                curies_to_test = set()
-                for params in self.param_sets:
-                    curies_to_test.add(params[0])
-                    curies_to_test.add(params[1])
+                case "resolveswith":
+                    curies_to_test = set()
+                    for params in self.param_sets:
+                        curies_to_test.add(params[0])
+                        curies_to_test.add(params[1])
 
-                nodenorm.normalize_curies(list(curies_to_test))
-                for params in self.param_sets:
-                    self.expect_param_count(params, 2)
-                    curie, expected_curie = params
+                    nodenorm.normalize_curies(list(curies_to_test))
+                    for params in self.param_sets:
+                        self.expect_param_count(params, 2)
+                        curie, expected_curie = params
 
-                    # Make sure we can resolve this CURIE.
-                    result = self.nodenorm.normalize_curie(curie)
-                    if not result:
-                        yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
-                    elif result['id']['identifier'] == expected_curie:
-                        yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm} as expected")
-                    else:
-                        yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}, but expected {expected_curie}")
+                        # Make sure we can resolve this CURIE.
+                        result = self.nodenorm.normalize_curie(curie)
+                        if not result:
+                            yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
+                        elif result['id']['identifier'] == expected_curie:
+                            yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm} as expected")
+                        else:
+                            yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}, but expected {expected_curie}")
 
-            case _:
-                raise ValueError(f"Unknown assertion type: {self.assertion}")
+                case _:
+                    raise ValueError(f"Unknown assertion type: {self.assertion}")
+        except Exception as e:
+            yield TestResult(status=TestStatus.Failed, message=f"Error running test {self}: {e}")
 
     def test_with_nameres(self) -> TestResult:
-        match self.assertion.lower():
-            case "resolves":
-                # Nothing we can do about this with NameRes.
-                return TestResult(status=TestStatus.Skipped, message="Cannot test Resolves assertion with Name Resolution service")
-            case "resolveswith":
-                # Nothing we can do about this with NameRes.
-                return TestResult(status=TestStatus.Skipped, message="Cannot test Resolves assertion with Name Resolution service")
-            case _:
-                raise ValueError(f"Unknown assertion type: {self.assertion}")
-
+        try:
+            match self.assertion.lower():
+                case "resolves":
+                    # Nothing we can do about this with NameRes.
+                    return TestResult(status=TestStatus.Skipped, message="Cannot test Resolves assertion with Name Resolution service")
+                case "resolveswith":
+                    # Nothing we can do about this with NameRes.
+                    return TestResult(status=TestStatus.Skipped, message="Cannot test Resolves assertion with Name Resolution service")
+                case _:
+                    raise ValueError(f"Unknown assertion type: {self.assertion}")
+        except Exception as e:
+            return TestResult(status=TestStatus.Failed, message=f"Error running test {self}: {e}")
 
 class GitHubIssuesTestCases:
     """
@@ -189,7 +192,7 @@ class GitHubIssuesTestCases:
         :return: An iterator over TestRows.
         """
 
-        self.logger.debug(f"Looking for tests in issue #{github_issue.number}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
+        self.logger.debug(f"Looking for tests in {GitHubIssuesTestCases.get_issue_description(github_issue)}")
 
         # Is there an issue body at all?
         if not github_issue.body or github_issue.body.strip() == '':
@@ -243,7 +246,7 @@ class GitHubIssuesTestCases:
             repo = self.github.get_repo(repo_id)
             yield from repo.get_issues(state='all', sort='updated')
 
-    def get_test_issues(self, repo_id, include_issues_without_tests = False) -> Iterator[GitHubIssueTest]:
+    def get_test_issues(self, repo_ids = None, include_issues_without_tests = False) -> Iterator[GitHubIssueTest]:
         """
         Get a list of test rows from one or more repositories.
 
@@ -252,16 +255,27 @@ class GitHubIssuesTestCases:
         :return: A list of TestRows to process.
         """
 
-        repo = self.github.get_repo(repo_id)
+        if repo_ids is None:
+            repo_ids = self.github_repositories
+        for repo_id in repo_ids:
+            repo = self.github.get_repo(repo_id)
 
-        issue_count = 0
-        for issue in tqdm(repo.get_issues(state='all', sort='updated'), desc=f"Processing issues in {repo_id}"):
-            test_issues = self.get_test_issues_from_issue(issue)
+            issue_count = 0
+            for issue in tqdm(repo.get_issues(state='all', sort='updated'), desc=f"Processing issues in {repo_id}"):
+                test_issues = self.get_test_issues_from_issue(issue)
 
-            if not include_issues_without_tests and not test_issues:
-                continue
+                if not include_issues_without_tests and not test_issues:
+                    continue
 
-            for test_issue in test_issues:
-                yield test_issue
+                for test_issue in test_issues:
+                    yield test_issue
 
-        self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")
+            self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")
+
+    @staticmethod
+    def get_issue_id(issue: Issue.Issue) -> str:
+        return f"{issue.repository.organization.name}/{issue.repository.name}#{issue.number}"
+
+    @staticmethod
+    def get_issue_description(issue: Issue.Issue) -> str:
+        return f"{issue.repository.organization.name}/{issue.repository.name}#{issue.number}: {issue.title} ({str(issue.state)}, {issue.html_url})"
