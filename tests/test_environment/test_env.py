@@ -1,7 +1,7 @@
 # Test whether the test environment is functional.
 import json
 
-from common.google_sheet_test_cases import GoogleSheetTestCases
+from src.babel_validation.sources.google_sheet_test_cases import GoogleSheetTestCases
 
 
 def test_google_sheet_has_test_cases():

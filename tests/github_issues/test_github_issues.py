@@ -5,8 +5,8 @@ import dotenv
 import pytest
 from github import Issue
 
-from tests.common.github_issues_test_cases import GitHubIssuesTestCases, CachedNodeNorm, CachedNameRes
-from tests.common.testrow import TestResult, TestStatus
+from src.babel_validation.sources.github_issues_test_cases import GitHubIssuesTestCases, CachedNodeNorm, CachedNameRes
+from src.babel_validation.core.testrow import TestResult, TestStatus
 
 # Helper functions
 def get_github_issue_id(github_issue: Issue.Issue):

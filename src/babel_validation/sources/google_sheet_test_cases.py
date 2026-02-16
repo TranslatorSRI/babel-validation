@@ -10,7 +10,7 @@ import pytest
 import requests
 from _pytest.mark import ParameterSet
 
-from tests.common.testrow import TestRow
+from src.babel_validation.core.testrow import TestRow
 
 
 class GoogleSheetTestCases:

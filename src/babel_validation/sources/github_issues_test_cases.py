@@ -7,7 +7,7 @@ from typing import Iterator
 import requests
 import yaml
 
-from tests.common.testrow import TestRow, TestResult, TestStatus
+from src.babel_validation.core.testrow import TestResult, TestStatus
 from github import Github, Auth, Issue
 from tqdm import tqdm
 
