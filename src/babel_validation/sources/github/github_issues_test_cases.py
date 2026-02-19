@@ -15,7 +15,7 @@ from src.babel_validation.services.nodenorm import CachedNodeNorm
 
 
 class GitHubIssueTest:
-    def __init__(self, github_issue: Issue.Issue, assertion: str, param_sets: list[list[str]] = None):
+    def __init__(self, github_issue: Issue.Issue, assertion: str, param_sets: list[list[str]] = None, repo_id: str = ""):
         self.github_issue = github_issue
         self.assertion = assertion
         if param_sets is None:
@@ -23,12 +23,13 @@ class GitHubIssueTest:
         self.param_sets = param_sets
         if not isinstance(self.param_sets, list):
             raise ValueError(f"param_sets must be a list when creating a GitHubIssueTest({self.github_issue}, {self.assertion}, {self.param_sets})")
+        self.repo_id = repo_id
 
         self.logger = logging.getLogger(str(self))
         self.logger.info(f"Creating GitHubIssueTest for {github_issue.html_url} {assertion}({param_sets})")
 
     def __str__(self):
-        return f"{self.github_issue.repository.organization.name}/{self.github_issue.repository.name}#{self.github_issue.number}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
+        return f"{self.repo_id}#{self.github_issue.number}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
 
     def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
         handler = ASSERTION_HANDLERS.get(self.assertion.lower())
@@ -83,7 +84,7 @@ class GitHubIssuesTestCases:
         self.babeltest_pattern = re.compile(r'{{BabelTest\|.*?}}')
         self.babeltest_yaml_pattern = re.compile(r'```yaml\s+babel_tests:\s+.*?\s+```', re.DOTALL)
 
-    def get_test_issues_from_issue(self, github_issue: Issue.Issue) -> list[GitHubIssueTest]:
+    def get_test_issues_from_issue(self, github_issue: Issue.Issue, repo_id: str = "") -> list[GitHubIssueTest]:
         """
         Extract test rows from a single GitHub issue.
 
@@ -102,15 +103,11 @@ class GitHubIssuesTestCases:
         src/babel_validation/assertions/README.md or inspect ASSERTION_HANDLERS.keys().
 
         :param github_issue: A single GitHub issue to extract test cases from.
+        :param repo_id: The repository identifier string (e.g. "NCATSTranslator/Babel").
         :return: A list of GitHubIssueTest objects found in the issue body.
         """
 
-        github_issue_id = f"{github_issue.number}"
-            # Ideally, we would use:
-            #   f"{github_issue.repository.organization.name}/{github_issue.repository.name}#{github_issue.number}"
-            # But that is very slow.
-            # TODO: Wrap Issue.Issue so that we can store orgName and repoName locally so we don't need to call out
-            # to figure it out.
+        github_issue_id = f"{repo_id}#{github_issue.number}" if repo_id else f"{github_issue.number}"
         self.logger.debug(f"Looking for tests in issue {github_issue_id}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
 
         # Is there an issue body at all?
@@ -135,7 +132,7 @@ class GitHubIssuesTestCases:
                 if len(params) < 2:
                     raise ValueError(f"Too few parameters found in BabelTest in issue {github_issue_id}: {match}")
                 else:
-                    testrows.append(GitHubIssueTest(github_issue, params[0], [params[1:]]))
+                    testrows.append(GitHubIssueTest(github_issue, params[0], [params[1:]], repo_id=repo_id))
 
         babeltest_yaml_matches = re.findall(self.babeltest_yaml_pattern, github_issue.body)
         if babeltest_yaml_matches:
@@ -158,7 +155,7 @@ class GitHubIssuesTestCases:
                             param_sets.append(param_set)
                         else:
                             raise RuntimeError(f"Unknown parameter set type {param_set} in issue {github_issue_id}")
-                    testrows.append(GitHubIssueTest(github_issue, assertion, param_sets))
+                    testrows.append(GitHubIssueTest(github_issue, assertion, param_sets, repo_id=repo_id))
 
         return testrows
 
@@ -183,3 +180,38 @@ class GitHubIssuesTestCases:
                 yield issue
 
             self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")
+
+    def get_all_test_issues(self, github_repositories=None) -> list:
+        """
+        Get all BabelTest assertions across one or more repositories as a flat list of pytest ParameterSets.
+
+        Each GitHubIssueTest (one assertion from one issue) becomes its own ParameterSet, so pytest
+        reports a separate pass/fail for every assertion rather than collapsing an entire issue into
+        a single test.
+
+        Issues that contain no BabelTest assertions are silently skipped.
+
+        :param github_repositories: A list of GitHub repositories to search for test cases. If none is
+            provided, we default to the list specified when creating this GitHubIssuesTestCases class.
+        :return: A list of pytest.param objects, one per GitHubIssueTest.
+        """
+        import pytest as _pytest
+
+        if github_repositories is None:
+            github_repositories = self.github_repositories
+
+        result = []
+        for repo_id in github_repositories:
+            self.logger.info(f"Looking up issues in GitHub repository {repo_id}")
+            repo = self.github.get_repo(repo_id, lazy=True)
+
+            issue_count = 0
+            for issue in tqdm(repo.get_issues(state='all', sort='updated'), desc=repo_id):
+                issue_count += 1
+                tests = self.get_test_issues_from_issue(issue, repo_id=repo_id)
+                for test_issue in tests:
+                    result.append(_pytest.param(test_issue, id=str(test_issue)))
+
+            self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")
+
+        return result
