@@ -5,10 +5,11 @@ from typing import Iterator
 
 import yaml
 
-from src.babel_validation.core.testrow import TestResult, TestStatus
 from github import Github, Auth, Issue
 from tqdm import tqdm
 
+from src.babel_validation.assertions import ASSERTION_HANDLERS
+from src.babel_validation.core.testrow import TestResult
 from src.babel_validation.services.nameres import CachedNameRes
 from src.babel_validation.services.nodenorm import CachedNodeNorm
 
@@ -30,194 +31,17 @@ class GitHubIssueTest:
         return f"{self.github_issue.repository.organization.name}/{self.github_issue.repository.name}#{self.github_issue.number}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
 
     def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
-        yielded_values = False
-        match self.assertion.lower():
-            case "resolves":
-                if not self.param_sets:
-                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
-
-                curies_to_resolve = [param for params in self.param_sets for param in params]
-                nodenorm.normalize_curies(curies_to_resolve)
-
-                # Enumerate curies.
-                for index, curies in enumerate(self.param_sets):
-                    if not curies:
-                        return TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
-
-                    for curie in curies:
-                        result = nodenorm.normalize_curie(curie)
-                        if not result:
-                            yield TestResult(status=TestStatus.Failed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
-                            yielded_values = True
-                        else:
-                            yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}")
-                            yielded_values = True
-
-            case "doesnotresolve":
-                if not self.param_sets:
-                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
-
-                curies_to_resolve = [param for params in self.param_sets for param in params]
-                nodenorm.normalize_curies(curies_to_resolve)
-
-                # Enumerate curies.
-                for index, curies in enumerate(self.param_sets):
-                    if not curies:
-                        yield TestResult(status=TestStatus.Failed, message=f"No parameters provided in paramset {index} in {self}")
-                        continue
-
-                    for curie in curies:
-                        result = nodenorm.normalize_curie(curie)
-                        if not result:
-                            yield TestResult(status=TestStatus.Passed, message=f"Could not resolve {curie} with NodeNormalization service {nodenorm} as expected")
-                            yielded_values = True
-                        else:
-                            yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}, but expected not to resolve")
-                            yielded_values = True
-
-                if not yielded_values:
-                    return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
-
-            case "resolveswith":
-                if not self.param_sets:
-                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
-
-                curies_to_resolve = [param for params in self.param_sets for param in params]
-                nodenorm.normalize_curies(curies_to_resolve)
-
-                for curies in self.param_sets:
-                    results = nodenorm.normalize_curies(curies)
-
-                    # Find the first good result.
-                    first_good_result = None
-                    for curie, result in results.items():
-                        if result is not None and first_good_result is None:
-                            first_good_result = result
-                            break
-
-                    if first_good_result is None:
-                        return [TestResult(status=TestStatus.Failed, message=f"None of the CURIEs {curies} could be resolved on {nodenorm}")]
-
-                    # Check all the results.
-                    for curie, result in results.items():
-                        if result is None:
-                            yield TestResult(status=TestStatus.Failed, message=f"CURIE {curie} could not be resolved, and so is not equal to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
-                            yielded_values = True
-                            continue
-
-                        if json.dumps(first_good_result, sort_keys=True) == json.dumps(result, sort_keys=True):
-                            yield TestResult(status=TestStatus.Passed, message=f"Resolved {curie} to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)}")
-                            yielded_values = True
-
-                        else:
-                            yield TestResult(status=TestStatus.Failed, message=f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\"), but expected {first_good_result['id']['identifier']} ({first_good_result['type'][0]}, \"{first_good_result['id']['label']}\") on {nodenorm}")
-                            yielded_values = True
-
-                if not yielded_values:
-                    return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
-
-            case "resolveswithtype":
-                if not self.param_sets:
-                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
-
-                for index, params in enumerate(self.param_sets):
-                    if len(params) < 2:
-                        yield TestResult(status=TestStatus.Failed, message=f"Too few parameters provided in param set {index} in {self}: {params}")
-                        continue
-                    expected_biolink_type = params[0]
-                    curies = params[1:]
-
-                    results = nodenorm.normalize_curies(curies)
-                    for curie in curies:
-                        biolink_types = results[curie]['type']
-                        if expected_biolink_type in biolink_types:
-                            yield TestResult(status=TestStatus.Passed, message=f"Biolink types {biolink_types} for CURIE {curie} includes expected Biolink type {expected_biolink_type}")
-                            yielded_values = True
-                        else:
-                            yield TestResult(status=TestStatus.Failed, message=f"Biolink types {biolink_types} for CURIE {curie} does not include expected Biolink type {expected_biolink_type}")
-                            yielded_values = True
-
-            # These are NameRes tests, not NodeNorm tests.
-            case "searchbyname":
-                return []
-
-            # This is a special assertion to remind ourselves that we need to add tests here.
-            case "needed":
-                return [TestResult(status=TestStatus.Failed, message=f"Test needed for issue")]
-
-            case _:
-                raise ValueError(f"Unknown assertion type for {self}: {self.assertion}")
-
-        if not yielded_values:
-            return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
-
-        return [
-            TestResult(status=TestStatus.Failed, message=f"Code malfunctioned in {self} -- code reached")
-        ]
+        handler = ASSERTION_HANDLERS.get(self.assertion.lower())
+        if handler is None:
+            raise ValueError(f"Unknown assertion type for {self}: {self.assertion}")
+        return handler.test_with_nodenorm(self.param_sets, nodenorm, label=str(self))
 
     def test_with_nameres(self, nodenorm: CachedNodeNorm, nameres: CachedNameRes, pass_if_found_in_top=5) -> Iterator[TestResult]:
-        yielded_values = False
-        match self.assertion.lower():
-            case "searchbyname":
-                if not self.param_sets:
-                    return [TestResult(status=TestStatus.Failed, message=f"No parameters provided in {self}")]
+        handler = ASSERTION_HANDLERS.get(self.assertion.lower())
+        if handler is None:
+            raise ValueError(f"Unknown assertion type: {self.assertion}")
+        return handler.test_with_nameres(self.param_sets, nodenorm, nameres, pass_if_found_in_top, label=str(self))
 
-                for params in self.param_sets:
-                    if len(params) < 2:
-                        yield TestResult(status=TestStatus.Failed, message=f"Two parameters expected for SearchByName in {self}, but params = {params}")
-                        yielded_values = True
-                        continue
-
-                    [search_query, expected_curie_from_test, *args] = params
-                    expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test, drug_chemical_conflate='true')
-                    if not expected_curie_result:
-                        yield TestResult(status=TestStatus.Failed, message=f"Unable to normalize CURIE {expected_curie_from_test} in {self}")
-                        yielded_values = True
-                        continue
-                    expected_curie = expected_curie_result['id']['identifier']
-                    expected_curie_label = expected_curie_result['id']['label']
-                    expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
-
-                    # We're going to search for the search name and see if we can find the expected CURIE
-                    # in the first {pass_if_found_in_top} results.
-                    results = nameres.lookup(search_query, autocomplete='false', limit=(2*pass_if_found_in_top))
-                    if not results:
-                        yield TestResult(status=TestStatus.Failed, message=f"No results found for '{search_query}' on NameRes {nameres} ({expected_curie_string}")
-                        yielded_values = True
-                        continue
-
-                    curies = [result['curie'] for result in results]
-                    try:
-                        found_index = curies.index(expected_curie)
-                    except ValueError:
-                        yield TestResult(status=TestStatus.Failed, message=f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}: {json.dumps(results, indent=2, sort_keys=True)}")
-                        yielded_values = True
-                        continue
-
-                    if found_index <= pass_if_found_in_top:
-                        yield TestResult(status=TestStatus.Passed, message=f"{expected_curie_string} found at index {found_index + 1} on NameRes {nameres}")
-                    else:
-                        yield TestResult(status=TestStatus.Failed, message=f"{expected_curie_string} found at index {found_index + 1} which is greater than {pass_if_found_in_top} on NameRes {nameres}")
-                    yielded_values = True
-
-            # These are NodeNorm tests, not NameRes tests.
-            case "resolves" | "doesnotresolve" | "resolveswith" | "resolveswithtype":
-                # Nothing we can do about this with NameRes.
-                return []
-
-            # This is a special assertion to remind ourselves that we need to add tests here.
-            case "needed":
-                return [TestResult(status=TestStatus.Failed, message=f"Test needed for issue")]
-
-            case _:
-                raise ValueError(f"Unknown assertion type: {self.assertion}")
-
-        if not yielded_values:
-            return [TestResult(status=TestStatus.Failed, message=f"No test results returned in {self}")]
-
-        return [
-            TestResult(status=TestStatus.Failed, message=f"Code malfunctioned in {self} -- code reached")
-        ]
 
 class GitHubIssuesTestCases:
     """
@@ -263,25 +87,22 @@ class GitHubIssuesTestCases:
         """
         Extract test rows from a single GitHub issue.
 
-        This is where we describe our test case recording language. I think we should support two formats:
+        Two syntaxes are supported:
         - Wiki syntax: {{BabelTest|AssertionType|param1|param2|...}}
-        - YAML syntax, which requires a YAML type box that looks like this:
+        - YAML syntax:
 
         ```yaml
         babel_tests:
             assertion:
             - param1
             - ['param1', 'param2']
-            - {'param1': 'value1', 'param2': 'value2'}
         ```
 
-        We currently support the following assertions:
-        - Resolves: Test whether any of the parameters can be resolved.
-        - DoesNotResolve: Ensure that the parameters do not resolve.
-        - ResolvesWith: Test whether all the parameters resolve together.
+        For the full list of supported assertion types and their parameters, see
+        src/babel_validation/assertions/README.md or inspect ASSERTION_HANDLERS.keys().
 
         :param github_issue: A single GitHub issue to extract test cases from.
-        :return: An iterator over TestRows.
+        :return: A list of GitHubIssueTest objects found in the issue body.
         """
 
         github_issue_id = f"{github_issue.number}"
@@ -347,7 +168,6 @@ class GitHubIssuesTestCases:
 
         :param github_repositories: A list of GitHub repositories to search for test cases. If none is provided,
             we default to the list specified when creating this GitHubIssuesTestCases class.
-        :param include_issues_without_tests: If true, include issues that do not contain any test cases. Default: false.
         :return: A list of TestRows to process.
         """
         if github_repositories is None:
