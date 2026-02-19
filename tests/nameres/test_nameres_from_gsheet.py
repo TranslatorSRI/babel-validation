@@ -1,7 +1,7 @@
 import urllib.parse
 import requests
 import pytest
-from src.babel_validation.sources.google_sheet_test_cases import GoogleSheetTestCases
+from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
 
 # Configuration options
 NAMERES_TIMEOUT = 10 # If we don't get a response in 10 seconds, that's a fail.
