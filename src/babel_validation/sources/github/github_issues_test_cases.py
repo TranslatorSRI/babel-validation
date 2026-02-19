@@ -159,6 +159,60 @@ class GitHubIssuesTestCases:
 
         return testrows
 
+    def get_specific_test_issues(self, issue_specs: list[str]) -> list:
+        """
+        Fetch only the issues identified by issue_specs (values from --issue flag).
+
+        Accepted formats (same as --issue CLI option):
+        - "637"                       bare number → try all configured repos
+        - "Babel#637"                 repo#number → match by repo name
+        - "NCATSTranslator/Babel#637" org/repo#number → exact match
+
+        Uses the single-issue API endpoint (fast: 1–4 calls instead of paginating
+        through all issues).
+        """
+        import pytest as _pytest
+        from github import GithubException
+
+        result = []
+        seen = set()  # avoid duplicates if a spec matches the same issue twice
+
+        for spec in issue_specs:
+            if '/' in spec and '#' in spec:
+                # "NCATSTranslator/Babel#637"
+                repo_id, issue_num_str = spec.rsplit('#', 1)
+                repos_to_check = [(repo_id, int(issue_num_str))]
+            elif '#' in spec:
+                # "Babel#637"
+                repo_name, issue_num_str = spec.split('#', 1)
+                repos_to_check = [
+                    (repo_id, int(issue_num_str))
+                    for repo_id in self.github_repositories
+                    if repo_id.split('/')[-1] == repo_name
+                ]
+            else:
+                # bare number "637"
+                repos_to_check = [(repo_id, int(spec)) for repo_id in self.github_repositories]
+
+            for repo_id, issue_num in repos_to_check:
+                key = (repo_id, issue_num)
+                if key in seen:
+                    continue
+                seen.add(key)
+                try:
+                    repo = self.github.get_repo(repo_id, lazy=True)
+                    issue = repo.get_issue(issue_num)
+                    tests = self.get_test_issues_from_issue(issue, repo_id=repo_id)
+                    for test_issue in tests:
+                        result.append(_pytest.param(test_issue, id=str(test_issue)))
+                except GithubException as e:
+                    if e.status == 404:
+                        pass  # issue doesn't exist in this repo, that's fine
+                    else:
+                        raise
+
+        return result
+
     def get_all_issues(self, github_repositories = None) -> Iterator[Issue.Issue]:
         """
         Get a list of test rows from one or more repositories.
