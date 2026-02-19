@@ -5,7 +5,9 @@ import dotenv
 import pytest
 from github import Issue
 
-from src.babel_validation.sources.github_issues_test_cases import GitHubIssuesTestCases, CachedNodeNorm, CachedNameRes
+from src.babel_validation.sources.github_issues_test_cases import GitHubIssuesTestCases
+from src.babel_validation.services.nameres import CachedNameRes
+from src.babel_validation.services.nodenorm import CachedNodeNorm
 from src.babel_validation.core.testrow import TestResult, TestStatus
 
 # Helper functions
