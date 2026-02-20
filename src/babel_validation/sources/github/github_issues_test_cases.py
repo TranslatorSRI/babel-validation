@@ -24,11 +24,16 @@ class GitHubIssueTest:
         if not isinstance(self.param_sets, list):
             raise ValueError(f"param_sets must be a list when creating a GitHubIssueTest({self.github_issue}, {self.assertion}, {self.param_sets})")
 
+        # Derive repo_id from html_url (e.g. https://github.com/org/repo/issues/1 → "org/repo")
+        # to avoid slow lazy API calls via github_issue.repository.organization.name.
+        parts = github_issue.html_url.split('/')
+        self.repo_id = f"{parts[3]}/{parts[4]}"
+
         self.logger = logging.getLogger(str(self))
         self.logger.info(f"Creating GitHubIssueTest for {github_issue.html_url} {assertion}({param_sets})")
 
     def __str__(self):
-        return f"{self.github_issue.repository.organization.name}/{self.github_issue.repository.name}#{self.github_issue.number}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
+        return f"{self.repo_id}#{self.github_issue.number}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
 
     def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
         handler = ASSERTION_HANDLERS.get(self.assertion.lower())
@@ -105,12 +110,8 @@ class GitHubIssuesTestCases:
         :return: A list of GitHubIssueTest objects found in the issue body.
         """
 
-        github_issue_id = f"{github_issue.number}"
-            # Ideally, we would use:
-            #   f"{github_issue.repository.organization.name}/{github_issue.repository.name}#{github_issue.number}"
-            # But that is very slow.
-            # TODO: Wrap Issue.Issue so that we can store orgName and repoName locally so we don't need to call out
-            # to figure it out.
+        parts = github_issue.html_url.split('/')
+        github_issue_id = f"{parts[3]}/{parts[4]}#{github_issue.number}"
         self.logger.debug(f"Looking for tests in issue {github_issue_id}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
 
         # Is there an issue body at all?

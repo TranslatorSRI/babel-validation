@@ -12,7 +12,8 @@ from src.babel_validation.core.testrow import TestResult, TestStatus
 
 # Helper functions
 def get_github_issue_id(github_issue: Issue.Issue):
-    return f"{github_issue.repository.organization.name}/{github_issue.repository.name}#{github_issue.number}"
+    parts = github_issue.html_url.split('/')
+    return f"{parts[3]}/{parts[4]}#{github_issue.number}"
 
 # Initialize the test.
 dotenv.load_dotenv()
