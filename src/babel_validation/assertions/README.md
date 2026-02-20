@@ -174,11 +174,11 @@ babel_tests:
 ## Adding a New Assertion Type
 
 1. Choose the right module:
-   - `nodenorm.py` — for NodeNorm-only assertions (subclass `NodeNormAssertion`)
-   - `nameres.py` — for NameRes-only assertions (subclass `NameResAssertion`)
-   - `common.py` — for assertions that apply to both services (subclass `AssertionHandler`)
+   - `nodenorm.py` — for NodeNorm-only assertions (subclass `NodeNormTest`, override `test_param_set`)
+   - `nameres.py` — for NameRes-only assertions (subclass `NameResTest`, override `test_param_set`)
+   - `common.py` — for assertions that apply to both services (subclass `AssertionHandler`, override `test_with_nodenorm` and/or `test_with_nameres`)
 
-2. Define the class with `NAME`, `DESCRIPTION`, and the relevant `test_with_nodenorm()` / `test_with_nameres()` method(s).
+2. Define the class with `NAME`, `DESCRIPTION`, and `test_param_set()` (or both `test_with_*` methods for `AssertionHandler` subclasses).
 
 3. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`.
 
