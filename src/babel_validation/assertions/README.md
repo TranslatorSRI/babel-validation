@@ -1,3 +1,6 @@
+<!-- AUTO-GENERATED — do not edit by hand.
+     Regenerate with: uv run python -m src.babel_validation.assertions.gen_docs -->
+
 # BabelTest Assertion Types
 
 This package defines the assertion types that can be embedded in GitHub issue bodies and evaluated against the NodeNorm and NameRes services.
@@ -33,7 +36,7 @@ These assertions test the [NodeNorm](https://nodenorm.transltr.io/docs) service.
 
 **Applies to:** NodeNorm
 
-Verifies that every CURIE in every param_set can be resolved to a non-null result.
+Each CURIE in each param_set must resolve to a non-null result in NodeNorm.
 
 **Parameters:** One or more CURIEs per param_set.
 
@@ -57,7 +60,7 @@ babel_tests:
 
 **Applies to:** NodeNorm
 
-Verifies that every CURIE in every param_set fails to resolve (returns null). Use this to confirm that an identifier is intentionally not normalizable.
+Each CURIE in each param_set must fail to resolve (return null) in NodeNorm. Use this to confirm that an identifier is intentionally not normalizable.
 
 **Parameters:** One or more CURIEs per param_set.
 
@@ -79,9 +82,9 @@ babel_tests:
 
 **Applies to:** NodeNorm
 
-Verifies that all CURIEs in a param_set resolve to the **identical** normalized result. Use this to assert that two or more identifiers are equivalent (same clique in NodeNorm).
+All CURIEs within each param_set must resolve to the identical normalized result. Use this to assert that two identifiers are equivalent.
 
-**Parameters:** Two or more CURIEs per param_set. All must resolve and produce the same result.
+**Parameters:** Two or more CURIEs per param_set. All must resolve to the same result.
 
 **Wiki syntax:**
 ```
@@ -102,9 +105,9 @@ babel_tests:
 
 **Applies to:** NodeNorm
 
-Verifies that one or more CURIEs resolve with a specific Biolink type in their `type` list.
+Each param_set must have at least two elements: the first is the expected Biolink type (e.g. 'biolink:Gene'), and the remainder are CURIEs that must resolve with that type.
 
-**Parameters:** Each param_set must have at least two elements. The **first** element is the expected Biolink type (e.g. `biolink:Gene`); the remaining elements are CURIEs to check.
+**Parameters:** Each param_set: first element is the expected Biolink type (e.g. `biolink:Gene`), remaining elements are CURIEs.
 
 **Wiki syntax:**
 ```
@@ -128,11 +131,9 @@ These assertions test the [NameRes](https://name-lookup.transltr.io/docs) servic
 
 **Applies to:** NameRes
 
-Verifies that a name search returns an expected CURIE within the top-N results (default N=5).
+Each param_set must have at least two elements: a search query string and an expected CURIE. The test passes if the CURIE's normalized identifier appears within the top N results (default N=5) when NameRes looks up the search query.
 
-The expected CURIE is first normalized via NodeNorm (with drug/chemical conflation enabled) to find its preferred identifier; that identifier must appear in the top results.
-
-**Parameters:** Each param_set must have at least two elements: the **search query string** and the **expected CURIE**.
+**Parameters:** Each param_set: the **search query string** and the **expected CURIE**. The CURIE is normalized via NodeNorm (drug/chemical conflation enabled) before matching.
 
 **Wiki syntax:**
 ```
@@ -155,7 +156,7 @@ babel_tests:
 
 **Applies to:** NodeNorm and NameRes
 
-A placeholder that always fails. Use this on issues where you know a test is required but haven't written it yet.
+Marks an issue as needing a test — always fails as a reminder to add real assertions.
 
 **Wiki syntax:**
 ```
@@ -178,8 +179,8 @@ babel_tests:
    - `nameres.py` — for NameRes-only assertions (subclass `NameResTest`, override `test_param_set`)
    - `common.py` — for assertions that apply to both services (subclass `AssertionHandler`, override `test_with_nodenorm` and/or `test_with_nameres`)
 
-2. Define the class with `NAME`, `DESCRIPTION`, and `test_param_set()` (or both `test_with_*` methods for `AssertionHandler` subclasses).
+2. Define the class with `NAME`, `DESCRIPTION`, `PARAMETERS`, `WIKI_EXAMPLES`, `YAML_PARAMS`, and `test_param_set()` (or both `test_with_*` methods for `AssertionHandler` subclasses).
 
 3. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`.
 
-4. Document it in this README.
+4. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`.

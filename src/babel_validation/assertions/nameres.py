@@ -15,6 +15,12 @@ class SearchByNameHandler(NameResTest):
         "The test passes if the CURIE's normalized identifier appears within the top N results "
         "(default N=5) when NameRes looks up the search query."
     )
+    PARAMETERS = (
+        "Each param_set: the **search query string** and the **expected CURIE**. "
+        "The CURIE is normalized via NodeNorm (drug/chemical conflation enabled) before matching."
+    )
+    WIKI_EXAMPLES = ["{{BabelTest|SearchByName|water|CHEBI:15377}}"]
+    YAML_PARAMS = "    - [water, CHEBI:15377]\n    - [diabetes, MONDO:0005015]"
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        nameres: CachedNameRes, pass_if_found_in_top: int = 5,

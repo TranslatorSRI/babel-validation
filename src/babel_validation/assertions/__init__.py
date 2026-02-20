@@ -6,15 +6,17 @@ This package defines the assertion types that can be embedded in GitHub issue bo
 and evaluated against the NodeNorm and NameRes services.
 
 Supported assertion types are registered in ASSERTION_HANDLERS. To see everything
-that is currently supported, scan that dict or read assertions/README.md.
+that is currently supported, scan that dict or read assertions/README.md (auto-generated).
 
 Adding a new assertion type
 ---------------------------
 1. Create a subclass of NodeNormTest or NameResTest (or AssertionHandler for both)
    in the appropriate module (nodenorm.py, nameres.py, or common.py).
 2. Set NAME and DESCRIPTION class attributes.
-3. Override test_param_set().
-4. Import it here and add an instance to ASSERTION_HANDLERS.
+3. Set PARAMETERS, WIKI_EXAMPLES, and YAML_PARAMS class attributes for documentation.
+4. Override test_param_set().
+5. Import it here and add an instance to ASSERTION_HANDLERS.
+6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate README.md.
 """
 
 from typing import Iterator

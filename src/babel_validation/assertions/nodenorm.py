@@ -10,6 +10,12 @@ class ResolvesHandler(NodeNormTest):
     """Test that every CURIE in every param_set resolves in NodeNorm."""
     NAME = "resolves"
     DESCRIPTION = "Each CURIE in each param_set must resolve to a non-null result in NodeNorm."
+    PARAMETERS = "One or more CURIEs per param_set."
+    WIKI_EXAMPLES = [
+        "{{BabelTest|Resolves|CHEBI:15365}}",
+        "{{BabelTest|Resolves|MONDO:0005015|DOID:9351}}",
+    ]
+    YAML_PARAMS = "    - CHEBI:15365\n    - [MONDO:0005015, DOID:9351]"
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
@@ -24,7 +30,13 @@ class ResolvesHandler(NodeNormTest):
 class DoesNotResolveHandler(NodeNormTest):
     """Test that every CURIE in every param_set does NOT resolve in NodeNorm."""
     NAME = "doesnotresolve"
-    DESCRIPTION = "Each CURIE in each param_set must fail to resolve (return null) in NodeNorm."
+    DESCRIPTION = (
+        "Each CURIE in each param_set must fail to resolve (return null) in NodeNorm. "
+        "Use this to confirm that an identifier is intentionally not normalizable."
+    )
+    PARAMETERS = "One or more CURIEs per param_set."
+    WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolve|FAKENS:99999}}"]
+    YAML_PARAMS = "    - FAKENS:99999"
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
@@ -43,6 +55,9 @@ class ResolvesWithHandler(NodeNormTest):
         "All CURIEs within each param_set must resolve to the identical normalized result. "
         "Use this to assert that two identifiers are equivalent."
     )
+    PARAMETERS = "Two or more CURIEs per param_set. All must resolve to the same result."
+    WIKI_EXAMPLES = ["{{BabelTest|ResolvesWith|CHEBI:15365|PUBCHEM.COMPOUND:1}}"]
+    YAML_PARAMS = "    - [CHEBI:15365, PUBCHEM.COMPOUND:1]\n    - [MONDO:0005015, DOID:9351]"
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
@@ -76,6 +91,12 @@ class ResolvesWithTypeHandler(NodeNormTest):
         "Each param_set must have at least two elements: the first is the expected Biolink type "
         "(e.g. 'biolink:Gene'), and the remainder are CURIEs that must resolve with that type."
     )
+    PARAMETERS = (
+        "Each param_set: first element is the expected Biolink type (e.g. `biolink:Gene`), "
+        "remaining elements are CURIEs."
+    )
+    WIKI_EXAMPLES = ["{{BabelTest|ResolvesWithType|biolink:Gene|NCBIGene:1}}"]
+    YAML_PARAMS = "    - [biolink:Gene, NCBIGene:1, HGNC:5]"
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
