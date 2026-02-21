@@ -37,8 +37,8 @@ class TestRow:
     def from_data_row(row):
         return TestRow(
             Category=row.get('Category', ''),
-            ExpectPassInNodeNorm=row.get('Passes in NodeNorm', '') == 'y',
-            ExpectPassInNameRes=row.get('Passes in NameRes', '') == 'y',
+            ExpectPassInNodeNorm=row.get('Passes in NodeNorm', '').strip().lower() == 'y',
+            ExpectPassInNameRes=row.get('Passes in NameRes', '').strip().lower() == 'y',
             Flags=set(row.get('Flags', '').split('|')),
             QueryLabel=row.get('Query Label', ''),
             QueryID=row.get('Query ID', ''),

@@ -71,7 +71,8 @@ class GoogleSheetTestCases:
         for count, row in enumerate(self.rows):
             # Note that count is off by two: presumably one for the header row and one because we count from zero
             # but Google Sheets counts from one.
-            row_id = f"{test_id_prefix}:row={count + 2}"
+            row_count = count + 2
+            row_id = f"{test_id_prefix}:row={row_count}"
 
             if has_nonempty_value(row):
                 tr = TestRow.from_data_row(row)
@@ -83,7 +84,7 @@ class GoogleSheetTestCases:
                         trows.append(pytest.param(
                             tr,
                             marks=pytest.mark.xfail(
-                                reason=f"Test row {count + 2} is marked as not expected to pass NodeNorm in the "
+                                reason=f"Test row {row_count} is marked as not expected to pass NodeNorm in the "
                                        f"Google Sheet: {tr}",
                                 strict=True),
                             id=row_id
@@ -96,7 +97,7 @@ class GoogleSheetTestCases:
                         trows.append(pytest.param(
                             tr,
                             marks=pytest.mark.xfail(
-                                reason=f"Test row {count + 2} is marked as not expected to pass NameRes in the "
+                                reason=f"Test row {row_count} is marked as not expected to pass NameRes in the "
                                        f"Google Sheet: {tr}",
                                 strict=True),
                             id=row_id
