@@ -6,15 +6,15 @@
 import pytest
 import requests
 
-IDENTIFIERS_WITH_DESCRIPTIONS = {
+IDENTIFIERS_WITH_DESCRIPTIONS = [
     'MESH:D014867',
     'NCIT:C34373',
     'NCBIGene:1756',
-}
+]
 
-IDENTIFIERS_WITHOUT_DESCRIPTIONS = {
+IDENTIFIERS_WITHOUT_DESCRIPTIONS = [
     'UMLS:C0665297',        # natalizumab
-}
+]
 
 @pytest.mark.parametrize('curie', IDENTIFIERS_WITH_DESCRIPTIONS)
 def test_descriptions(target_info, curie):
