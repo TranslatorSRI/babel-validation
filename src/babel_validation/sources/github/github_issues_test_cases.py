@@ -107,10 +107,7 @@ class GitHubIssuesTestCases:
         :return: A list of GitHubIssueTest objects found in the issue body.
         """
 
-        github_org = github_issue.repository.organization.name
-        github_repo = github_issue.repository.name
-
-        github_issue_id = f"{github_org}/{github_repo}#{github_issue.number}"
+        github_issue_id = f"{github_issue.repository.full_name}#{github_issue.number}"
         self.logger.debug(f"Looking for tests in issue {github_issue_id}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
 
         # Is there an issue body at all?
@@ -161,6 +158,44 @@ class GitHubIssuesTestCases:
                     testrows.append(GitHubIssueTest(github_issue_id, github_issue, assertion, param_sets))
 
         return testrows
+
+    def issue_has_tests(self, issue: Issue.Issue) -> bool:
+        """Quick regex check to see if an issue body contains any BabelTest syntax."""
+        if not issue.body or issue.body.strip() == '':
+            return False
+        return bool(self.babeltest_pattern.search(issue.body) or
+                    self.babeltest_yaml_pattern.search(issue.body))
+
+    def get_issues_by_ids(self, issue_ids: list[str]) -> list[Issue.Issue]:
+        """
+        Fetch specific GitHub issues by their ID strings, supporting three formats:
+        - 'org/repo#N'  → direct fetch from that repo
+        - 'repo#N'      → search self.github_repositories for matching repo name
+        - 'N'           → fetch #N from all configured repositories
+        """
+        from github import GithubException
+        issues = []
+        for issue_id in issue_ids:
+            if m := re.match(r'^([^/]+)/([^#]+)#(\d+)$', issue_id):
+                # org/repo#N
+                issue = self.github.get_repo(f"{m.group(1)}/{m.group(2)}").get_issue(int(m.group(3)))
+                issues.append(issue)
+            elif m := re.match(r'^([^/#]+)#(\d+)$', issue_id):
+                # repo#N — find repo in configured list
+                repo_name, num = m.group(1), int(m.group(2))
+                for full_repo in self.github_repositories:
+                    if full_repo.split('/')[1] == repo_name:
+                        issues.append(self.github.get_repo(full_repo).get_issue(num))
+                        break
+            elif m := re.match(r'^(\d+)$', issue_id):
+                # N — try all configured repos
+                num = int(m.group(1))
+                for full_repo in self.github_repositories:
+                    try:
+                        issues.append(self.github.get_repo(full_repo).get_issue(num))
+                    except GithubException:
+                        pass
+        return issues
 
     def get_all_issues(self, github_repositories = None) -> Iterator[Issue.Issue]:
         """
