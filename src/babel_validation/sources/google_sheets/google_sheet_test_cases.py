@@ -3,14 +3,21 @@
 #
 # This library contains classes and methods for accessing those test cases.
 import csv
+import hashlib
 import io
+import tempfile
+import time
 from collections import Counter
+from pathlib import Path
 
 import pytest
 import requests
 from _pytest.mark import ParameterSet
+from filelock import FileLock
 
 from src.babel_validation.core.testrow import TestRow
+
+_CACHE_TTL = 3600  # 1 hour
 
 
 class GoogleSheetTestCases:
@@ -28,9 +35,19 @@ class GoogleSheetTestCases:
         """
 
         self.google_sheet_id = google_sheet_id
-        csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
-        response = requests.get(csv_url)
-        self.csv_content = response.text
+
+        sheet_hash = hashlib.md5(google_sheet_id.encode()).hexdigest()[:8]
+        cache_file = Path(tempfile.gettempdir()) / f"babel_validation_gsheet_{sheet_hash}.csv"
+        lock_file = cache_file.with_suffix(".lock")
+
+        with FileLock(lock_file):
+            if cache_file.exists() and (time.time() - cache_file.stat().st_mtime) < _CACHE_TTL:
+                self.csv_content = cache_file.read_text(encoding="utf-8")
+            else:
+                csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
+                response = requests.get(csv_url)
+                self.csv_content = response.text
+                cache_file.write_text(self.csv_content, encoding="utf-8")
 
         self.rows = []
         with io.StringIO(self.csv_content) as f:
