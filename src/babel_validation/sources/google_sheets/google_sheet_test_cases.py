@@ -6,7 +6,6 @@ import csv
 import hashlib
 import io
 import tempfile
-import time
 from collections import Counter
 from pathlib import Path
 
@@ -16,8 +15,6 @@ from _pytest.mark import ParameterSet
 from filelock import FileLock
 
 from src.babel_validation.core.testrow import TestRow
-
-_CACHE_TTL = 3600  # 1 hour
 
 
 class GoogleSheetTestCases:
@@ -41,7 +38,7 @@ class GoogleSheetTestCases:
         lock_file = cache_file.with_suffix(".lock")
 
         with FileLock(lock_file):
-            if cache_file.exists() and (time.time() - cache_file.stat().st_mtime) < _CACHE_TTL:
+            if cache_file.exists():
                 self.csv_content = cache_file.read_text(encoding="utf-8")
             else:
                 csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"

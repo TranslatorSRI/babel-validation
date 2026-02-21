@@ -1,7 +1,10 @@
 #
 # conftest.py - pytest configuration settings
 #
+import glob
+import os
 import os.path
+import tempfile
 
 import pytest
 import configparser
@@ -23,6 +26,18 @@ def get_targets_ini_path(config):
             raise RuntimeError(f"Could not find targets.ini configuration file at either {config_path} or {config_path_with_tests}")
         return config_path_with_tests
     return config_path
+
+
+def pytest_configure(config):
+    # Delete the Google Sheet CSV cache at the start of each run so tests always
+    # use a fresh download. Only the controller does this — xdist workers skip it
+    # so they can share the cache file written by the controller.
+    if not os.environ.get('PYTEST_XDIST_WORKER'):
+        for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
+            try:
+                os.unlink(f)
+            except FileNotFoundError:
+                pass
 
 
 def pytest_addoption(parser):
