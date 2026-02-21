@@ -26,7 +26,7 @@ def test_github_issue(target_info, github_issue, github_issues_test_cases_fixtur
         results_nameres = test_issue.test_with_nameres(nodenorm, nameres)
 
         for result in itertools.chain(results_nodenorm, results_nameres):
-            with subtests.test(msg=f"{issue_id} ({github_issue.state}): {result.message}"):
+            with subtests.test(msg=issue_id):
                 match result:
                     case TestResult(status=TestStatus.Passed, message=message):
                         subtests_passed += 1

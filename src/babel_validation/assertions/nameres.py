@@ -49,7 +49,8 @@ class SearchByNameHandler(NameResTest):
         try:
             found_index = curies.index(expected_curie)
         except ValueError:
-            yield self.failed(f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}: {json.dumps(results, indent=2, sort_keys=True)}")
+            print(f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}: {json.dumps(results, indent=2, sort_keys=True)}")
+            yield self.failed(f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}")
             return
 
         if found_index <= pass_if_found_in_top:
