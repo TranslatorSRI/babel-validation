@@ -38,6 +38,10 @@ def pytest_configure(config):
                 os.unlink(f)
             except FileNotFoundError:
                 pass
+        try:
+            os.unlink(os.path.join(tempfile.gettempdir(), 'babel_validation_issues_cache.json'))
+        except FileNotFoundError:
+            pass
 
 
 def pytest_addoption(parser):

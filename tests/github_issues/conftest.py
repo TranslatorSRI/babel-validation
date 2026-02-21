@@ -1,7 +1,6 @@
 import json
 import os
 import tempfile
-import time
 from pathlib import Path
 
 import dotenv
@@ -23,7 +22,6 @@ github_issues_test_cases = GitHubIssuesTestCases(_github_token, _repos)
 
 _CACHE_FILE = Path(tempfile.gettempdir()) / "babel_validation_issues_cache.json"
 _LOCK_FILE = _CACHE_FILE.with_suffix(".lock")
-_CACHE_TTL = 3600  # 1 hour
 
 
 def _issue_id(issue: Issue.Issue) -> str:
@@ -36,9 +34,7 @@ def _get_all_test_issue_ids() -> list[str]:
     """Return IDs of all issues that contain tests, using a file-based cache."""
     with FileLock(_LOCK_FILE):
         if _CACHE_FILE.exists():
-            age = time.time() - _CACHE_FILE.stat().st_mtime
-            if age < _CACHE_TTL:
-                return json.loads(_CACHE_FILE.read_text())
+            return json.loads(_CACHE_FILE.read_text())
         issues = [i for i in github_issues_test_cases.get_all_issues()
                   if github_issues_test_cases.issue_has_tests(i)]
         ids = [_issue_id(i) for i in issues]
