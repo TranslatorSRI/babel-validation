@@ -27,12 +27,15 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
             strict=False,
         ))
 
-    any_subtest_xfailed = False
+    count_subtests = 0
+    count_subtests_xfailed = 0
     for test_issue in tests:
         results_nodenorm = test_issue.test_with_nodenorm(nodenorm)
         results_nameres = test_issue.test_with_nameres(nodenorm, nameres)
 
         for result in itertools.chain(results_nodenorm, results_nameres):
+            count_subtests += 1
+
             with subtests.test(msg=issue_id):
                 match result:
                     case TestResult(status=TestStatus.Passed, message=message):
@@ -40,8 +43,8 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
 
                     case TestResult(status=TestStatus.Failed, message=message):
                         if is_open:
-                            any_subtest_xfailed = True
-                            pytest.xfail(f"Issue {issue_id} is still open: {message}")
+                            count_subtests_xfailed += 1
+                            pytest.xfail(message)
                         else:
                             assert False, f"{issue_id} ({github_issue.state}): {message}"
 
@@ -53,5 +56,5 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
 
     # If any subtest xfailed, also xfail the parent — otherwise the parent would show
     # as XPASS (masking the distinction between "all pass" and "some fail").
-    if is_open and any_subtest_xfailed:
-        pytest.xfail(f"Issue {issue_id} has failing subtests (issue is still open)")
+    if is_open and (count_subtests_xfailed > 0):
+        pytest.xfail(f"Open issue {issue_id} has {count_subtests_xfailed:,} failing subtests out of {count_subtests:,} ({count_subtests_xfailed/count_subtests:.0%})")
