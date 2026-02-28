@@ -197,7 +197,31 @@ class GitHubIssuesTestCases:
                         pass
         return issues
 
-    def get_all_issues(self, github_repositories = None) -> Iterator[Issue.Issue]:
+    def get_issues_with_tests(self, github_repositories=None) -> Iterator[Issue.Issue]:
+        """Use GitHub search API to find only issues containing BabelTest syntax.
+
+        This is much faster than get_all_issues() + issue_has_tests() filtering because
+        it only fetches issues that match the search query rather than paginating through
+        every issue in each repository.
+
+        Note: GitHub's search index has a ~60-second lag for very recent edits. For
+        immediate testing of freshly-edited issues, use --issue which calls
+        get_issues_by_ids() directly.
+        """
+        if github_repositories is None:
+            github_repositories = self.github_repositories
+        for repo_id in github_repositories:
+            seen_numbers = set()
+            for keyword in ['{{BabelTest', 'babel_tests:']:
+                query = f'"{keyword}" is:issue in:body repo:{repo_id}'
+                self.logger.info(f"Searching GitHub issues with query: {query}")
+                for issue in self.github.search_issues(query):
+                    if issue.number not in seen_numbers:
+                        seen_numbers.add(issue.number)
+                        if self.issue_has_tests(issue):
+                            yield issue
+
+    def get_all_issues(self, github_repositories=None) -> Iterator[Issue.Issue]:
         """
         Get a list of test rows from one or more repositories.
 
