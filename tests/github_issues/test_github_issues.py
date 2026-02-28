@@ -17,15 +17,17 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
 
     parts = github_issue.html_url.split('/')
     issue_id = f"{parts[3]}/{parts[4]}#{github_issue.number}"
+    is_open = github_issue.state == "open"
 
     # Open issues are expected to have failing tests. Mark as xfail(strict=False) so
-    # that failures show as XFAIL (x) and unexpected full passes show as XPASS (X).
-    if github_issue.state == "open":
+    # that if all subtests pass, the parent shows as XPASS (X) — issue ready to close.
+    if is_open:
         request.node.add_marker(pytest.mark.xfail(
             reason=f"Issue {issue_id} is still open",
             strict=False,
         ))
 
+    any_subtest_xfailed = False
     for test_issue in tests:
         results_nodenorm = test_issue.test_with_nodenorm(nodenorm)
         results_nameres = test_issue.test_with_nameres(nodenorm, nameres)
@@ -37,10 +39,19 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
                         assert True, f"{issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Failed, message=message):
-                        assert False, f"{issue_id} ({github_issue.state}): {message}"
+                        if is_open:
+                            any_subtest_xfailed = True
+                            pytest.xfail(f"Issue {issue_id} is still open: {message}")
+                        else:
+                            assert False, f"{issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Skipped, message=message):
                         pytest.skip(f"{issue_id} ({github_issue.state}): {message}")
 
                     case _:
                         assert False, f"Unknown result from {issue_id}: {result}"
+
+    # If any subtest xfailed, also xfail the parent — otherwise the parent would show
+    # as XPASS (masking the distinction between "all pass" and "some fail").
+    if is_open and any_subtest_xfailed:
+        pytest.xfail(f"Issue {issue_id} has failing subtests (issue is still open)")
