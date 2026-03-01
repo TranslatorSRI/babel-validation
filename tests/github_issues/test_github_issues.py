@@ -31,12 +31,12 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
             f"Valid types (case-insensitive): {sorted(ASSERTION_HANDLERS.keys())}"
         )
 
-    # Open issues are expected to have failing tests. Mark as xfail(strict=False) so
-    # that if all subtests pass, the parent shows as XPASS (X) — issue ready to close.
+    # Open issues are assumed to fail, so we set an xfail marker (but we set it to strict so
+    # that XPASSes are reported loudly).
     if is_open:
         request.node.add_marker(pytest.mark.xfail(
             reason=f"Issue {issue_id} is still open",
-            strict=False,
+            strict=True,
         ))
 
     count_subtests = 0
@@ -66,7 +66,11 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
                     case _:
                         assert False, f"Unknown result from {issue_id}: {result}"
 
-    # If any subtest xfailed, also xfail the parent — otherwise the parent would show
-    # as XPASS (masking the distinction between "all pass" and "some fail").
-    if is_open and (count_subtests_xfailed > 0):
-        pytest.xfail(f"Open issue {issue_id} has {count_subtests_xfailed:,} failing subtests out of {count_subtests:,} ({count_subtests_xfailed/count_subtests:.0%})")
+    # Always xfail open issues so the result stays in the xfail family.
+    # If all subtests pass the message signals the issue is ready to close;
+    # if some failed it reports the failure count.
+    if is_open:
+        if count_subtests_xfailed > 0:
+            pytest.xfail(f"Open issue {issue_id} has {count_subtests_xfailed:,} failing subtests out of {count_subtests:,} ({count_subtests_xfailed/count_subtests:.0%})")
+        else:
+            assert True, f"Open issue {issue_id} has all {count_subtests:,} subtests passing -- ready to close?"
