@@ -101,7 +101,7 @@ class ResolvesWithHandler(NodeNormTest):
 
 class DoesNotResolveWithHandler(NodeNormTest):
     """Test that not all CURIEs in a param_set resolve to the same result in NodeNorm."""
-    NAME = "doesnotresolveswith"
+    NAME = "doesnotresolvewith"
     DESCRIPTION = (
         "The CURIEs within each param_set must NOT all resolve to the same normalized "
         "result. Use this to assert that two identifiers are intentionally distinct entities."
