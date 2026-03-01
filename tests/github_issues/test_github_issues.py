@@ -2,6 +2,7 @@ import itertools
 
 import pytest
 
+from src.babel_validation.assertions import ASSERTION_HANDLERS
 from src.babel_validation.services.nameres import CachedNameRes
 from src.babel_validation.services.nodenorm import CachedNodeNorm
 from src.babel_validation.core.testrow import TestResult, TestStatus
@@ -18,6 +19,16 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
     parts = github_issue.html_url.split('/')
     issue_id = f"{parts[3]}/{parts[4]}#{github_issue.number}"
     is_open = github_issue.state == "open"
+
+    # Unknown assertion types must fail hard, not XFAIL.
+    unknown = [f"'{t.assertion}'" for t in tests
+               if t.assertion.lower() not in ASSERTION_HANDLERS]
+    if unknown:
+        pytest.fail(
+            f"Issue {issue_id} uses unknown assertion type(s): "
+            f"{', '.join(unknown)}. "
+            f"Valid types (case-insensitive): {sorted(ASSERTION_HANDLERS.keys())}"
+        )
 
     # Open issues are expected to have failing tests. Mark as xfail(strict=False) so
     # that if all subtests pass, the parent shows as XPASS (X) — issue ready to close.
