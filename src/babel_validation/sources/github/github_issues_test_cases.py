@@ -53,7 +53,7 @@ class GitHubIssuesTestCases:
     - A closed issue has test cases that are now failing (and so should be reopened).
     """
 
-    def __init__(self, github_token: str, github_repositories=None):
+    def __init__(self, github_token: str, github_repositories):
         """
         Create a GitHubIssuesTestCase object.
 
@@ -72,13 +72,8 @@ class GitHubIssuesTestCases:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.info("Set up GitHub object ({self.github})")
 
-        if github_repositories is None:
-            github_repositories = [
-                'NCATSTranslator/Babel',                # https://github.com/NCATSTranslator/Babel
-                'NCATSTranslator/NodeNormalization',    # https://github.com/NCATSTranslator/NodeNormalization
-                'NCATSTranslator/NameResolution',       # https://github.com/NCATSTranslator/NameResolution
-                'TranslatorSRI/babel-validation',       # https://github.com/TranslatorSRI/babel-validation
-            ]
+        if not github_repositories:
+            raise ValueError("No GitHub repositories specified in `github_repositories`.")
         self.github_repositories = github_repositories
 
         # Prepare regular expressions.

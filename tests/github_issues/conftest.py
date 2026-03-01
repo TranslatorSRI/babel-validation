@@ -17,6 +17,7 @@ _repos = [
     'NCATSTranslator/NodeNormalization',
     'NCATSTranslator/NameResolution',
     'TranslatorSRI/babel-validation',
+    'TranslatorSRI/babel-explorer',
 ]
 github_issues_test_cases = GitHubIssuesTestCases(_github_token, _repos)
 
