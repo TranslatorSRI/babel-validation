@@ -145,6 +145,48 @@ class DoesNotResolveWithHandler(NodeNormTest):
             )
 
 
+class HasLabelHandler(NodeNormTest):
+    """Test that a CURIE resolves to a specific primary label in NodeNorm."""
+    NAME = "haslabel"
+    DESCRIPTION = (
+        "The CURIE must resolve in NodeNorm and its primary label (id.label) must "
+        "match the expected label exactly (case-sensitive)."
+    )
+    PARAMETERS = "Exactly two elements per param_set: a CURIE, then the expected label string."
+    WIKI_EXAMPLES = ["{{BabelTest|HasLabel|CHEBI:15365|aspirin}}"]
+    YAML_PARAMS = "    - [CHEBI:15365, aspirin]"
+
+    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+                       label: str = "") -> Iterator[TestResult]:
+        if len(params) < 2:
+            yield self.failed(
+                f"HasLabel requires two parameters (CURIE, expected label) in {label}, "
+                f"but got: {params}"
+            )
+            return
+
+        curie = params[0]
+        expected_label = params[1].strip()
+
+        result = nodenorm.normalize_curie(curie)
+        if not result:
+            yield self.failed(
+                f"Could not resolve {curie} on {nodenorm}"
+            )
+            return
+
+        actual_label = result['id']['label']
+        if actual_label == expected_label:
+            yield self.passed(
+                f"CURIE {curie} has expected label '{actual_label}' on {nodenorm}"
+            )
+        else:
+            yield self.failed(
+                f"CURIE {curie} has label '{actual_label}', "
+                f"but expected '{expected_label}' on {nodenorm}"
+            )
+
+
 class ResolvesWithTypeHandler(NodeNormTest):
     """Test that CURIEs resolve with a specific Biolink type in NodeNorm."""
     NAME = "resolveswithtype"
