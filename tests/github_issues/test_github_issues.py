@@ -27,7 +27,7 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
     if unknown:
         pytest.fail(
             f"Issue {issue_id} uses unknown assertion type(s): "
-            f"{', '.join(unknown)} with param sets {json.dumps([t.param_set for t in tests])}. "
+            f"{', '.join(unknown)} with param sets {json.dumps([t.param_sets for t in tests])}. "
             f"Valid types (case-insensitive): {sorted(ASSERTION_HANDLERS.keys())}"
         )
 
