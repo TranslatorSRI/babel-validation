@@ -1,4 +1,3 @@
-import json
 from typing import Iterator
 
 from src.babel_validation.assertions import NodeNormTest
@@ -48,6 +47,19 @@ class DoesNotResolveHandler(NodeNormTest):
                 yield self.failed(f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}, but expected not to resolve")
 
 
+def _compare_resolutions(
+    params: list[str], nodenorm: CachedNodeNorm
+) -> tuple[dict | None, dict[str, dict | None]]:
+    """Resolve all params; return (first_good_result, per_curie_results).
+
+    first_good_result is None if every CURIE failed to resolve.
+    per_curie_results maps each CURIE to its result (None if unresolvable).
+    """
+    per_curie = nodenorm.normalize_curies(params)
+    first_good = next((r for r in per_curie.values() if r is not None), None)
+    return first_good, per_curie
+
+
 class ResolvesWithHandler(NodeNormTest):
     """Test that all CURIEs in a param_set resolve to the same normalized result in NodeNorm."""
     NAME = "resolveswith"
@@ -61,27 +73,76 @@ class ResolvesWithHandler(NodeNormTest):
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
-        results = nodenorm.normalize_curies(params)
+        first_good, results = _compare_resolutions(params, nodenorm)
 
-        # Find the first good result.
-        first_good_result = None
-        for curie, result in results.items():
-            if result is not None and first_good_result is None:
-                first_good_result = result
-                break
-
-        if first_good_result is None:
+        if first_good is None:
             yield self.failed(f"None of the CURIEs {params} could be resolved on {nodenorm}")
             return
 
-        # Check all the results.
+        canonical_id = first_good['id']['identifier']
+
         for curie, result in results.items():
             if result is None:
-                yield self.failed(f"CURIE {curie} could not be resolved, and so is not equal to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)} on {nodenorm}")
-            elif json.dumps(first_good_result, sort_keys=True) == json.dumps(result, sort_keys=True):
-                yield self.passed(f"Resolved {curie} to the expected result {json.dumps(first_good_result, indent=2, sort_keys=True)}")
+                yield self.failed(
+                    f"CURIE {curie} could not be resolved on {nodenorm}"
+                )
+            elif result['id']['identifier'] == canonical_id:
+                yield self.passed(
+                    f"Resolved {curie} to the expected canonical identifier {canonical_id}"
+                )
             else:
-                yield self.failed(f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\"), but expected {first_good_result['id']['identifier']} ({first_good_result['type'][0]}, \"{first_good_result['id']['label']}\") on {nodenorm}")
+                yield self.failed(
+                    f"Resolved {curie} to {result['id']['identifier']} "
+                    f"({result['type'][0]}, \"{result['id']['label']}\"), but expected "
+                    f"{canonical_id} "
+                    f"({first_good['type'][0]}, \"{first_good['id']['label']}\") on {nodenorm}"
+                )
+
+
+class DoesNotResolveWithHandler(NodeNormTest):
+    """Test that not all CURIEs in a param_set resolve to the same result in NodeNorm."""
+    NAME = "doesnotresolveswith"
+    DESCRIPTION = (
+        "The CURIEs within each param_set must NOT all resolve to the same normalized "
+        "result. Use this to assert that two identifiers are intentionally distinct entities."
+    )
+    PARAMETERS = "Two or more CURIEs per param_set. They must not all resolve to the same result."
+    WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolveWith|CHEBI:15365|CHEBI:16856}}"]
+    YAML_PARAMS = "    - [CHEBI:15365, CHEBI:16856]"
+
+    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+                       label: str = "") -> Iterator[TestResult]:
+        first_good, results = _compare_resolutions(params, nodenorm)
+
+        # Every CURIE must resolve — an unresolved CURIE is a configuration error.
+        unresolved = [curie for curie, result in results.items() if result is None]
+        if unresolved:
+            yield self.failed(
+                f"CURIEs {unresolved} could not be resolved on {nodenorm}; "
+                f"all CURIEs in a DoesNotResolveWith param_set must resolve"
+            )
+            return
+
+        # All resolved — check that they don't all map to the same canonical identifier.
+        canonical_ids = {result['id']['identifier'] for result in results.values()}
+
+        if len(canonical_ids) == 1:
+            # Every CURIE maps to the same result — assertion fails.
+            shared = first_good
+            yield self.failed(
+                f"All CURIEs {params} resolved to the same result "
+                f"{shared['id']['identifier']} "
+                f"({shared['type'][0]}, \"{shared['id']['label']}\") on {nodenorm}, "
+                f"but expected them to resolve differently"
+            )
+        else:
+            summary = ", ".join(
+                f"{curie} → {result['id']['identifier']}"
+                for curie, result in results.items()
+            )
+            yield self.passed(
+                f"CURIEs resolve to different results as expected: {summary} on {nodenorm}"
+            )
 
 
 class ResolvesWithTypeHandler(NodeNormTest):

@@ -115,7 +115,8 @@ class NameResTest(AssertionHandler):
 
 # Registry — import submodules after base classes are defined to avoid circular imports.
 from src.babel_validation.assertions.nodenorm import (  # noqa: E402
-    ResolvesHandler, DoesNotResolveHandler, ResolvesWithHandler, ResolvesWithTypeHandler,
+    ResolvesHandler, DoesNotResolveHandler, ResolvesWithHandler,
+    ResolvesWithTypeHandler, DoesNotResolveWithHandler,
 )
 from src.babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
 from src.babel_validation.assertions.common import NeededHandler  # noqa: E402
@@ -125,6 +126,7 @@ ASSERTION_HANDLERS: dict[str, AssertionHandler] = {
         ResolvesHandler(),
         DoesNotResolveHandler(),
         ResolvesWithHandler(),
+        DoesNotResolveWithHandler(),
         ResolvesWithTypeHandler(),
         SearchByNameHandler(),
         NeededHandler(),
