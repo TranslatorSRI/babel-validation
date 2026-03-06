@@ -101,6 +101,50 @@ babel_tests:
 
 ---
 
+### DoesNotResolveWith
+
+**Applies to:** NodeNorm
+
+The CURIEs within each param_set must NOT all resolve to the same normalized result. Use this to assert that two identifiers are intentionally distinct entities.
+
+**Parameters:** Two or more CURIEs per param_set. They must not all resolve to the same result.
+
+**Wiki syntax:**
+```
+{{BabelTest|DoesNotResolveWith|CHEBI:15365|CHEBI:16856}}
+```
+
+**YAML syntax:**
+```yaml
+babel_tests:
+  DoesNotResolveWith:
+    - [CHEBI:15365, CHEBI:16856]
+```
+
+---
+
+### HasLabel
+
+**Applies to:** NodeNorm
+
+The CURIE must resolve in NodeNorm and its primary label (id.label) must match the expected label exactly (case-sensitive).
+
+**Parameters:** Exactly two elements per param_set: a CURIE, then the expected label string.
+
+**Wiki syntax:**
+```
+{{BabelTest|HasLabel|CHEBI:15365|aspirin}}
+```
+
+**YAML syntax:**
+```yaml
+babel_tests:
+  HasLabel:
+    - [CHEBI:15365, aspirin]
+```
+
+---
+
 ### ResolvesWithType
 
 **Applies to:** NodeNorm
