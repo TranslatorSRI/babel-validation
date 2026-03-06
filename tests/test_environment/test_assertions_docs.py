@@ -1,6 +1,9 @@
+import pytest
+
 from src.babel_validation.assertions.gen_docs import generate_readme, README_PATH
 
 
+@pytest.mark.unit
 def test_assertions_readme_is_up_to_date():
     expected = generate_readme()
     actual = README_PATH.read_text(encoding="utf-8")
