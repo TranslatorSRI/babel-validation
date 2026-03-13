@@ -1,8 +1,7 @@
-import itertools
 import urllib.parse
 import requests
 import pytest
-from common.google_sheet_test_cases import GoogleSheetTestCases, TestRow
+from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
 
 # We generate a set of tests from the GoogleSheetTestCases.
 gsheet = GoogleSheetTestCases()
