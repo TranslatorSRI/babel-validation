@@ -19,13 +19,27 @@ _repos = [
     'TranslatorSRI/babel-validation',
     'TranslatorSRI/babel-explorer',
 ]
-github_issues_test_cases = GitHubIssuesTestCases(_github_token, _repos)
+github_issues_test_cases = None
 
 _CACHE_FILE = Path(tempfile.gettempdir()) / "babel_validation_issues_cache.json"
 _LOCK_FILE = _CACHE_FILE.with_suffix(".lock")
 
 # Module-level cache to avoid re-fetching issues already retrieved during collection.
 _fetched_issues_cache: dict[str, Issue.Issue] = {}
+
+
+def _get_github_issues_test_cases() -> GitHubIssuesTestCases:
+    """Lazily construct GitHubIssuesTestCases, skipping tests if no token is available."""
+    global github_issues_test_cases
+    if github_issues_test_cases is not None:
+        return github_issues_test_cases
+    if not _github_token:
+        pytest.skip(
+            "GITHUB_TOKEN environment variable not set; skipping GitHub issues tests.",
+            allow_module_level=True,
+        )
+    github_issues_test_cases = GitHubIssuesTestCases(_github_token, _repos)
+    return github_issues_test_cases
 
 
 def _issue_id(issue: Issue.Issue) -> str:
@@ -39,7 +53,7 @@ def _get_all_test_issue_ids() -> list[str]:
     with FileLock(_LOCK_FILE):
         if _CACHE_FILE.exists():
             return json.loads(_CACHE_FILE.read_text())
-        issues = list(github_issues_test_cases.get_issues_with_tests())
+        issues = list(_get_github_issues_test_cases().get_issues_with_tests())
         ids = [_issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
             _fetched_issues_cache[id_] = issue
@@ -52,7 +66,7 @@ def pytest_generate_tests(metafunc):
         return
     issue_id_filter = metafunc.config.getoption("issue", default=[])
     if issue_id_filter:
-        issues = github_issues_test_cases.get_issues_by_ids(issue_id_filter)
+        issues = _get_github_issues_test_cases().get_issues_by_ids(issue_id_filter)
         ids = [_issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
             _fetched_issues_cache[id_] = issue
@@ -66,9 +80,9 @@ def github_issue(github_issue_id):
     """Hydrate a GitHub Issue object from its string ID."""
     if github_issue_id in _fetched_issues_cache:
         return _fetched_issues_cache[github_issue_id]
-    return github_issues_test_cases.get_issues_by_ids([github_issue_id])[0]
+    return _get_github_issues_test_cases().get_issues_by_ids([github_issue_id])[0]
 
 
 @pytest.fixture(scope="session")
 def github_issues_test_cases_fixture():
-    return github_issues_test_cases
+    return _get_github_issues_test_cases()
