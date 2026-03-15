@@ -19,10 +19,5 @@ dependencies = [
     "pytest-xdist[psutil]",
 ]
 
-[tool.pytest.ini_options]
-markers = [
-    "unit: unit tests that do not require network access",
-]
-
 [project.urls]
 Repository = "https://github.com/TranslatorSRI/babel-validation"
