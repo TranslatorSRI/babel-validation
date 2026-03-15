@@ -52,7 +52,10 @@ def _get_all_test_issue_ids() -> list[str]:
     """Return IDs of all issues that contain tests, using a file-based cache."""
     with FileLock(_LOCK_FILE):
         if _CACHE_FILE.exists():
-            return json.loads(_CACHE_FILE.read_text())
+            try:
+                return json.loads(_CACHE_FILE.read_text())
+            except (json.JSONDecodeError, OSError):
+                _CACHE_FILE.unlink(missing_ok=True)
         issues = list(_get_github_issues_test_cases().get_issues_with_tests())
         ids = [_issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
