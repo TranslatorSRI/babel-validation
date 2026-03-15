@@ -19,6 +19,7 @@ Adding a new assertion type
 6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate README.md.
 """
 
+import re
 from typing import Iterator
 
 from src.babel_validation.core.testrow import TestResult, TestStatus
@@ -53,17 +54,32 @@ class NodeNormTest(AssertionHandler):
     Subclasses implement test_param_set() instead of test_with_nodenorm().
     """
 
+    _CURIE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$')
+
+    def curie_params(self, params: list[str]) -> list[str]:
+        """Return the subset of params that are CURIEs (for prewarming and validation).
+        Default: all params are CURIEs. Subclasses override when some params are non-CURIEs."""
+        return params
+
     def test_with_nodenorm(self, param_sets: list[list[str]], nodenorm,
                            label: str = "") -> Iterator[TestResult]:
         if not param_sets:
             yield self.failed(f"No parameters provided in {label}")
             return
-        # warm the cache for all CURIEs up front
-        nodenorm.normalize_curies([p for params in param_sets for p in params])
+        # warm the cache only for params that are CURIEs
+        nodenorm.normalize_curies([p for params in param_sets for p in self.curie_params(params)])
         found = False
         for index, params in enumerate(param_sets):
             if not params:
                 yield self.failed(f"No parameters in param_set {index} in {label}")
+                found = True
+                continue
+            invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
+            if invalid:
+                yield self.failed(
+                    f"Malformed CURIE(s) {invalid} in param_set {index} in {label}: "
+                    f"expected format PREFIX:LOCAL_ID (e.g. CHEBI:15365)"
+                )
                 found = True
                 continue
             for result in self.test_param_set(params, nodenorm, label):
