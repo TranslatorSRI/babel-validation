@@ -35,7 +35,7 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
     # that XPASSes are reported loudly).
     if is_open:
         request.node.add_marker(pytest.mark.xfail(
-            reason=f"Issue {issue_id} is still open",
+            reason=f"Issue {github_issue.html_url} is expected to fail because the issue is open.",
             strict=True,
         ))
 
