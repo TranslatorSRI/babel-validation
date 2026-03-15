@@ -70,7 +70,7 @@ class GitHubIssuesTestCases:
 
         self.github = Github(auth=Auth.Token(self.github_token))
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.info("Set up GitHub object ({self.github})")
+        self.logger.info(f"Set up GitHub object ({self.github})")
 
         if not github_repositories:
             raise ValueError("No GitHub repositories specified in `github_repositories`.")
