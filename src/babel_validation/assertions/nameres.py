@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Iterator
 
 from src.babel_validation.assertions import NameResTest
@@ -49,7 +50,10 @@ class SearchByNameHandler(NameResTest):
         try:
             found_index = curies.index(expected_curie)
         except ValueError:
-            print(f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}: {json.dumps(results, indent=2, sort_keys=True)}")
+            logging.getLogger(__name__).debug(
+                "%s not found when searching for '%s' in NameRes %s: %s",
+                expected_curie_string, search_query, nameres, json.dumps(results, indent=2, sort_keys=True)
+            )
             yield self.failed(f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}")
             return
 
