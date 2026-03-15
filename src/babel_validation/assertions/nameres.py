@@ -42,7 +42,7 @@ class SearchByNameHandler(NameResTest):
         # Search for the expected CURIE in the first {pass_if_found_in_top} results.
         results = nameres.lookup(search_query, autocomplete='false', limit=(2 * pass_if_found_in_top))
         if not results:
-            yield self.failed(f"No results found for '{search_query}' on NameRes {nameres} ({expected_curie_string}")
+            yield self.failed(f"No results found for '{search_query}' on NameRes {nameres} ({expected_curie_string})")
             return
 
         curies = [result['curie'] for result in results]
