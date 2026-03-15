@@ -53,7 +53,7 @@ class SearchByNameHandler(NameResTest):
             yield self.failed(f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}")
             return
 
-        if found_index <= pass_if_found_in_top:
+        if found_index < pass_if_found_in_top:
             yield self.passed(f"{expected_curie_string} found at index {found_index + 1} on NameRes {nameres}")
         else:
             yield self.failed(f"{expected_curie_string} found at index {found_index + 1} which is greater than {pass_if_found_in_top} on NameRes {nameres}")
