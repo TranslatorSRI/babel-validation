@@ -9,7 +9,7 @@ from src.babel_validation.services.nodenorm import CachedNodeNorm
 from src.babel_validation.core.testrow import TestResult, TestStatus
 
 
-def test_github_issue(request, target_info, github_issue, github_issues_test_cases_fixture, subtests):
+def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases_fixture, subtests):
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
     nameres = CachedNameRes.from_url(target_info['NameResURL'])
     tests = github_issues_test_cases_fixture.get_test_issues_from_issue(github_issue)
@@ -17,8 +17,7 @@ def test_github_issue(request, target_info, github_issue, github_issues_test_cas
         pytest.skip(f"No tests found in issue {github_issue}")
         return
 
-    parts = github_issue.html_url.split('/')
-    issue_id = f"{parts[3]}/{parts[4]}#{github_issue.number}"
+    issue_id = github_issue_id
     is_open = github_issue.state == "open"
 
     # Unknown assertion types must fail hard, not XFAIL.
