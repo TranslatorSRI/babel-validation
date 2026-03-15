@@ -212,7 +212,11 @@ class ResolvesWithTypeHandler(NodeNormTest):
 
         results = nodenorm.normalize_curies(curies)
         for curie in curies:
-            biolink_types = results[curie]['type']
+            node = results.get(curie)
+            if not node:
+                yield self.failed(f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
+                continue
+            biolink_types = node['type']
             if expected_biolink_type in biolink_types:
                 yield self.passed(f"Biolink types {biolink_types} for CURIE {curie} includes expected Biolink type {expected_biolink_type}")
             else:
