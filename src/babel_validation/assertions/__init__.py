@@ -38,13 +38,21 @@ class AssertionHandler:
 
     def test_with_nodenorm(self, param_sets: list[list[str]], nodenorm,
                            label: str = "") -> Iterator[TestResult]:
-        """Evaluate this assertion against NodeNorm. Returns [] if not applicable."""
+        """Evaluate this assertion against NodeNorm. Returns [] if not applicable.
+
+        :param param_sets: list[list[str]] — see github_issues_test_cases.py module
+                           docstring for the full definition of param_set / param_sets.
+        """
         return []
 
     def test_with_nameres(self, param_sets: list[list[str]], nodenorm, nameres,
                           pass_if_found_in_top: int = 5,
                           label: str = "") -> Iterator[TestResult]:
-        """Evaluate this assertion against NameRes. Returns [] if not applicable."""
+        """Evaluate this assertion against NameRes. Returns [] if not applicable.
+
+        :param param_sets: list[list[str]] — see github_issues_test_cases.py module
+                           docstring for the full definition of param_set / param_sets.
+        """
         return []
 
 
@@ -89,7 +97,11 @@ class NodeNormTest(AssertionHandler):
             yield self.failed(f"No test results returned in {label}")
 
     def test_param_set(self, params: list[str], nodenorm, label: str = "") -> Iterator[TestResult]:
-        """Override this to implement the assertion. Called once per param_set."""
+        """Override this to implement the assertion. Called once per param_set.
+
+        :param params: A single param_set — one element of the outer param_sets list.
+                       See github_issues_test_cases.py for the full terminology.
+        """
         raise NotImplementedError
 
     def resolved_message(self, curie: str, result: dict, nodenorm) -> str:
@@ -125,7 +137,11 @@ class NameResTest(AssertionHandler):
 
     def test_param_set(self, params: list[str], nodenorm, nameres,
                        pass_if_found_in_top: int, label: str = "") -> Iterator[TestResult]:
-        """Override this to implement the assertion. Called once per param_set."""
+        """Override this to implement the assertion. Called once per param_set.
+
+        :param params: A single param_set — one element of the outer param_sets list.
+                       See github_issues_test_cases.py for the full terminology.
+        """
         raise NotImplementedError
 
 

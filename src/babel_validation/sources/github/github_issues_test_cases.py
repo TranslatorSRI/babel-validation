@@ -1,3 +1,28 @@
+"""
+Parse and evaluate BabelTest assertions embedded in GitHub issue bodies.
+
+Terminology
+-----------
+assertion   — The name of the test type, e.g. "Resolves" or "ResolvesWith".
+              Case-insensitive. Maps to a key in ASSERTION_HANDLERS.
+
+param_set   — One set of parameters for a single invocation of an assertion.
+              Represented as a list of strings. Each Wiki-syntax line produces
+              exactly one param_set; each entry under a YAML assertion key
+              produces one param_set.
+
+              Often the first element is "special" (e.g. an expected label or
+              Biolink type) and the remaining elements are CURIEs to test,
+              but the interpretation is assertion-specific.
+              Example: ["CHEBI:15365", "PUBCHEM.COMPOUND:1"]
+
+param_sets  — The full list of param_sets for one assertion in one issue.
+              A list of lists (list[list[str]]). YAML syntax allows many
+              param_sets for one assertion type in a single block.
+              Example: [["CHEBI:15365", "PUBCHEM.COMPOUND:1"],
+                        ["MONDO:0005015", "DOID:9351"]]
+"""
+
 import json
 import logging
 import re
@@ -15,7 +40,17 @@ from src.babel_validation.services.nodenorm import CachedNodeNorm
 
 
 class GitHubIssueTest:
+    """Represents one assertion extracted from a GitHub issue body — an assertion name paired with a list of param_sets to evaluate."""
+
     def __init__(self, github_issue_id: str, github_issue: Issue.Issue, assertion: str, param_sets: list[list[str]] = None):
+        """
+        :param github_issue_id: Human-readable issue identifier, e.g. "org/repo#42".
+        :param github_issue: The PyGitHub Issue object this test was extracted from.
+        :param assertion: The assertion name (case-insensitive), e.g. "Resolves" or "HasLabel".
+                          Must match a key in ASSERTION_HANDLERS.
+        :param param_sets: A list of param_sets (list[list[str]]) to evaluate for this assertion.
+                           Each inner list is one param_set — see module docstring for details.
+        """
         self.github_issue = github_issue
         self.assertion = assertion
         if param_sets is None:
@@ -127,6 +162,8 @@ class GitHubIssuesTestCases:
                 if len(params) < 2:
                     raise ValueError(f"Too few parameters found in BabelTest in issue {github_issue_id}: {match}")
                 else:
+                    # Wiki syntax: params[0] is the assertion name; params[1:] form a single
+                    # param_set, so param_sets is a one-element list: [params[1:]].
                     testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
 
         babeltest_yaml_matches = re.findall(self.babeltest_yaml_pattern, github_issue.body)
@@ -142,6 +179,8 @@ class GitHubIssuesTestCases:
                 yaml_dict = yaml.safe_load(match)
 
                 for assertion, original_param_sets in yaml_dict['babel_tests'].items():
+                    # YAML syntax: each entry under an assertion key becomes one param_set.
+                    # A bare string becomes a single-element param_set; a list is used as-is.
                     param_sets = []
                     for param_set in original_param_sets:
                         if isinstance(param_set, str):

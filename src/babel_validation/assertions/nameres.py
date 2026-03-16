@@ -26,6 +26,7 @@ class SearchByNameHandler(NameResTest):
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        nameres: CachedNameRes, pass_if_found_in_top: int = 5,
                        label: str = "") -> Iterator[TestResult]:
+        # params[0] is the search query string; params[1] is the expected CURIE.
         if len(params) < 2:
             yield self.failed(f"Two parameters expected for SearchByName in {label}, but params = {params}")
             return

@@ -161,6 +161,7 @@ class HasLabelHandler(NodeNormTest):
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
+        # params[0] is the CURIE to resolve; params[1] is the expected label string.
         if len(params) < 2:
             yield self.failed(
                 f"HasLabel requires two parameters (CURIE, expected label) in {label}, "
@@ -209,6 +210,8 @@ class ResolvesWithTypeHandler(NodeNormTest):
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
+        # params[0] is the expected Biolink type (e.g. "biolink:Gene");
+        # params[1:] are the CURIEs that must resolve with that type.
         if len(params) < 2:
             yield self.failed(f"Too few parameters provided in param_set in {label}: {params}")
             return

@@ -41,6 +41,19 @@ babel_tests:
 
 Assertion names are case-insensitive.
 
+## Param Sets
+
+Each assertion can be invoked with one or more **param sets** — independent groups of
+parameters that are each evaluated separately.
+
+- **Wiki syntax** — each `{{BabelTest|...}}` line is one param set.
+- **YAML syntax** — each list entry under an assertion key is one param set; a bare string
+  is a single-element param set, a YAML list is a multi-element param set.
+
+The meaning of each element in a param set depends on the assertion type (see below).
+For most assertions the elements are CURIEs; for `HasLabel` the second element is a
+label string; for `ResolvesWithType` the first element is a Biolink type.
+
 ---
 """
 
