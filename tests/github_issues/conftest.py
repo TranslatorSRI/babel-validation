@@ -1,3 +1,4 @@
+import configparser
 import json
 import os
 import tempfile
@@ -12,12 +13,13 @@ from src.babel_validation.sources.github.github_issues_test_cases import GitHubI
 
 dotenv.load_dotenv()
 _github_token = os.getenv('GITHUB_TOKEN')
+
+_targets_config = configparser.ConfigParser()
+_targets_config.read(Path(__file__).parent.parent / 'targets.ini')
 _repos = [
-    'NCATSTranslator/Babel',
-    'NCATSTranslator/NodeNormalization',
-    'NCATSTranslator/NameResolution',
-    'TranslatorSRI/babel-validation',
-    'TranslatorSRI/babel-explorer',
+    r.strip()
+    for r in _targets_config['DEFAULT']['Repositories'].splitlines()
+    if r.strip()
 ]
 github_issues_test_cases = None
 
