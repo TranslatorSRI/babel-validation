@@ -109,3 +109,46 @@ class TestMalformedYaml:
         mock = _mock_issue(self.MALFORMED_BODY)
         with pytest.raises(yaml.YAMLError):
             github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+
+
+@pytest.mark.unit
+class TestEmptyOrNullBabelTests:
+    """Documents behaviour when issue bodies contain empty or null babel test content."""
+
+    # --- empty/null body (already handled gracefully) ---
+
+    def test_none_body_returns_empty(self, github_issues_test_cases_fixture):
+        mock = _mock_issue(None)
+        assert github_issues_test_cases_fixture.get_test_issues_from_issue(mock) == []
+
+    def test_whitespace_body_returns_empty(self, github_issues_test_cases_fixture):
+        mock = _mock_issue("   ")
+        assert github_issues_test_cases_fixture.get_test_issues_from_issue(mock) == []
+
+    # --- wiki syntax: assertion name only, no curie params ---
+
+    def test_wiki_no_curie_params_raises(self, github_issues_test_cases_fixture):
+        mock = _mock_issue("{{BabelTest|Resolves}}")
+        with pytest.raises(ValueError, match="Too few parameters"):
+            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+
+    # --- YAML syntax: null / empty values ---
+
+    def test_yaml_null_babel_tests_raises(self, github_issues_test_cases_fixture):
+        # babel_tests: null → AttributeError calling .items() on None
+        mock = _mock_issue("```yaml\nbabel_tests:\n\n```")
+        with pytest.raises((AttributeError, TypeError)):
+            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+
+    def test_yaml_null_assertion_params_raises(self, github_issues_test_cases_fixture):
+        # Resolves: null → TypeError iterating over None
+        mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n```")
+        with pytest.raises(TypeError):
+            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+
+    def test_yaml_empty_assertion_params(self, github_issues_test_cases_fixture):
+        # Resolves: [] → GitHubIssueTest with empty param_sets (no crash)
+        mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves: []\n```")
+        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].param_sets == []
