@@ -54,7 +54,8 @@ def load_blocklist_from_gsheet():
     google_sheet_id = '1UR2eplHBvFRwaSIVOhlB44wpfNPY1z7AVzUkqzDqIWA'
     csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
 
-    response = requests.get(csv_url)
+    response = requests.get(csv_url, timeout=10)
+    response.raise_for_status()
     csv_content = response.text
 
     rows = []
