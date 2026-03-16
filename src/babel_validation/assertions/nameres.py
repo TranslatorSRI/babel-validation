@@ -30,8 +30,14 @@ class SearchByNameHandler(NameResTest):
         if len(params) < 2:
             yield self.failed(f"Two parameters expected for SearchByName in {label}, but params = {params}")
             return
+        elif len(params) > 2:
+            yield self.failed(
+                f"SearchByName requires exactly two parameters (search query, expected CURIE) in {label}, "
+                f"but got {len(params)}: {params}"
+            )
+            return
 
-        [search_query, expected_curie_from_test, *_] = params
+        [search_query, expected_curie_from_test] = params
         expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test, drug_chemical_conflate='true')
         if not expected_curie_result:
             yield self.failed(f"Unable to normalize CURIE {expected_curie_from_test} in {label}")

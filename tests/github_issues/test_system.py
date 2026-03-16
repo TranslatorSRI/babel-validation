@@ -3,6 +3,8 @@
 from unittest.mock import MagicMock
 import pytest
 
+from src.babel_validation.core.testrow import TestStatus
+
 pytestmark = pytest.mark.unit
 
 INVALID_NAME = "NotARealAssertion"
@@ -61,3 +63,36 @@ class TestInvalidAssertionNameDetection:
         tests = github_issues_test_cases_fixture.get_test_issues_from_issue(self._yaml_issue())
         with pytest.raises(ValueError, match="Unknown assertion type"):
             list(tests[0].test_with_nameres(None, None))
+
+
+@pytest.mark.unit
+class TestTooManyParams:
+    """Extra params for fixed-arity assertions should yield a failed result, not silently pass."""
+
+    def _results(self, fixture, wiki_syntax, service="nodenorm"):
+        mock = _mock_issue(wiki_syntax)
+        tests = fixture.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        if service == "nodenorm":
+            return list(tests[0].test_with_nodenorm(MagicMock()))
+        else:
+            return list(tests[0].test_with_nameres(None, None))
+
+    def test_haslabel_too_many_params(self, github_issues_test_cases_fixture):
+        results = self._results(
+            github_issues_test_cases_fixture,
+            "{{BabelTest|HasLabel|CHEBI:15365|aspirin|unexpected}}"
+        )
+        assert len(results) == 1
+        assert results[0].status == TestStatus.Failed
+        assert "exactly two" in results[0].message
+
+    def test_searchbyname_too_many_params(self, github_issues_test_cases_fixture):
+        results = self._results(
+            github_issues_test_cases_fixture,
+            "{{BabelTest|SearchByName|water|CHEBI:15377|unexpected}}",
+            service="nameres"
+        )
+        assert len(results) == 1
+        assert results[0].status == TestStatus.Failed
+        assert "exactly two" in results[0].message

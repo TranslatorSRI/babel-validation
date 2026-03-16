@@ -168,6 +168,12 @@ class HasLabelHandler(NodeNormTest):
                 f"but got: {params}"
             )
             return
+        elif len(params) > 2:
+            yield self.failed(
+                f"HasLabel requires exactly two parameters (CURIE, expected label) in {label}, "
+                f"but got {len(params)}: {params}"
+            )
+            return
 
         curie = params[0]
         expected_label = params[1].strip()
