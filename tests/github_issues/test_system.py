@@ -1,6 +1,6 @@
 """System tests for BabelTest trigger detection in GitHub issue bodies."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
@@ -152,3 +152,78 @@ class TestEmptyOrNullBabelTests:
         tests = github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
         assert len(tests) == 1
         assert tests[0].param_sets == []
+
+
+@pytest.mark.unit
+class TestIssueHasTests:
+    """Documents issue_has_tests() behaviour for various body contents."""
+
+    def test_none_body_returns_false(self, github_issues_test_cases_fixture):
+        assert github_issues_test_cases_fixture.issue_has_tests(_mock_issue(None)) is False
+
+    def test_whitespace_body_returns_false(self, github_issues_test_cases_fixture):
+        assert github_issues_test_cases_fixture.issue_has_tests(_mock_issue("   ")) is False
+
+    def test_wiki_syntax_detected(self, github_issues_test_cases_fixture):
+        assert github_issues_test_cases_fixture.issue_has_tests(
+            _mock_issue("{{BabelTest|Resolves|CHEBI:12345}}")
+        ) is True
+
+    def test_yaml_syntax_detected(self, github_issues_test_cases_fixture):
+        assert github_issues_test_cases_fixture.issue_has_tests(
+            _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```")
+        ) is True
+
+    def test_plain_text_not_detected(self, github_issues_test_cases_fixture):
+        assert github_issues_test_cases_fixture.issue_has_tests(
+            _mock_issue("Just some text without babel tests.")
+        ) is False
+
+
+@pytest.mark.unit
+class TestGetIssuesWithTests:
+    """Documents the search-API path of get_issues_with_tests()."""
+
+    _REPOS = ["test-org/test-repo"]
+
+    def test_no_results_yields_nothing(self, github_issues_test_cases_fixture):
+        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+                          return_value=[]):
+            results = list(
+                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+            )
+        assert results == []
+
+    def test_matching_issue_is_yielded(self, github_issues_test_cases_fixture):
+        mock = _mock_issue("{{BabelTest|Resolves|CHEBI:12345}}", number=1)
+        # Two keyword searches per repo; first returns our issue, second returns nothing.
+        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+                          side_effect=[[mock], []]):
+            results = list(
+                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+            )
+        assert results == [mock]
+
+    def test_duplicate_across_keywords_deduplicated(self, github_issues_test_cases_fixture):
+        # Issue contains both syntaxes → appears in both keyword searches → yielded once.
+        body = (
+            "{{BabelTest|Resolves|CHEBI:12345}}\n"
+            "```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```"
+        )
+        mock = _mock_issue(body, number=42)
+        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+                          side_effect=[[mock], [mock]]):
+            results = list(
+                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+            )
+        assert results == [mock]
+
+    def test_search_false_positive_filtered(self, github_issues_test_cases_fixture):
+        # GitHub returns an issue that mentions the keyword in prose (no real BabelTest block).
+        mock = _mock_issue("This issue discusses babel_tests: in passing.", number=99)
+        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+                          side_effect=[[mock], []]):
+            results = list(
+                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+            )
+        assert results == []
