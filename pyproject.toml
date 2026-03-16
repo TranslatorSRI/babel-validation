@@ -21,3 +21,9 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/TranslatorSRI/babel-validation"
+
+[tool.pytest.ini_options]
+timeout = 300
+markers = [
+    "unit: unit tests that do not require network access",
+]
