@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock
 import pytest
+import yaml
 
 from src.babel_validation.core.testrow import TestStatus
 
@@ -96,3 +97,15 @@ class TestTooManyParams:
         assert len(results) == 1
         assert results[0].status == TestStatus.Failed
         assert "exactly two" in results[0].message
+
+
+@pytest.mark.unit
+class TestMalformedYaml:
+    """A YAML block that matches the detection regex but is not valid YAML raises yaml.YAMLError."""
+
+    MALFORMED_BODY = "```yaml\nbabel_tests:\n  Resolves:\n  - [unclosed bracket\n```"
+
+    def test_malformed_yaml_raises(self, github_issues_test_cases_fixture):
+        mock = _mock_issue(self.MALFORMED_BODY)
+        with pytest.raises(yaml.YAMLError):
+            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
