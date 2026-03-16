@@ -66,7 +66,7 @@ def pytest_addoption(parser):
         help="The categories of tests to exclude."
     )
 
-    # The issue option is only used by
+    # Only test particular GitHub issues.
     parser.addoption(
         '--issue',
         default=[],
