@@ -45,7 +45,7 @@ requires-dist = [
     { name = "filelock" },
     { name = "openapi-spec-validator", specifier = ">=0.7.2" },
     { name = "pygithub", specifier = ">=2.8.1" },
-    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "pytest-xdist", extras = ["psutil"] },
     { name = "python-dotenv", specifier = ">=0.9.9" },
