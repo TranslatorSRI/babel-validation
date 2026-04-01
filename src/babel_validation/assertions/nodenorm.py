@@ -93,7 +93,7 @@ class ResolvesWithHandler(NodeNormTest):
             else:
                 yield self.failed(
                     f"Resolved {curie} to {result['id']['identifier']} "
-                    f"({result['type'][0]}, \"{result['id']['label']}\"), but expected "
+                    f"({result['type'][0]}, \"{result['id'].get('label', '')}\"), but expected "
                     f"{canonical_id} "
                     f"({first_good['type'][0]}, \"{first_good['id']['label']}\") on {nodenorm}"
                 )
