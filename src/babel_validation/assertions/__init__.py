@@ -74,8 +74,8 @@ class NodeNormTest(AssertionHandler):
         if not param_sets:
             yield self.failed(f"No parameters provided in {label}")
             return
-        # warm the cache only for params that are CURIEs
-        nodenorm.normalize_curies([p for params in param_sets for p in self.curie_params(params)])
+        # warm the cache only for params that are CURIEs (deduplicated)
+        nodenorm.normalize_curies(list({p for params in param_sets for p in self.curie_params(params)}))
         found = False
         for index, params in enumerate(param_sets):
             if not params:

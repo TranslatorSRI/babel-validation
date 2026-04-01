@@ -6,7 +6,8 @@ import requests
 cached_nameres_by_url = {}
 
 class CachedNameRes:
-    # TODO: actually cache once we've implemented a param-based cache.
+    # Note: caching ignores extra **params (e.g. autocomplete, limit), so callers should use
+    # a consistent set of params or call delete_query() to invalidate before changing params.
     def __init__(self, nameres_url: str):
         self.nameres_url = nameres_url
         self.logger = logging.getLogger(str(self))

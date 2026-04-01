@@ -33,35 +33,35 @@ class TestInvalidAssertionNameDetection:
 
     # --- parsing: invalid names are extracted, not rejected ---
 
-    def test_wiki_syntax_parses_invalid_name(self, github_issues_test_cases_fixture):
-        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(self._wiki_issue())
+    def test_wiki_syntax_parses_invalid_name(self, github_issues_test_cases):
+        tests = github_issues_test_cases.get_test_issues_from_issue(self._wiki_issue())
         assert len(tests) == 1
         assert tests[0].assertion == INVALID_NAME
 
-    def test_yaml_syntax_parses_invalid_name(self, github_issues_test_cases_fixture):
-        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(self._yaml_issue())
+    def test_yaml_syntax_parses_invalid_name(self, github_issues_test_cases):
+        tests = github_issues_test_cases.get_test_issues_from_issue(self._yaml_issue())
         assert len(tests) == 1
         assert tests[0].assertion == INVALID_NAME
 
     # --- execution: invalid names raise ValueError before any service call ---
 
-    def test_wiki_invalid_name_raises_on_nodenorm(self, github_issues_test_cases_fixture):
-        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(self._wiki_issue())
+    def test_wiki_invalid_name_raises_on_nodenorm(self, github_issues_test_cases):
+        tests = github_issues_test_cases.get_test_issues_from_issue(self._wiki_issue())
         with pytest.raises(ValueError, match="Unknown assertion type"):
             list(tests[0].test_with_nodenorm(None))
 
-    def test_wiki_invalid_name_raises_on_nameres(self, github_issues_test_cases_fixture):
-        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(self._wiki_issue())
+    def test_wiki_invalid_name_raises_on_nameres(self, github_issues_test_cases):
+        tests = github_issues_test_cases.get_test_issues_from_issue(self._wiki_issue())
         with pytest.raises(ValueError, match="Unknown assertion type"):
             list(tests[0].test_with_nameres(None, None))
 
-    def test_yaml_invalid_name_raises_on_nodenorm(self, github_issues_test_cases_fixture):
-        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(self._yaml_issue())
+    def test_yaml_invalid_name_raises_on_nodenorm(self, github_issues_test_cases):
+        tests = github_issues_test_cases.get_test_issues_from_issue(self._yaml_issue())
         with pytest.raises(ValueError, match="Unknown assertion type"):
             list(tests[0].test_with_nodenorm(None))
 
-    def test_yaml_invalid_name_raises_on_nameres(self, github_issues_test_cases_fixture):
-        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(self._yaml_issue())
+    def test_yaml_invalid_name_raises_on_nameres(self, github_issues_test_cases):
+        tests = github_issues_test_cases.get_test_issues_from_issue(self._yaml_issue())
         with pytest.raises(ValueError, match="Unknown assertion type"):
             list(tests[0].test_with_nameres(None, None))
 
@@ -79,18 +79,18 @@ class TestTooManyParams:
         else:
             return list(tests[0].test_with_nameres(None, None))
 
-    def test_haslabel_too_many_params(self, github_issues_test_cases_fixture):
+    def test_haslabel_too_many_params(self, github_issues_test_cases):
         results = self._results(
-            github_issues_test_cases_fixture,
+            github_issues_test_cases,
             "{{BabelTest|HasLabel|CHEBI:15365|aspirin|unexpected}}"
         )
         assert len(results) == 1
         assert results[0].status == TestStatus.Failed
         assert "exactly two" in results[0].message
 
-    def test_searchbyname_too_many_params(self, github_issues_test_cases_fixture):
+    def test_searchbyname_too_many_params(self, github_issues_test_cases):
         results = self._results(
-            github_issues_test_cases_fixture,
+            github_issues_test_cases,
             "{{BabelTest|SearchByName|water|CHEBI:15377|unexpected}}",
             service="nameres"
         )
@@ -105,10 +105,10 @@ class TestMalformedYaml:
 
     MALFORMED_BODY = "```yaml\nbabel_tests:\n  Resolves:\n  - [unclosed bracket\n```"
 
-    def test_malformed_yaml_raises(self, github_issues_test_cases_fixture):
+    def test_malformed_yaml_raises(self, github_issues_test_cases):
         mock = _mock_issue(self.MALFORMED_BODY)
         with pytest.raises(yaml.YAMLError):
-            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+            github_issues_test_cases.get_test_issues_from_issue(mock)
 
 
 @pytest.mark.unit
@@ -117,39 +117,39 @@ class TestEmptyOrNullBabelTests:
 
     # --- empty/null body (already handled gracefully) ---
 
-    def test_none_body_returns_empty(self, github_issues_test_cases_fixture):
+    def test_none_body_returns_empty(self, github_issues_test_cases):
         mock = _mock_issue(None)
-        assert github_issues_test_cases_fixture.get_test_issues_from_issue(mock) == []
+        assert github_issues_test_cases.get_test_issues_from_issue(mock) == []
 
-    def test_whitespace_body_returns_empty(self, github_issues_test_cases_fixture):
+    def test_whitespace_body_returns_empty(self, github_issues_test_cases):
         mock = _mock_issue("   ")
-        assert github_issues_test_cases_fixture.get_test_issues_from_issue(mock) == []
+        assert github_issues_test_cases.get_test_issues_from_issue(mock) == []
 
     # --- wiki syntax: assertion name only, no curie params ---
 
-    def test_wiki_no_curie_params_raises(self, github_issues_test_cases_fixture):
+    def test_wiki_no_curie_params_raises(self, github_issues_test_cases):
         mock = _mock_issue("{{BabelTest|Resolves}}")
         with pytest.raises(ValueError, match="Too few parameters"):
-            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+            github_issues_test_cases.get_test_issues_from_issue(mock)
 
     # --- YAML syntax: null / empty values ---
 
-    def test_yaml_null_babel_tests_raises(self, github_issues_test_cases_fixture):
+    def test_yaml_null_babel_tests_raises(self, github_issues_test_cases):
         # babel_tests: null → AttributeError calling .items() on None
         mock = _mock_issue("```yaml\nbabel_tests:\n\n```")
         with pytest.raises((AttributeError, TypeError)):
-            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+            github_issues_test_cases.get_test_issues_from_issue(mock)
 
-    def test_yaml_null_assertion_params_raises(self, github_issues_test_cases_fixture):
+    def test_yaml_null_assertion_params_raises(self, github_issues_test_cases):
         # Resolves: null → TypeError iterating over None
         mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n```")
         with pytest.raises(TypeError):
-            github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+            github_issues_test_cases.get_test_issues_from_issue(mock)
 
-    def test_yaml_empty_assertion_params(self, github_issues_test_cases_fixture):
+    def test_yaml_empty_assertion_params(self, github_issues_test_cases):
         # Resolves: [] → GitHubIssueTest with empty param_sets (no crash)
         mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves: []\n```")
-        tests = github_issues_test_cases_fixture.get_test_issues_from_issue(mock)
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
         assert len(tests) == 1
         assert tests[0].param_sets == []
 
@@ -158,24 +158,24 @@ class TestEmptyOrNullBabelTests:
 class TestIssueHasTests:
     """Documents issue_has_tests() behaviour for various body contents."""
 
-    def test_none_body_returns_false(self, github_issues_test_cases_fixture):
-        assert github_issues_test_cases_fixture.issue_has_tests(_mock_issue(None)) is False
+    def test_none_body_returns_false(self, github_issues_test_cases):
+        assert github_issues_test_cases.issue_has_tests(_mock_issue(None)) is False
 
-    def test_whitespace_body_returns_false(self, github_issues_test_cases_fixture):
-        assert github_issues_test_cases_fixture.issue_has_tests(_mock_issue("   ")) is False
+    def test_whitespace_body_returns_false(self, github_issues_test_cases):
+        assert github_issues_test_cases.issue_has_tests(_mock_issue("   ")) is False
 
-    def test_wiki_syntax_detected(self, github_issues_test_cases_fixture):
-        assert github_issues_test_cases_fixture.issue_has_tests(
+    def test_wiki_syntax_detected(self, github_issues_test_cases):
+        assert github_issues_test_cases.issue_has_tests(
             _mock_issue("{{BabelTest|Resolves|CHEBI:12345}}")
         ) is True
 
-    def test_yaml_syntax_detected(self, github_issues_test_cases_fixture):
-        assert github_issues_test_cases_fixture.issue_has_tests(
+    def test_yaml_syntax_detected(self, github_issues_test_cases):
+        assert github_issues_test_cases.issue_has_tests(
             _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```")
         ) is True
 
-    def test_plain_text_not_detected(self, github_issues_test_cases_fixture):
-        assert github_issues_test_cases_fixture.issue_has_tests(
+    def test_plain_text_not_detected(self, github_issues_test_cases):
+        assert github_issues_test_cases.issue_has_tests(
             _mock_issue("Just some text without babel tests.")
         ) is False
 
@@ -186,44 +186,44 @@ class TestGetIssuesWithTests:
 
     _REPOS = ["test-org/test-repo"]
 
-    def test_no_results_yields_nothing(self, github_issues_test_cases_fixture):
-        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+    def test_no_results_yields_nothing(self, github_issues_test_cases):
+        with patch.object(github_issues_test_cases.github, "search_issues",
                           return_value=[]):
             results = list(
-                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+                github_issues_test_cases.get_issues_with_tests(self._REPOS)
             )
         assert results == []
 
-    def test_matching_issue_is_yielded(self, github_issues_test_cases_fixture):
+    def test_matching_issue_is_yielded(self, github_issues_test_cases):
         mock = _mock_issue("{{BabelTest|Resolves|CHEBI:12345}}", number=1)
         # Two keyword searches per repo; first returns our issue, second returns nothing.
-        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+        with patch.object(github_issues_test_cases.github, "search_issues",
                           side_effect=[[mock], []]):
             results = list(
-                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+                github_issues_test_cases.get_issues_with_tests(self._REPOS)
             )
         assert results == [mock]
 
-    def test_duplicate_across_keywords_deduplicated(self, github_issues_test_cases_fixture):
+    def test_duplicate_across_keywords_deduplicated(self, github_issues_test_cases):
         # Issue contains both syntaxes → appears in both keyword searches → yielded once.
         body = (
             "{{BabelTest|Resolves|CHEBI:12345}}\n"
             "```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```"
         )
         mock = _mock_issue(body, number=42)
-        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+        with patch.object(github_issues_test_cases.github, "search_issues",
                           side_effect=[[mock], [mock]]):
             results = list(
-                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+                github_issues_test_cases.get_issues_with_tests(self._REPOS)
             )
         assert results == [mock]
 
-    def test_search_false_positive_filtered(self, github_issues_test_cases_fixture):
+    def test_search_false_positive_filtered(self, github_issues_test_cases):
         # GitHub returns an issue that mentions the keyword in prose (no real BabelTest block).
         mock = _mock_issue("This issue discusses babel_tests: in passing.", number=99)
-        with patch.object(github_issues_test_cases_fixture.github, "search_issues",
+        with patch.object(github_issues_test_cases.github, "search_issues",
                           side_effect=[[mock], []]):
             results = list(
-                github_issues_test_cases_fixture.get_issues_with_tests(self._REPOS)
+                github_issues_test_cases.get_issues_with_tests(self._REPOS)
             )
         assert results == []

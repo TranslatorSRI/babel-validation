@@ -21,7 +21,7 @@ _repos = [
     for r in _targets_config['DEFAULT']['Repositories'].splitlines()
     if r.strip()
 ]
-github_issues_test_cases = None
+_github_issues_test_cases = None
 
 _CACHE_FILE = Path(tempfile.gettempdir()) / "babel_validation_issues_cache.json"
 _LOCK_FILE = _CACHE_FILE.with_suffix(".lock")
@@ -32,16 +32,16 @@ _fetched_issues_cache: dict[str, Issue.Issue] = {}
 
 def _get_github_issues_test_cases() -> GitHubIssuesTestCases:
     """Lazily construct GitHubIssuesTestCases, skipping tests if no token is available."""
-    global github_issues_test_cases
-    if github_issues_test_cases is not None:
-        return github_issues_test_cases
+    global _github_issues_test_cases
+    if _github_issues_test_cases is not None:
+        return _github_issues_test_cases
     if not _github_token:
         pytest.skip(
             "GITHUB_TOKEN environment variable not set; skipping GitHub issues tests.",
             allow_module_level=True,
         )
-    github_issues_test_cases = GitHubIssuesTestCases(_github_token, _repos)
-    return github_issues_test_cases
+    _github_issues_test_cases = GitHubIssuesTestCases(_github_token, _repos)
+    return _github_issues_test_cases
 
 
 def _issue_id(issue: Issue.Issue) -> str:
@@ -89,5 +89,5 @@ def github_issue(github_issue_id):
 
 
 @pytest.fixture(scope="session")
-def github_issues_test_cases_fixture():
+def github_issues_test_cases():
     return _get_github_issues_test_cases()

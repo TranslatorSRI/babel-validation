@@ -9,10 +9,10 @@ from src.babel_validation.services.nodenorm import CachedNodeNorm
 from src.babel_validation.core.testrow import TestResult, TestStatus
 
 
-def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases_fixture, subtests):
+def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases, subtests):
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
     nameres = CachedNameRes.from_url(target_info['NameResURL'])
-    tests = github_issues_test_cases_fixture.get_test_issues_from_issue(github_issue)
+    tests = github_issues_test_cases.get_test_issues_from_issue(github_issue)
     if not tests:
         pytest.skip(f"No tests found in issue {github_issue}")
         return

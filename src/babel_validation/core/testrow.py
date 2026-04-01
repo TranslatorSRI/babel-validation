@@ -66,7 +66,6 @@ class TestStatus(Enum):
 class TestResult:
     status: TestStatus
     message: str = ""
-    github_issue_test: 'GitHubIssueTest' = None
 
     # Mark as not a test despite starting with Test*.
     __test__ = False

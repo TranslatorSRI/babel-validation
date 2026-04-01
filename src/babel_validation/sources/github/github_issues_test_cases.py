@@ -153,11 +153,7 @@ class GitHubIssuesTestCases:
                 self.logger.info(f"Found BabelTest in issue {github_issue_id}: {match}")
 
                 # Figure out parameters.
-                test_string = match
-                if test_string.startswith("{{BabelTest|"):
-                    test_string = test_string[12:]
-                if test_string.endswith("}}"):
-                    test_string = test_string[:-2]
+                test_string = match.removeprefix("{{BabelTest|").removesuffix("}}")
                 params = test_string.split("|")
                 if len(params) < 2:
                     raise ValueError(f"Too few parameters found in BabelTest in issue {github_issue_id}: {match}")
@@ -172,11 +168,7 @@ class GitHubIssuesTestCases:
                 self.logger.info(f"Found BabelTest YAML in issue {github_issue_id}: {match}")
 
                 # Parse string as YAML.
-                if match.startswith("```yaml"):
-                    match = match[7:]
-                if match.endswith("```"):
-                    match = match[:-3]
-                yaml_dict = yaml.safe_load(match)
+                yaml_dict = yaml.safe_load(match.removeprefix("```yaml").removesuffix("```"))
 
                 for assertion, original_param_sets in yaml_dict['babel_tests'].items():
                     # YAML syntax: each entry under an assertion key becomes one param_set.
