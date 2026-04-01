@@ -185,6 +185,12 @@ class HasLabelHandler(NodeNormTest):
             )
             return
 
+        if 'label' not in result['id']:
+            yield self.failed(
+                f"CURIE {curie} has no label but expected '{expected_label}' on {nodenorm}"
+            )
+            return
+
         actual_label = result['id']['label']
         if actual_label == expected_label:
             yield self.passed(
