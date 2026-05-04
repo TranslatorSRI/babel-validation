@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import click
+import requests
 import yaml
 
 from src.babel_validation.assertions import ASSERTION_HANDLERS
@@ -87,6 +88,60 @@ def read_csv(path: Path | str, delimiter: str | None = None) -> list[dict[str, s
 
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     return list(reader)
+
+
+def read_google_sheet(url: str) -> list[dict[str, str]]:
+    """Download a Google Sheet CSV-export URL and parse it as CSV rows.
+
+    Accepts any URL that returns CSV — typically the ``gviz/tq?tqx=out:csv``
+    export URL shown in a Google Sheet's *File → Share → Publish to web* dialog.
+    """
+    response = requests.get(url)
+    response.raise_for_status()
+    text = response.text
+    try:
+        delimiter = csv.Sniffer().sniff(text[:4096], delimiters=",\t;|").delimiter
+    except csv.Error:
+        delimiter = ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    return list(reader)
+
+
+def parse_yaml_blocks(source: Path | str) -> dict[str, list[BlockEntry]]:
+    """Parse a ``babel_tests:`` YAML block back into a ``{assertion: [BlockEntry]}`` map.
+
+    ``source`` may be a file path or ``'-'`` for stdin.  Each entry gets a
+    synthetic row index (1-based position within its assertion list) since
+    there is no originating CSV.
+    """
+    if str(source) == "-":
+        text = sys.stdin.read()
+    else:
+        text = Path(source).read_text(encoding="utf-8")
+
+    data = yaml.safe_load(text)
+    if not isinstance(data, dict) or "babel_tests" not in data:
+        raise click.ClickException(
+            "Input does not contain a top-level 'babel_tests:' key. "
+            "Expected YAML of the form:\n  babel_tests:\n    HasLabel:\n    - [CURIE, label]"
+        )
+    raw = data["babel_tests"]
+    if not isinstance(raw, dict):
+        raise click.ClickException("'babel_tests' value must be a mapping of assertion names to lists.")
+
+    blocks: dict[str, list[BlockEntry]] = {}
+    for assertion, entries in raw.items():
+        if not isinstance(entries, list):
+            raise click.ClickException(f"babel_tests.{assertion} must be a list.")
+        block: list[BlockEntry] = []
+        for idx, entry in enumerate(entries, start=1):
+            if isinstance(entry, list):
+                param_set = [str(v) for v in entry]
+            else:
+                param_set = [str(entry)]
+            block.append(BlockEntry(row_idx=idx, param_set=param_set))
+        blocks[assertion] = block
+    return blocks
 
 
 def build_blocks(
@@ -308,11 +363,30 @@ def load_nodenorm_url(target_name: str, targets_ini_path: Path) -> str:
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument(
     "input_csv",
-    type=click.Path(exists=True, dir_okay=False, allow_dash=True, path_type=Path),
+    required=False,
+    default=None,
+    type=click.Path(exists=False, dir_okay=False, allow_dash=True, path_type=Path),
 )
 @click.option(
-    "--curie-column", required=True,
-    help="Column name containing the primary CURIE.",
+    "--from-google-sheet", "google_sheet_url", default=None, metavar="URL",
+    help=(
+        "Download a Google Sheet CSV-export URL instead of reading a local file. "
+        "Use the 'File → Share → Publish to web' CSV URL, or any URL returning CSV. "
+        "Mutually exclusive with INPUT_CSV and --from-yaml."
+    ),
+)
+@click.option(
+    "--from-yaml", "from_yaml_path", default=None, metavar="FILE",
+    type=click.Path(exists=False, dir_okay=False, allow_dash=True, path_type=Path),
+    help=(
+        "Read an existing babel_tests: YAML block (file or '-' for stdin), validate "
+        "it against --target, and print a report. No YAML is written to stdout. "
+        "Requires --target. Mutually exclusive with INPUT_CSV and --from-google-sheet."
+    ),
+)
+@click.option(
+    "--curie-column", default=None,
+    help="Column name containing the primary CURIE. Required for CSV/sheet input.",
 )
 @click.option(
     "--label-column", default=None,
@@ -351,8 +425,10 @@ def load_nodenorm_url(target_name: str, targets_ini_path: Path) -> str:
               help="Optional comment line emitted above the YAML block "
                    "(useful for recording provenance).")
 def main(
-    input_csv: Path,
-    curie_column: str,
+    input_csv: Path | None,
+    google_sheet_url: str | None,
+    from_yaml_path: Path | None,
+    curie_column: str | None,
     label_column: str | None,
     type_column: str | None,
     equivalent_curie_column: str | None,
@@ -365,16 +441,52 @@ def main(
     fence: bool,
     header: str | None,
 ) -> None:
-    """Convert INPUT_CSV into a BabelTests YAML block on stdout."""
+    """Convert INPUT_CSV (or a Google Sheet) into a BabelTests YAML block on stdout.
 
-    # Default behavior for --resolves: emit Resolves only when the user
-    # didn't ask for any of the other assertion blocks.
-    if emit_resolves_flag is None:
-        emit_resolves = not (label_column or type_column or equivalent_curie_column)
+    Exactly one input source must be given: INPUT_CSV, --from-google-sheet, or
+    --from-yaml.  With --from-yaml the tool runs in *reverse mode*: it reads an
+    existing YAML block, validates it against --target, and prints a report to
+    stderr without writing any YAML to stdout.
+    """
+
+    # --- Validate mutually-exclusive input sources ---
+    input_sources = [s for s in (input_csv, google_sheet_url, from_yaml_path) if s is not None]
+    if len(input_sources) == 0:
+        raise click.UsageError(
+            "Provide exactly one input source: INPUT_CSV, --from-google-sheet URL, "
+            "or --from-yaml FILE."
+        )
+    if len(input_sources) > 1:
+        raise click.UsageError(
+            "INPUT_CSV, --from-google-sheet, and --from-yaml are mutually exclusive."
+        )
+
+    # --- Reverse mode: --from-yaml ---
+    if from_yaml_path is not None:
+        if not target:
+            raise click.UsageError("--from-yaml requires --target to run validation.")
+        blocks = parse_yaml_blocks(from_yaml_path)
+        ini_path = targets_ini or _default_targets_ini()
+        nodenorm_url = load_nodenorm_url(target, ini_path)
+        nodenorm = CachedNodeNorm.from_url(nodenorm_url)
+        results = validate_blocks(blocks, nodenorm)
+        click.echo(format_report(results, target, nodenorm_url), err=True)
+        return
+
+    # --- CSV / Google Sheet mode ---
+    if not curie_column:
+        raise click.UsageError("--curie-column is required for CSV and Google Sheet input.")
+
+    if google_sheet_url is not None:
+        try:
+            rows = read_google_sheet(google_sheet_url)
+        except requests.HTTPError as exc:
+            raise click.ClickException(f"Failed to download Google Sheet: {exc}") from exc
     else:
-        emit_resolves = emit_resolves_flag
+        if not Path(str(input_csv)).exists() and str(input_csv) != "-":
+            raise click.ClickException(f"File not found: {input_csv}")
+        rows = read_csv(input_csv, delimiter=delimiter)
 
-    rows = read_csv(input_csv, delimiter=delimiter)
     if rows and curie_column not in rows[0]:
         raise click.ClickException(
             f"--curie-column {curie_column!r} not found in CSV header. "
@@ -390,6 +502,13 @@ def main(
                 f"{col_label} {col_name!r} not found in CSV header. "
                 f"Available columns: {list(rows[0].keys())}"
             )
+
+    # Default behavior for --resolves: emit Resolves only when the user
+    # didn't ask for any of the other assertion blocks.
+    if emit_resolves_flag is None:
+        emit_resolves = not (label_column or type_column or equivalent_curie_column)
+    else:
+        emit_resolves = emit_resolves_flag
 
     blocks, warnings = build_blocks(
         rows,
