@@ -9,6 +9,7 @@ requires-python = ">=3.11"
 # services/service_checks.py and sources/google_sheets/google_sheet_test_cases.py both do, so an
 # installed copy without it would fail on import.
 dependencies = [
+    "click>=8.1",
     "pyyaml>=6.0",
     "requests>=2.32.5",
     "filelock",
@@ -34,6 +35,9 @@ dev = [
 
 [project.urls]
 Repository = "https://github.com/TranslatorSRI/babel-validation"
+
+[project.scripts]
+csv-to-babeltests = "babel_validation.tools.csv_to_babeltests:main"
 
 [build-system]
 requires = ["hatchling"]

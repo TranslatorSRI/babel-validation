@@ -25,6 +25,7 @@ name = "babel-validation"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "filelock" },
     { name = "pygithub" },
     { name = "pytest" },
@@ -46,6 +47,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.1" },
     { name = "filelock" },
     { name = "pygithub", specifier = ">=2.8.1" },
     { name = "pytest", specifier = ">=9.0.2" },
