@@ -38,10 +38,16 @@ def pytest_configure(config):
                 os.unlink(f)
             except FileNotFoundError:
                 pass
-        try:
-            os.unlink(os.path.join(tempfile.gettempdir(), 'babel_validation_issues_cache.json'))
-        except FileNotFoundError:
-            pass
+            try:
+                os.unlink(f + '.lock')
+            except FileNotFoundError:
+                pass
+        tmpdir = tempfile.gettempdir()
+        for name in ('babel_validation_issues_cache.json', 'babel_validation_issues_cache.lock'):
+            try:
+                os.unlink(os.path.join(tmpdir, name))
+            except FileNotFoundError:
+                pass
 
 
 def pytest_addoption(parser):
@@ -148,7 +154,7 @@ def test_category(request):
 
     return category_test
 
-# Issue is only used by the GitHub issue tests (tests/github_issues/*)
+# --issue is consumed by tests/github_issues/conftest.py; this fixture exposes it to any test that wants it.
 @pytest.fixture
 def selected_github_issues(pytestconfig):
     return pytestconfig.getoption('issue')
