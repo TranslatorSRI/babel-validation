@@ -155,12 +155,12 @@ class GitHubIssuesTestCases:
                 # Figure out parameters.
                 test_string = match.removeprefix("{{BabelTest|").removesuffix("}}")
                 params = test_string.split("|")
-                if len(params) < 2:
-                    raise ValueError(f"Too few parameters found in BabelTest in issue {github_issue_id}: {match}")
-                else:
-                    # Wiki syntax: params[0] is the assertion name; params[1:] form a single
-                    # param_set, so param_sets is a one-element list: [params[1:]].
-                    testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
+                if not params or not params[0]:
+                    raise ValueError(f"Missing assertion name in BabelTest in issue {github_issue_id}: {match}")
+                # Wiki syntax: params[0] is the assertion name; params[1:] form a single
+                # param_set (may be empty for assertions like Needed), so param_sets is a
+                # one-element list: [params[1:]].
+                testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
 
         babeltest_yaml_matches = re.findall(self.babeltest_yaml_pattern, github_issue.body)
         if babeltest_yaml_matches:
@@ -202,16 +202,19 @@ class GitHubIssuesTestCases:
         from github import GithubException
         issues = []
         for issue_id in issue_ids:
+            found = False
             if m := re.match(r'^([^/]+)/([^#]+)#(\d+)$', issue_id):
                 # org/repo#N
                 issue = self.github.get_repo(f"{m.group(1)}/{m.group(2)}").get_issue(int(m.group(3)))
                 issues.append(issue)
+                found = True
             elif m := re.match(r'^([^/#]+)#(\d+)$', issue_id):
                 # repo#N — find repo in configured list
                 repo_name, num = m.group(1), int(m.group(2))
                 for full_repo in self.github_repositories:
                     if full_repo.split('/')[1] == repo_name:
                         issues.append(self.github.get_repo(full_repo).get_issue(num))
+                        found = True
                         break
             elif m := re.match(r'^(\d+)$', issue_id):
                 # N — try all configured repos
@@ -219,8 +222,12 @@ class GitHubIssuesTestCases:
                 for full_repo in self.github_repositories:
                     try:
                         issues.append(self.github.get_repo(full_repo).get_issue(num))
+                        found = True
                     except GithubException:
                         pass
+            if not found:
+                self.logger.warning("Could not resolve issue ID %r in configured repositories %s",
+                                    issue_id, self.github_repositories)
         return issues
 
     def get_issues_with_tests(self, github_repositories=None) -> Iterator[Issue.Issue]:

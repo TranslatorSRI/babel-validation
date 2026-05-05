@@ -127,10 +127,21 @@ class TestEmptyOrNullBabelTests:
 
     # --- wiki syntax: assertion name only, no curie params ---
 
-    def test_wiki_no_curie_params_raises(self, github_issues_test_cases):
+    def test_wiki_no_curie_params_parsed(self, github_issues_test_cases):
+        # {{BabelTest|Resolves}} with no params parses to an empty param_set, not a parse error.
         mock = _mock_issue("{{BabelTest|Resolves}}")
-        with pytest.raises(ValueError, match="Too few parameters"):
-            github_issues_test_cases.get_test_issues_from_issue(mock)
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].assertion == "Resolves"
+        assert tests[0].param_sets == [[]]
+
+    def test_wiki_needed_no_params(self, github_issues_test_cases):
+        # {{BabelTest|Needed}} with no extra params is valid per the documented wiki syntax.
+        mock = _mock_issue("{{BabelTest|Needed}}")
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].assertion == "Needed"
+        assert tests[0].param_sets == [[]]
 
     # --- YAML syntax: null / empty values ---
 
