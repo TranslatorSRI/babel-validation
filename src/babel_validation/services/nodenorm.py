@@ -38,7 +38,7 @@ class CachedNodeNorm:
             params['curies'] = list(curies_to_be_queried)
 
             self.logger.debug(f"Called NodeNorm {self} with params {params}")
-            response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=params)
+            response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=params, timeout=30)
             response.raise_for_status()
             result = response.json()
 

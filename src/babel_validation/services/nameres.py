@@ -26,7 +26,7 @@ class CachedNameRes:
         if not queries:
             raise ValueError(f"queries must not be empty when calling bulk_lookup({queries}, {params}) on {self}")
         if not isinstance(queries, list):
-            raise ValueError(f"queries must be a list when calling normalize_curies({queries}, {params}) on {self}")
+            raise ValueError(f"queries must be a list when calling bulk_lookup({queries}, {params}) on {self}")
 
         time_started = time.time_ns()
         queries_set = set(queries)
@@ -39,7 +39,7 @@ class CachedNameRes:
             params['strings'] = list(queries_to_be_queried)
 
             self.logger.debug(f"Called NameRes {self} with params {params}")
-            response = requests.post(self.nameres_url + "bulk-lookup", json=params)
+            response = requests.post(self.nameres_url + "bulk-lookup", json=params, timeout=30)
             response.raise_for_status()
             result = response.json()
 
@@ -61,7 +61,7 @@ class CachedNameRes:
         params['string'] = query
         self.logger.debug(f"Querying NameRes with params {params}")
 
-        response = requests.post(self.nameres_url + "lookup", params=params)
+        response = requests.post(self.nameres_url + "lookup", params=params, timeout=30)
         response.raise_for_status()
         result = response.json()
 
