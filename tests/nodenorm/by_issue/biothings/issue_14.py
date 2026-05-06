@@ -1,10 +1,17 @@
 # Test for https://github.com/biothings/NodeNormalizationAPI/issues/14
-# NodeNorm ES returns an error for this list of CURIEs.
-import requests
+# NodeNorm ES returns HTTP 500 when queried with conflate=False and
+# drug_chemical_conflate=True for a list that contains both CHEBI:17310 and
+# DRUGBANK:DB00058. Bisection confirmed this pair is the minimal reproducer;
+# neither CURIE fails on its own.
 import urllib.parse
 
+import pytest
+import requests
 
-CURIES = [
+# The two CURIEs that together trigger the 500 under drug_chemical_conflate=True.
+FAILING_PAIR = ["CHEBI:17310", "DRUGBANK:DB00058"]
+
+ALL_CURIES = [
     "PUBCHEM.COMPOUND:5288464", "CHEBI:18332", "CHEBI:29678", "UNII:EVS87XF13W",
     "CHEBI:134990", "CHEBI:4027", "CHEBI:65329", "CHEBI:33007", "CHEBI:27584",
     "CHEBI:7956", "CHEBI:33364", "CHEBI:28299", "MESH:C000717949", "CHEBI:65408",
@@ -72,28 +79,51 @@ CURIES = [
     "CHEBI:16480", "DRUGBANK:DB10575", "CHEBI:46345",
 ]
 
+REMAINING_CURIES = [c for c in ALL_CURIES if c not in FAILING_PAIR]
 
-def test_biothings_issue_14(target_info):
-    """
-    NodeNorm ES returns an error (not a valid JSON dict) when queried with this
-    specific list of ~300 CURIEs. The endpoint should return 200 with a dict
-    mapping each CURIE to its normalization result (or null).
-    """
-    nodenorm_url = target_info["NodeNormURL"]
+
+def _post(nodenorm_url, curies):
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
-
-    response = requests.post(url, json={"curies": CURIES, "conflate": False, "drug_chemical_conflate": True})
-    assert response.ok, (
-        f"POST {url} returned HTTP {response.status_code}: {response.text[:500]}"
+    return requests.post(
+        url,
+        json={"curies": curies, "conflate": False, "drug_chemical_conflate": True},
     )
 
+
+def _assert_ok(response, url, curies):
+    assert response.ok, (
+        f"POST {url} returned HTTP {response.status_code} for {curies}: "
+        f"{response.text[:500]}"
+    )
     result = response.json()
     assert isinstance(result, dict), (
-        f"Expected a dict response from {url}, got {type(result).__name__}: "
-        f"{str(result)[:500]}"
+        f"Expected a dict response, got {type(result).__name__}: {str(result)[:500]}"
     )
+    missing = [c for c in curies if c not in result]
+    assert not missing, f"{len(missing)} CURIEs missing from response: {missing}"
 
-    missing = [c for c in CURIES if c not in result]
-    assert not missing, (
-        f"{len(missing)} CURIEs missing from response: {missing[:20]}"
-    )
+
+def test_all_curies_except_failing_pair(target_info):
+    """All CURIEs from the original report, minus the known-bad pair, should succeed."""
+    nodenorm_url = target_info["NodeNormURL"]
+    url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
+    response = _post(nodenorm_url, REMAINING_CURIES)
+    _assert_ok(response, url, REMAINING_CURIES)
+
+
+@pytest.mark.xfail(strict=True, reason="CHEBI:17310 + DRUGBANK:DB00058 together cause HTTP 500 under drug_chemical_conflate=True (biothings/NodeNormalizationAPI#14)")
+def test_failing_pair(target_info):
+    """CHEBI:17310 and DRUGBANK:DB00058 together trigger HTTP 500 — minimal reproducer."""
+    nodenorm_url = target_info["NodeNormURL"]
+    url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
+    response = _post(nodenorm_url, FAILING_PAIR)
+    _assert_ok(response, url, FAILING_PAIR)
+
+
+@pytest.mark.parametrize("curie", ALL_CURIES)
+def test_individual_curie(target_info, curie):
+    """Every CURIE from the original report should succeed when queried on its own."""
+    nodenorm_url = target_info["NodeNormURL"]
+    url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
+    response = _post(nodenorm_url, [curie])
+    _assert_ok(response, url, [curie])
