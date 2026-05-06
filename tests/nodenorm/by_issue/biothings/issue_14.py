@@ -82,7 +82,7 @@ def test_biothings_issue_14(target_info):
     nodenorm_url = target_info["NodeNormURL"]
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
 
-    response = requests.post(url, json={"curies": CURIES})
+    response = requests.post(url, json={"curies": CURIES, "conflate": False, "drug_chemical_conflate": True})
     assert response.ok, (
         f"POST {url} returned HTTP {response.status_code}: {response.text[:500]}"
     )
