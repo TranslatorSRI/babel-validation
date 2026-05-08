@@ -170,7 +170,14 @@ class GitHubIssuesTestCases:
                 # Parse string as YAML.
                 yaml_dict = yaml.safe_load(match.removeprefix("```yaml").removesuffix("```"))
 
-                for assertion, original_param_sets in yaml_dict['babel_tests'].items():
+                babel_tests = yaml_dict.get('babel_tests') if isinstance(yaml_dict, dict) else None
+                if babel_tests is None:
+                    raise ValueError(
+                        f"YAML block in issue {github_issue_id} matched the detection pattern "
+                        f"but contains no 'babel_tests' top-level key: {match!r}"
+                    )
+
+                for assertion, original_param_sets in babel_tests.items():
                     # YAML syntax: each entry under an assertion key becomes one param_set.
                     # A bare string becomes a single-element param_set; a list is used as-is.
                     param_sets = []
@@ -199,7 +206,7 @@ class GitHubIssuesTestCases:
         - 'repo#N'      → search self.github_repositories for matching repo name
         - 'N'           → fetch #N from all configured repositories
         """
-        from github import GithubException
+        from github import UnknownObjectException
         issues = []
         for issue_id in issue_ids:
             found = False
@@ -217,13 +224,13 @@ class GitHubIssuesTestCases:
                         found = True
                         break
             elif m := re.match(r'^(\d+)$', issue_id):
-                # N — try all configured repos
+                # N — try all configured repos; skip repos that don't have this issue number.
                 num = int(m.group(1))
                 for full_repo in self.github_repositories:
                     try:
                         issues.append(self.github.get_repo(full_repo).get_issue(num))
                         found = True
-                    except GithubException:
+                    except UnknownObjectException:
                         pass
             if not found:
                 self.logger.warning("Could not resolve issue ID %r in configured repositories %s",
