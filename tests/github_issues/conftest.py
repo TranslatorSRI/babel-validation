@@ -11,8 +11,7 @@ from github import Issue
 
 from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
 
-dotenv.load_dotenv()
-_github_token = os.getenv('GITHUB_TOKEN')
+_github_token = None
 
 _targets_config = configparser.ConfigParser()
 _targets_config.read(Path(__file__).parent.parent / 'targets.ini')
@@ -32,9 +31,12 @@ _fetched_issues_cache: dict[str, Issue.Issue] = {}
 
 def _get_github_issues_test_cases() -> GitHubIssuesTestCases:
     """Lazily construct GitHubIssuesTestCases, skipping tests if no token is available."""
-    global _github_issues_test_cases
+    global _github_issues_test_cases, _github_token
     if _github_issues_test_cases is not None:
         return _github_issues_test_cases
+    if _github_token is None:
+        dotenv.load_dotenv()
+        _github_token = os.getenv('GITHUB_TOKEN') or ''
     if not _github_token:
         pytest.skip(
             "GITHUB_TOKEN environment variable not set; skipping GitHub issues tests.",

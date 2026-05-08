@@ -146,9 +146,9 @@ class TestEmptyOrNullBabelTests:
     # --- YAML syntax: null / empty values ---
 
     def test_yaml_null_babel_tests_raises(self, github_issues_test_cases):
-        # babel_tests: null → AttributeError calling .items() on None
+        # babel_tests: null → ValueError with a clear message (null yaml value has no .items())
         mock = _mock_issue("```yaml\nbabel_tests:\n\n```")
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValueError, match="no 'babel_tests' top-level key"):
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
     def test_yaml_null_assertion_params_raises(self, github_issues_test_cases):
