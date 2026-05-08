@@ -21,32 +21,33 @@ class CachedNodeNorm:
         return cached_node_norms_by_url[nodenorm_url]
 
     def normalize_curies(self, curies: list[str], **params) -> dict[str, dict]:
-        # TODO: eventually we'll need some way to cache the parameters along with the curie.
         if not curies:
             raise ValueError(f"curies must not be empty when calling normalize_curies({curies}, {params}) on {self}")
         if not isinstance(curies, list):
             raise ValueError(f"curies must be a list when calling normalize_curies({curies}, {params}) on {self}")
 
         time_started = time.time_ns()
+        params_key = frozenset(params.items())
         curies_set = set(curies)
-        cached_curies = curies_set & self.cache.keys()
+        cached_curies = {c for c in curies_set if (c, params_key) in self.cache}
         curies_to_be_queried = curies_set - cached_curies
 
         # Make query.
         result = {}
         if curies_to_be_queried:
-            params['curies'] = list(curies_to_be_queried)
+            api_params = dict(params)
+            api_params['curies'] = list(curies_to_be_queried)
 
-            self.logger.debug(f"Called NodeNorm {self} with params {params}")
-            response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=params, timeout=30)
+            self.logger.debug(f"Called NodeNorm {self} with params {api_params}")
+            response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=api_params, timeout=30)
             response.raise_for_status()
             result = response.json()
 
             for curie in curies_to_be_queried:
-                self.cache[curie] = result.get(curie, None)
+                self.cache[(curie, params_key)] = result.get(curie, None)
 
         for curie in cached_curies:
-            result[curie] = self.cache[curie]
+            result[curie] = self.cache[(curie, params_key)]
 
         time_taken_sec = (time.time_ns() - time_started) / 1E9
         self.logger.info(f"Normalizing {len(curies_to_be_queried)} CURIEs {curies_to_be_queried} (with {len(cached_curies)} CURIEs cached) with params {params} on {self} in {time_taken_sec:.3f}s")
@@ -54,11 +55,12 @@ class CachedNodeNorm:
         return result
 
     def normalize_curie(self, curie, **params):
-        if curie in self.cache:
-            return self.cache[curie]
+        cache_key = (curie, frozenset(params.items()))
+        if cache_key in self.cache:
+            return self.cache[cache_key]
         return self.normalize_curies([curie], **params)[curie]
 
     def clear_curie(self, curie):
-        # This will be needed if you need to call a CURIE with different parameters.
-        if curie in self.cache:
-            del self.cache[curie]
+        keys_to_delete = [k for k in self.cache if k[0] == curie]
+        for k in keys_to_delete:
+            del self.cache[k]

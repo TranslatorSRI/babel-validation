@@ -6,8 +6,6 @@ import requests
 cached_nameres_by_url = {}
 
 class CachedNameRes:
-    # Note: caching ignores extra **params (e.g. autocomplete, limit), so callers should use
-    # a consistent set of params or call delete_query() to invalidate before changing params.
     def __init__(self, nameres_url: str):
         self.nameres_url = nameres_url
         self.logger = logging.getLogger(str(self))
@@ -55,19 +53,22 @@ class CachedNameRes:
         return result
 
     def lookup(self, query, **params):
-        if query in self.cache:
-            return self.cache[query]
+        cache_key = (query, frozenset(params.items()))
+        if cache_key in self.cache:
+            return self.cache[cache_key]
 
-        params['string'] = query
-        self.logger.debug(f"Querying NameRes with params {params}")
+        api_params = dict(params)
+        api_params['string'] = query
+        self.logger.debug(f"Querying NameRes with params {api_params}")
 
-        response = requests.post(self.nameres_url + "lookup", params=params, timeout=30)
+        response = requests.post(self.nameres_url + "lookup", params=api_params, timeout=30)
         response.raise_for_status()
         result = response.json()
 
-        self.cache[query] = result
+        self.cache[cache_key] = result
         return result
 
     def delete_query(self, query):
-        if query in self.cache:
-            del self.cache[query]
+        keys_to_delete = [k for k in self.cache if k[0] == query]
+        for k in keys_to_delete:
+            del self.cache[k]
