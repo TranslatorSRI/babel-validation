@@ -233,8 +233,10 @@ class GitHubIssuesTestCases:
                     except UnknownObjectException:
                         pass
             if not found:
-                self.logger.warning("Could not resolve issue ID %r in configured repositories %s",
-                                    issue_id, self.github_repositories)
+                raise ValueError(
+                    f"Could not resolve issue ID {issue_id!r} in configured repositories "
+                    f"{self.github_repositories}. Use 'org/repo#N', 'repo#N', or 'N'."
+                )
         return issues
 
     def get_issues_with_tests(self, github_repositories=None) -> Iterator[Issue.Issue]:
