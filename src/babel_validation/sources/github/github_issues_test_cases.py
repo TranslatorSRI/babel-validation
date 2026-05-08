@@ -61,8 +61,8 @@ class GitHubIssueTest:
 
         self.github_issue_id = github_issue_id
 
-        self.logger = logging.getLogger(str(self))
-        self.logger.info(f"Creating GitHubIssueTest for {github_issue.html_url} {assertion}({param_sets})")
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("Creating GitHubIssueTest for %s %s(%s)", github_issue.html_url, assertion, param_sets)
 
     def __str__(self):
         return f"{self.github_issue_id}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
