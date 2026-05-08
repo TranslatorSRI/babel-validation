@@ -127,17 +127,28 @@ class TestEmptyOrNullBabelTests:
 
     # --- wiki syntax: assertion name only, no curie params ---
 
-    def test_wiki_no_curie_params_raises(self, github_issues_test_cases):
+    def test_wiki_no_curie_params_parsed(self, github_issues_test_cases):
+        # {{BabelTest|Resolves}} with no params parses to an empty param_set, not a parse error.
         mock = _mock_issue("{{BabelTest|Resolves}}")
-        with pytest.raises(ValueError, match="Too few parameters"):
-            github_issues_test_cases.get_test_issues_from_issue(mock)
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].assertion == "Resolves"
+        assert tests[0].param_sets == [[]]
+
+    def test_wiki_needed_no_params(self, github_issues_test_cases):
+        # {{BabelTest|Needed}} with no extra params is valid per the documented wiki syntax.
+        mock = _mock_issue("{{BabelTest|Needed}}")
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].assertion == "Needed"
+        assert tests[0].param_sets == [[]]
 
     # --- YAML syntax: null / empty values ---
 
     def test_yaml_null_babel_tests_raises(self, github_issues_test_cases):
-        # babel_tests: null → AttributeError calling .items() on None
+        # babel_tests: null → ValueError with a clear message (null yaml value has no .items())
         mock = _mock_issue("```yaml\nbabel_tests:\n\n```")
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValueError, match="no 'babel_tests' top-level key"):
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
     def test_yaml_null_assertion_params_raises(self, github_issues_test_cases):

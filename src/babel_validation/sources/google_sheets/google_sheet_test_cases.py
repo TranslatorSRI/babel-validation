@@ -42,7 +42,8 @@ class GoogleSheetTestCases:
                 self.csv_content = cache_file.read_text(encoding="utf-8")
             else:
                 csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
-                response = requests.get(csv_url)
+                response = requests.get(csv_url, timeout=30)
+                response.raise_for_status()
                 self.csv_content = response.text
                 cache_file.write_text(self.csv_content, encoding="utf-8")
 

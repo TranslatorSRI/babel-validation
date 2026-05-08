@@ -148,9 +148,6 @@ class DoesNotResolveWithHandler(NodeNormTest):
 class HasLabelHandler(NodeNormTest):
     """Test that a CURIE resolves to a specific primary label in NodeNorm."""
     NAME = "haslabel"
-
-    def curie_params(self, params: list[str]) -> list[str]:
-        return params[:1]
     DESCRIPTION = (
         "The CURIE must resolve in NodeNorm and its primary label (id.label) must "
         "match the expected label exactly (case-sensitive)."
@@ -158,6 +155,9 @@ class HasLabelHandler(NodeNormTest):
     PARAMETERS = "Exactly two elements per param_set: a CURIE, then the expected label string."
     WIKI_EXAMPLES = ["{{BabelTest|HasLabel|CHEBI:15365|aspirin}}"]
     YAML_PARAMS = "    - [CHEBI:15365, aspirin]"
+
+    def curie_params(self, params: list[str]) -> list[str]:
+        return params[:1]
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
@@ -206,9 +206,6 @@ class HasLabelHandler(NodeNormTest):
 class ResolvesWithTypeHandler(NodeNormTest):
     """Test that CURIEs resolve with a specific Biolink type in NodeNorm."""
     NAME = "resolveswithtype"
-
-    def curie_params(self, params: list[str]) -> list[str]:
-        return params[1:]
     DESCRIPTION = (
         "Each param_set must have at least two elements: the first is the expected Biolink type "
         "(e.g. 'biolink:Gene'), and the remainder are CURIEs that must resolve with that type."
@@ -219,6 +216,9 @@ class ResolvesWithTypeHandler(NodeNormTest):
     )
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWithType|biolink:Gene|NCBIGene:1}}"]
     YAML_PARAMS = "    - [biolink:Gene, NCBIGene:1, HGNC:5]"
+
+    def curie_params(self, params: list[str]) -> list[str]:
+        return params[1:]
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
