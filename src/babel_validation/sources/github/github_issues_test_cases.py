@@ -105,11 +105,11 @@ class GitHubIssuesTestCases:
 
         self.github = Github(auth=Auth.Token(self.github_token))
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.info(f"Set up GitHub object ({self.github})")
 
         if not github_repositories:
             raise ValueError("No GitHub repositories specified in `github_repositories`.")
         self.github_repositories = github_repositories
+        self.logger.info("Configured GitHub repositories: %s", self.github_repositories)
 
         # Prepare regular expressions.
         self.babeltest_pattern = re.compile(r'{{BabelTest\|.*?}}')
@@ -219,7 +219,8 @@ class GitHubIssuesTestCases:
                 # repo#N — find repo in configured list
                 repo_name, num = m.group(1), int(m.group(2))
                 for full_repo in self.github_repositories:
-                    if full_repo.split('/')[1] == repo_name:
+                    parts = full_repo.split('/')
+                    if len(parts) >= 2 and parts[1] == repo_name:
                         issues.append(self.github.get_repo(full_repo).get_issue(num))
                         found = True
                         break

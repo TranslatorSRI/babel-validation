@@ -39,7 +39,7 @@ def pytest_configure(config):
             except FileNotFoundError:
                 pass
             try:
-                os.unlink(f + '.lock')
+                os.unlink(f.removesuffix('.csv') + '.lock')
             except FileNotFoundError:
                 pass
         tmpdir = tempfile.gettempdir()
