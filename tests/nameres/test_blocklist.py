@@ -17,7 +17,7 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
     :param target_info: The test target information.
     """
     nameres_url = target_info['NameResURL']
-    nameres_url_reverse_lookup = nameres_url + 'reverse_lookup'
+    nameres_url_reverse_lookup = nameres_url + 'synonyms'
 
     # If there is any test category provided, this test is not relevant and we can skip it.
     if categories_include:

@@ -61,8 +61,8 @@ class GitHubIssueTest:
 
         self.github_issue_id = github_issue_id
 
-        self.logger = logging.getLogger(str(self))
-        self.logger.info(f"Creating GitHubIssueTest for {github_issue.html_url} {assertion}({param_sets})")
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("Creating GitHubIssueTest for %s %s(%s)", github_issue.html_url, assertion, param_sets)
 
     def __str__(self):
         return f"{self.github_issue_id}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
@@ -105,11 +105,11 @@ class GitHubIssuesTestCases:
 
         self.github = Github(auth=Auth.Token(self.github_token))
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.info(f"Set up GitHub object ({self.github})")
 
         if not github_repositories:
             raise ValueError("No GitHub repositories specified in `github_repositories`.")
         self.github_repositories = github_repositories
+        self.logger.info("Configured GitHub repositories: %s", self.github_repositories)
 
         # Prepare regular expressions.
         self.babeltest_pattern = re.compile(r'{{BabelTest\|.*?}}')
@@ -155,12 +155,12 @@ class GitHubIssuesTestCases:
                 # Figure out parameters.
                 test_string = match.removeprefix("{{BabelTest|").removesuffix("}}")
                 params = test_string.split("|")
-                if len(params) < 2:
-                    raise ValueError(f"Too few parameters found in BabelTest in issue {github_issue_id}: {match}")
-                else:
-                    # Wiki syntax: params[0] is the assertion name; params[1:] form a single
-                    # param_set, so param_sets is a one-element list: [params[1:]].
-                    testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
+                if not params or not params[0]:
+                    raise ValueError(f"Missing assertion name in BabelTest in issue {github_issue_id}: {match}")
+                # Wiki syntax: params[0] is the assertion name; params[1:] form a single
+                # param_set (may be empty for assertions like Needed), so param_sets is a
+                # one-element list: [params[1:]].
+                testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
 
         babeltest_yaml_matches = re.findall(self.babeltest_yaml_pattern, github_issue.body)
         if babeltest_yaml_matches:
@@ -170,7 +170,14 @@ class GitHubIssuesTestCases:
                 # Parse string as YAML.
                 yaml_dict = yaml.safe_load(match.removeprefix("```yaml").removesuffix("```"))
 
-                for assertion, original_param_sets in yaml_dict['babel_tests'].items():
+                babel_tests = yaml_dict.get('babel_tests') if isinstance(yaml_dict, dict) else None
+                if babel_tests is None:
+                    raise ValueError(
+                        f"YAML block in issue {github_issue_id} matched the detection pattern "
+                        f"but contains no 'babel_tests' top-level key: {match!r}"
+                    )
+
+                for assertion, original_param_sets in babel_tests.items():
                     # YAML syntax: each entry under an assertion key becomes one param_set.
                     # A bare string becomes a single-element param_set; a list is used as-is.
                     param_sets = []
@@ -199,28 +206,38 @@ class GitHubIssuesTestCases:
         - 'repo#N'      → search self.github_repositories for matching repo name
         - 'N'           → fetch #N from all configured repositories
         """
-        from github import GithubException
+        from github import UnknownObjectException
         issues = []
         for issue_id in issue_ids:
+            found = False
             if m := re.match(r'^([^/]+)/([^#]+)#(\d+)$', issue_id):
                 # org/repo#N
                 issue = self.github.get_repo(f"{m.group(1)}/{m.group(2)}").get_issue(int(m.group(3)))
                 issues.append(issue)
+                found = True
             elif m := re.match(r'^([^/#]+)#(\d+)$', issue_id):
                 # repo#N — find repo in configured list
                 repo_name, num = m.group(1), int(m.group(2))
                 for full_repo in self.github_repositories:
-                    if full_repo.split('/')[1] == repo_name:
+                    parts = full_repo.split('/')
+                    if len(parts) >= 2 and parts[1] == repo_name:
                         issues.append(self.github.get_repo(full_repo).get_issue(num))
+                        found = True
                         break
             elif m := re.match(r'^(\d+)$', issue_id):
-                # N — try all configured repos
+                # N — try all configured repos; skip repos that don't have this issue number.
                 num = int(m.group(1))
                 for full_repo in self.github_repositories:
                     try:
                         issues.append(self.github.get_repo(full_repo).get_issue(num))
-                    except GithubException:
+                        found = True
+                    except UnknownObjectException:
                         pass
+            if not found:
+                raise ValueError(
+                    f"Could not resolve issue ID {issue_id!r} in configured repositories "
+                    f"{self.github_repositories}. Use 'org/repo#N', 'repo#N', or 'N'."
+                )
         return issues
 
     def get_issues_with_tests(self, github_repositories=None) -> Iterator[Issue.Issue]:

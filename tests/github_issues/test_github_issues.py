@@ -39,7 +39,7 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
         ))
 
     count_subtests = 0
-    count_subtests_xfailed = 0
+    count_subtests_failed = 0
     for test_issue in tests:
         results_nodenorm = test_issue.test_with_nodenorm(nodenorm)
         results_nameres = test_issue.test_with_nameres(nodenorm, nameres)
@@ -53,8 +53,8 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
                         assert True, f"{issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Failed, message=message):
+                        count_subtests_failed += 1
                         if is_open:
-                            count_subtests_xfailed += 1
                             pytest.xfail(message)
                         else:
                             assert False, f"{issue_id} ({github_issue.state}): {message}"
@@ -65,11 +65,17 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
                     case _:
                         assert False, f"Unknown result from {issue_id}: {result}"
 
-    # Always xfail open issues so the result stays in the xfail family.
-    # If all subtests pass the message signals the issue is ready to close;
-    # if some failed it reports the failure count.
+    # For open issues: xfail so the result stays in the xfail family.
+    # - Some subtests failed → xfail with a count summary (expected outcome).
+    # - All subtests passed  → the xfail marker added above makes this XPASS,
+    #   which (strict=True) reports as a failure and signals the issue is closeable.
+    # - No subtests ran      → xfail as a configuration error.
     if is_open:
-        if count_subtests_xfailed > 0:
-            pytest.xfail(f"Open issue {issue_id} has {count_subtests_xfailed:,} failing subtests out of {count_subtests:,} ({count_subtests_xfailed/count_subtests:.0%})")
-        else:
-            assert True, f"Open issue {issue_id} has all {count_subtests:,} subtests passing -- ready to close?"
+        if count_subtests == 0:
+            pytest.xfail(f"Open issue {issue_id} produced no test results — check assertion configuration")
+        elif count_subtests_failed > 0:
+            pct = count_subtests_failed / count_subtests
+            pytest.xfail(
+                f"Open issue {issue_id} has {count_subtests_failed:,} failing subtests "
+                f"out of {count_subtests:,} ({pct:.0%})"
+            )

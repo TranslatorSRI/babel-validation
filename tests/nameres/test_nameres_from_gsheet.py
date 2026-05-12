@@ -56,10 +56,8 @@ def test_label(target_info, test_row, test_category):
             request = {
                 "string": label,
                 "autocomplete": autocomplete_flag,
-                "biolink_type": [
-                    # Turned it into a list to support multiple Biolink types.
-                    biolink_class,
-                ], "limit": limit
+                "biolink_type": [biolink_class],
+                "limit": limit,
             }
             if test_row.Prefixes:
                 only_prefixes = []
