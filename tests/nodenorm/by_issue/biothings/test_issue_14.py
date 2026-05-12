@@ -111,7 +111,6 @@ def test_all_curies_except_failing_pair(target_info):
     _assert_ok(response, url, REMAINING_CURIES)
 
 
-@pytest.mark.xfail(strict=True, reason="CHEBI:17310 + DRUGBANK:DB00058 together cause HTTP 500 under drug_chemical_conflate=True (biothings/NodeNormalizationAPI#14)")
 def test_failing_pair(target_info):
     """CHEBI:17310 and DRUGBANK:DB00058 together trigger HTTP 500 — minimal reproducer."""
     nodenorm_url = target_info["NodeNormURL"]

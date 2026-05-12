@@ -36,7 +36,6 @@ def test_without_drug_chemical_conflate(target_info):
     _assert_ok(response, target_info["NodeNormURL"], drug_chemical_conflate=False)
 
 
-@pytest.mark.xfail(strict=True, reason="UNII:2ZM8CX04RZ causes HTTP 500 with drug_chemical_conflate=True (biothings/NodeNormalizationAPI#10)")
 def test_with_drug_chemical_conflate(target_info):
     """UNII:2ZM8CX04RZ triggers HTTP 500 when drug_chemical_conflate=True."""
     response = _post(target_info["NodeNormURL"], drug_chemical_conflate=True)
