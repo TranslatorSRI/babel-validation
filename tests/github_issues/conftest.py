@@ -7,11 +7,21 @@ from pathlib import Path
 import dotenv
 import pytest
 from filelock import FileLock
-from github import Issue
+from github import GithubException, Issue
 
 from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
 
 _github_token = None
+_github_auth_error: str | None = None
+
+_AUTH_ERROR_ID = "github-auth-error"
+_AUTH_HELP = (
+    "GitHub token is expired or invalid. Generate a new one at "
+    "https://github.com/settings/tokens and set it as the GITHUB_TOKEN "
+    "environment variable (or in a .env file), then delete the cache file "
+    f"at {Path(tempfile.gettempdir()) / 'babel_validation_issues_cache.json'} "
+    "if it exists."
+)
 
 _targets_config = configparser.ConfigParser()
 _targets_config.read(Path(__file__).parent.parent / 'targets.ini')
@@ -54,13 +64,20 @@ def _issue_id(issue: Issue.Issue) -> str:
 
 def _get_all_test_issue_ids() -> list[str]:
     """Return IDs of all issues that contain tests, using a file-based cache."""
+    global _github_auth_error
     with FileLock(_LOCK_FILE):
         if _CACHE_FILE.exists():
             try:
                 return json.loads(_CACHE_FILE.read_text())
             except (json.JSONDecodeError, OSError):
                 _CACHE_FILE.unlink(missing_ok=True)
-        issues = list(_get_github_issues_test_cases().get_issues_with_tests())
+        try:
+            issues = list(_get_github_issues_test_cases().get_issues_with_tests())
+        except GithubException as e:
+            if e.status == 401:
+                _github_auth_error = f"{_AUTH_HELP}\n\nOriginal error: {e}"
+                return [_AUTH_ERROR_ID]
+            raise
         ids = [_issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
             _fetched_issues_cache[id_] = issue
@@ -69,11 +86,19 @@ def _get_all_test_issue_ids() -> list[str]:
 
 
 def pytest_generate_tests(metafunc):
+    global _github_auth_error
     if "github_issue_id" not in metafunc.fixturenames:
         return
     issue_id_filter = metafunc.config.getoption("issue", default=[])
     if issue_id_filter:
-        issues = _get_github_issues_test_cases().get_issues_by_ids(issue_id_filter)
+        try:
+            issues = _get_github_issues_test_cases().get_issues_by_ids(issue_id_filter)
+        except GithubException as e:
+            if e.status == 401:
+                _github_auth_error = f"{_AUTH_HELP}\n\nOriginal error: {e}"
+                metafunc.parametrize("github_issue_id", [_AUTH_ERROR_ID], ids=[_AUTH_ERROR_ID])
+                return
+            raise
         ids = [_issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
             _fetched_issues_cache[id_] = issue
@@ -85,9 +110,16 @@ def pytest_generate_tests(metafunc):
 @pytest.fixture
 def github_issue(github_issue_id):
     """Hydrate a GitHub Issue object from its string ID."""
+    if github_issue_id == _AUTH_ERROR_ID:
+        pytest.fail(_github_auth_error or _AUTH_HELP)
     if github_issue_id in _fetched_issues_cache:
         return _fetched_issues_cache[github_issue_id]
-    return _get_github_issues_test_cases().get_issues_by_ids([github_issue_id])[0]
+    try:
+        return _get_github_issues_test_cases().get_issues_by_ids([github_issue_id])[0]
+    except GithubException as e:
+        if e.status == 401:
+            pytest.fail(f"{_AUTH_HELP}\n\nOriginal error: {e}")
+        raise
 
 
 @pytest.fixture(scope="session")
