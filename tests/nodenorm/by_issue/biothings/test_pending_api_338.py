@@ -38,7 +38,6 @@ def test_working_pair(target_info):
     _assert_ok(response, nodenorm_url, WORKING_PAIR)
 
 
-@pytest.mark.xfail(strict=True, reason="MESH:C029371 alongside NCBITaxon:2 causes NCBITaxon:2 to return null (biothings/pending.api#338)")
 def test_triggering_pair(target_info):
     """MESH:C029371 alongside NCBITaxon:2 causes NCBITaxon:2 to return null."""
     nodenorm_url = target_info["NodeNormURL"]
