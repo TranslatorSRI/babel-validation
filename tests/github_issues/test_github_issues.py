@@ -53,10 +53,7 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
 
                     case TestResult(status=TestStatus.Failed, message=message):
                         count_subtests_failed += 1
-                        if is_open:
-                            pytest.xfail(message)
-                        else:
-                            assert False, f"{github_issue_id} ({github_issue.state}): {message}"
+                        assert False, f"{github_issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Skipped, message=message):
                         pytest.skip(f"{github_issue_id} ({github_issue.state}): {message}")

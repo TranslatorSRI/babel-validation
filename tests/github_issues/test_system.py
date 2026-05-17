@@ -152,9 +152,9 @@ class TestEmptyOrNullBabelTests:
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
     def test_yaml_null_assertion_params_raises(self, github_issues_test_cases):
-        # Resolves: null → TypeError iterating over None
+        # Resolves: null → ValueError with a clear message (null param list is a config error)
         mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n```")
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError, match="null param list"):
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
     def test_yaml_empty_assertion_params(self, github_issues_test_cases):

@@ -178,6 +178,11 @@ class GitHubIssuesTestCases:
                 for assertion, original_param_sets in babel_tests.items():
                     # YAML syntax: each entry under an assertion key becomes one param_set.
                     # A bare string becomes a single-element param_set; a list is used as-is.
+                    if original_param_sets is None:
+                        raise ValueError(
+                            f"YAML block in issue {github_issue_id}: assertion '{assertion}' has a null "
+                            f"param list — use an empty list [] or remove the entry"
+                        )
                     param_sets = []
                     for param_set in original_param_sets:
                         if isinstance(param_set, str):
