@@ -17,7 +17,6 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
         pytest.skip(f"No tests found in issue {github_issue}")
         return
 
-    issue_id = github_issue_id
     is_open = github_issue.state == "open"
 
     # Unknown assertion types must fail hard, not XFAIL.
@@ -25,7 +24,7 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
                if t.assertion.lower() not in ASSERTION_HANDLERS]
     if unknown:
         pytest.fail(
-            f"Issue {issue_id} uses unknown assertion type(s): "
+            f"Issue {github_issue_id} uses unknown assertion type(s): "
             f"{', '.join(unknown)} with param sets {json.dumps([t.param_sets for t in tests])}. "
             f"Valid types (case-insensitive): {sorted(ASSERTION_HANDLERS.keys())}"
         )
@@ -47,23 +46,23 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
         for result in itertools.chain(results_nodenorm, results_nameres):
             count_subtests += 1
 
-            with subtests.test(msg=issue_id):
+            with subtests.test(msg=github_issue_id):
                 match result:
                     case TestResult(status=TestStatus.Passed, message=message):
-                        assert True, f"{issue_id} ({github_issue.state}): {message}"
+                        assert True, f"{github_issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Failed, message=message):
                         count_subtests_failed += 1
                         if is_open:
                             pytest.xfail(message)
                         else:
-                            assert False, f"{issue_id} ({github_issue.state}): {message}"
+                            assert False, f"{github_issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Skipped, message=message):
-                        pytest.skip(f"{issue_id} ({github_issue.state}): {message}")
+                        pytest.skip(f"{github_issue_id} ({github_issue.state}): {message}")
 
                     case _:
-                        assert False, f"Unknown result from {issue_id}: {result}"
+                        assert False, f"Unknown result from {github_issue_id}: {result}"
 
     # For open issues: xfail so the result stays in the xfail family.
     # - Some subtests failed → xfail with a count summary (expected outcome).
@@ -72,10 +71,10 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
     # - No subtests ran      → xfail as a configuration error.
     if is_open:
         if count_subtests == 0:
-            pytest.xfail(f"Open issue {issue_id} produced no test results — check assertion configuration")
+            pytest.xfail(f"Open issue {github_issue_id} produced no test results — check assertion configuration")
         elif count_subtests_failed > 0:
             pct = count_subtests_failed / count_subtests
             pytest.xfail(
-                f"Open issue {issue_id} has {count_subtests_failed:,} failing subtests "
+                f"Open issue {github_issue_id} has {count_subtests_failed:,} failing subtests "
                 f"out of {count_subtests:,} ({pct:.0%})"
             )

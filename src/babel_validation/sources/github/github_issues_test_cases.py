@@ -38,6 +38,8 @@ from src.babel_validation.core.testrow import TestResult
 from src.babel_validation.services.nameres import CachedNameRes
 from src.babel_validation.services.nodenorm import CachedNodeNorm
 
+_logger = logging.getLogger(__name__)
+
 
 class GitHubIssueTest:
     """Represents one assertion extracted from a GitHub issue body — an assertion name paired with a list of param_sets to evaluate."""
@@ -51,33 +53,29 @@ class GitHubIssueTest:
         :param param_sets: A list of param_sets (list[list[str]]) to evaluate for this assertion.
                            Each inner list is one param_set — see module docstring for details.
         """
+        if not isinstance(param_sets, list) and param_sets is not None:
+            raise ValueError(f"param_sets must be a list when creating a GitHubIssueTest({github_issue}, {assertion}, {param_sets})")
         self.github_issue = github_issue
         self.assertion = assertion
-        if param_sets is None:
-            param_sets = []
-        self.param_sets = param_sets
-        if not isinstance(self.param_sets, list):
-            raise ValueError(f"param_sets must be a list when creating a GitHubIssueTest({self.github_issue}, {self.assertion}, {self.param_sets})")
-
+        self.param_sets = param_sets if param_sets is not None else []
         self.github_issue_id = github_issue_id
 
-        self.logger = logging.getLogger(__name__)
-        self.logger.info("Creating GitHubIssueTest for %s %s(%s)", github_issue.html_url, assertion, param_sets)
+        _logger.info("Creating GitHubIssueTest for %s %s(%s)", github_issue.html_url, assertion, param_sets)
 
     def __str__(self):
         return f"{self.github_issue_id}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
 
-    def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
+    def _get_handler(self):
         handler = ASSERTION_HANDLERS.get(self.assertion.lower())
         if handler is None:
             raise ValueError(f"Unknown assertion type for {self}: {self.assertion}")
-        return handler.test_with_nodenorm(self.param_sets, nodenorm, label=str(self))
+        return handler
+
+    def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
+        return self._get_handler().test_with_nodenorm(self.param_sets, nodenorm, label=str(self))
 
     def test_with_nameres(self, nodenorm: CachedNodeNorm, nameres: CachedNameRes, pass_if_found_in_top=5) -> Iterator[TestResult]:
-        handler = ASSERTION_HANDLERS.get(self.assertion.lower())
-        if handler is None:
-            raise ValueError(f"Unknown assertion type: {self.assertion}")
-        return handler.test_with_nameres(self.param_sets, nodenorm, nameres, pass_if_found_in_top, label=str(self))
+        return self._get_handler().test_with_nameres(self.param_sets, nodenorm, nameres, pass_if_found_in_top, label=str(self))
 
 
 class GitHubIssuesTestCases:
@@ -87,6 +85,9 @@ class GitHubIssuesTestCases:
     - An open issue has test cases that are now passing (and so should be updated or maybe even closed).
     - A closed issue has test cases that are now failing (and so should be reopened).
     """
+
+    _BABELTEST_RE = re.compile(r'{{BabelTest\|.*?}}')
+    _BABELTEST_YAML_RE = re.compile(r'```yaml\s+babel_tests:\s+.*?\s+```', re.DOTALL)
 
     def __init__(self, github_token: str, github_repositories):
         """
@@ -111,10 +112,6 @@ class GitHubIssuesTestCases:
         self.github_repositories = github_repositories
         self.logger.info("Configured GitHub repositories: %s", self.github_repositories)
 
-        # Prepare regular expressions.
-        self.babeltest_pattern = re.compile(r'{{BabelTest\|.*?}}')
-        self.babeltest_yaml_pattern = re.compile(r'```yaml\s+babel_tests:\s+.*?\s+```', re.DOTALL)
-
     def get_test_issues_from_issue(self, github_issue: Issue.Issue) -> list[GitHubIssueTest]:
         """
         Extract test rows from a single GitHub issue.
@@ -138,7 +135,8 @@ class GitHubIssuesTestCases:
         """
 
         github_issue_id = f"{github_issue.repository.full_name}#{github_issue.number}"
-        self.logger.debug(f"Looking for tests in issue {github_issue_id}: {github_issue.title} ({str(github_issue.state)}, {github_issue.html_url})")
+        self.logger.debug("Looking for tests in issue %s: %s (%s, %s)",
+                          github_issue_id, github_issue.title, github_issue.state, github_issue.html_url)
 
         # Is there an issue body at all?
         if not github_issue.body or github_issue.body.strip() == '':
@@ -147,10 +145,10 @@ class GitHubIssuesTestCases:
         # Look for BabelTest syntax.
         testrows = []
 
-        babeltest_matches = re.findall(self.babeltest_pattern, github_issue.body)
+        babeltest_matches = re.findall(self._BABELTEST_RE, github_issue.body)
         if babeltest_matches:
             for match in babeltest_matches:
-                self.logger.info(f"Found BabelTest in issue {github_issue_id}: {match}")
+                self.logger.info("Found BabelTest in issue %s: %s", github_issue_id, match)
 
                 # Figure out parameters.
                 test_string = match.removeprefix("{{BabelTest|").removesuffix("}}")
@@ -162,10 +160,10 @@ class GitHubIssuesTestCases:
                 # one-element list: [params[1:]].
                 testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
 
-        babeltest_yaml_matches = re.findall(self.babeltest_yaml_pattern, github_issue.body)
+        babeltest_yaml_matches = re.findall(self._BABELTEST_YAML_RE, github_issue.body)
         if babeltest_yaml_matches:
             for match in babeltest_yaml_matches:
-                self.logger.info(f"Found BabelTest YAML in issue {github_issue_id}: {match}")
+                self.logger.info("Found BabelTest YAML in issue %s: %s", github_issue_id, match)
 
                 # Parse string as YAML.
                 yaml_dict = yaml.safe_load(match.removeprefix("```yaml").removesuffix("```"))
@@ -196,8 +194,8 @@ class GitHubIssuesTestCases:
         """Quick regex check to see if an issue body contains any BabelTest syntax."""
         if not issue.body or issue.body.strip() == '':
             return False
-        return bool(self.babeltest_pattern.search(issue.body) or
-                    self.babeltest_yaml_pattern.search(issue.body))
+        return bool(self._BABELTEST_RE.search(issue.body) or
+                    self._BABELTEST_YAML_RE.search(issue.body))
 
     def get_issues_by_ids(self, issue_ids: list[str]) -> list[Issue.Issue]:
         """
@@ -257,7 +255,7 @@ class GitHubIssuesTestCases:
             seen_numbers = set()
             for keyword in ['{{BabelTest', 'babel_tests:']:
                 query = f'"{keyword}" is:issue in:body repo:{repo_id}'
-                self.logger.info(f"Searching GitHub issues with query: {query}")
+                self.logger.info("Searching GitHub issues with query: %s", query)
                 for issue in self.github.search_issues(query):
                     if issue.number not in seen_numbers:
                         seen_numbers.add(issue.number)
@@ -276,7 +274,7 @@ class GitHubIssuesTestCases:
             github_repositories = self.github_repositories
 
         for repo_id in github_repositories:
-            self.logger.info(f"Looking up issues in GitHub repository {repo_id}")
+            self.logger.info("Looking up issues in GitHub repository %s", repo_id)
             repo = self.github.get_repo(repo_id, lazy=True)
 
             issue_count = 0
@@ -284,4 +282,4 @@ class GitHubIssuesTestCases:
                 issue_count += 1
                 yield issue
 
-            self.logger.info(f"Found {issue_count} issues in GitHub repository {repo_id}")
+            self.logger.info("Found %d issues in GitHub repository %s", issue_count, repo_id)

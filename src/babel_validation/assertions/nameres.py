@@ -26,11 +26,7 @@ class SearchByNameHandler(NameResTest):
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        nameres: CachedNameRes, pass_if_found_in_top: int = 5,
                        label: str = "") -> Iterator[TestResult]:
-        # params[0] is the search query string; params[1] is the expected CURIE.
-        if len(params) < 2:
-            yield self.failed(f"Two parameters expected for SearchByName in {label}, but params = {params}")
-            return
-        elif len(params) > 2:
+        if len(params) != 2:
             yield self.failed(
                 f"SearchByName requires exactly two parameters (search query, expected CURIE) in {label}, "
                 f"but got {len(params)}: {params}"
@@ -47,24 +43,19 @@ class SearchByNameHandler(NameResTest):
         expected_curie_label = expected_curie_result['id']['label']
         expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
 
-        # Search for the expected CURIE in the first {pass_if_found_in_top} results.
-        results = nameres.lookup(search_query, autocomplete='false', limit=(2 * pass_if_found_in_top))
+        results = nameres.lookup(search_query, autocomplete='false', limit=pass_if_found_in_top)
         if not results:
             yield self.failed(f"No results found for '{search_query}' on NameRes {nameres} ({expected_curie_string})")
             return
 
         curies = [result['curie'] for result in results]
-        try:
-            found_index = curies.index(expected_curie)
-        except ValueError:
+        if expected_curie not in curies:
             logging.getLogger(__name__).debug(
-                "%s not found when searching for '%s' in NameRes %s: %s",
-                expected_curie_string, search_query, nameres, json.dumps(results, indent=2, sort_keys=True)
+                "%s not found in top %d results for '%s' in NameRes %s: %s",
+                expected_curie_string, pass_if_found_in_top, search_query, nameres,
+                json.dumps(results, indent=2, sort_keys=True)
             )
-            yield self.failed(f"{expected_curie_string} not found when searching for '{search_query}' in NameRes {nameres}")
+            yield self.failed(f"{expected_curie_string} not found in top {pass_if_found_in_top} results for '{search_query}' in NameRes {nameres}")
             return
 
-        if found_index < pass_if_found_in_top:
-            yield self.passed(f"{expected_curie_string} found at index {found_index + 1} on NameRes {nameres}")
-        else:
-            yield self.failed(f"{expected_curie_string} found at index {found_index + 1} which is greater than {pass_if_found_in_top} on NameRes {nameres}")
+        yield self.passed(f"{expected_curie_string} found at index {curies.index(expected_curie) + 1} on NameRes {nameres}")

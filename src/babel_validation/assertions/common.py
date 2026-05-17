@@ -11,6 +11,3 @@ class NeededHandler(AssertionHandler):
 
     def test_with_nodenorm(self, param_sets, nodenorm, label=""):
         yield self.failed("Test needed for issue")
-
-    def test_with_nameres(self, param_sets, nodenorm, nameres, pass_if_found_in_top=5, label=""):
-        yield self.failed("Test needed for issue")
