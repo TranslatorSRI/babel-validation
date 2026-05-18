@@ -5,7 +5,6 @@ construction, YAML emission, and round-trip parsing through the same regex
 + yaml.safe_load that the GitHub-issue test discovery uses. No network.
 """
 
-import io
 import re
 from pathlib import Path
 
