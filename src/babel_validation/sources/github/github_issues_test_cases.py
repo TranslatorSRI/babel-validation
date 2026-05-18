@@ -183,14 +183,26 @@ class GitHubIssuesTestCases:
                             f"YAML block in issue {github_issue_id}: assertion '{assertion}' has a null "
                             f"param list — use an empty list [] or remove the entry"
                         )
+                    if isinstance(original_param_sets, str):
+                        normalized_param_sets = [original_param_sets]
+                    elif isinstance(original_param_sets, list):
+                        normalized_param_sets = original_param_sets
+                    else:
+                        raise ValueError(
+                            f"YAML block in issue {github_issue_id}: assertion '{assertion}' must be a "
+                            f"string or list, got {type(original_param_sets).__name__}"
+                        )
                     param_sets = []
-                    for param_set in original_param_sets:
+                    for param_set in normalized_param_sets:
                         if isinstance(param_set, str):
                             param_sets.append([param_set])
                         elif isinstance(param_set, list):
                             param_sets.append(param_set)
                         else:
-                            raise RuntimeError(f"Unknown parameter set type {param_set} in issue {github_issue_id}")
+                            raise ValueError(
+                                f"YAML block in issue {github_issue_id}: assertion '{assertion}' contains "
+                                f"an unsupported parameter set type {type(param_set).__name__}"
+                            )
                     testrows.append(GitHubIssueTest(github_issue_id, github_issue, assertion, param_sets))
 
         return testrows
