@@ -14,4 +14,4 @@ jobs:
       - name: Run unit tests
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uv run pytest tests/github_issues/test_system.py tests/test_environment -m unit -v
+        run: uv run pytest -m unit -v
