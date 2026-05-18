@@ -164,6 +164,13 @@ class TestEmptyOrNullBabelTests:
         assert len(tests) == 1
         assert tests[0].param_sets == []
 
+    def test_yaml_scalar_assertion_params_treated_as_single_param_set(self, github_issues_test_cases):
+        # Resolves: CHEBI:15365 (bare scalar) → wrapped as a single one-element param_set
+        mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves: CHEBI:15365\n```")
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].param_sets == [["CHEBI:15365"]]
+
 
 @pytest.mark.unit
 class TestIssueHasTests:
