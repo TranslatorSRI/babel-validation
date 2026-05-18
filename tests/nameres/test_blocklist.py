@@ -3,7 +3,7 @@ import logging
 import requests
 import pytest
 
-from src.babel_validation.sources.google_sheets.blocklist import BlocklistEntry, load_blocklist_from_gsheet
+from src.babel_validation.sources.google_sheets.blocklist import load_blocklist_from_gsheet
 
 # Parameterize blocklist entries.
 blocklist_entries = load_blocklist_from_gsheet()
