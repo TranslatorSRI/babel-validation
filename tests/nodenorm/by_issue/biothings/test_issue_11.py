@@ -23,56 +23,71 @@ CURIES = [
 EXPECTED_UNIQUE_COUNTS = {False: 17, True: 32}
 
 
-def _post(nodenorm_url, drug_chemical_conflate):
+def _post(nodenorm_url, curie, drug_chemical_conflate):
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
     return requests.post(
         url,
         json={
-            "curies": CURIES,
+            "curies": [curie],
             "conflate": True,
             "drug_chemical_conflate": drug_chemical_conflate,
         },
     )
 
 
-def _assert_equivalent_identifiers(response, nodenorm_url, drug_chemical_conflate):
+def _format_identifier_list(counts: dict[str, int]) -> str:
+    lines = []
+    for i, (ident, count) in enumerate(counts.items(), 1):
+        repeat = f" [x{count} DUPLICATE]" if count > 1 else ""
+        lines.append(f"  {i:3d}. {ident}{repeat}")
+    return "\n".join(lines)
+
+
+@pytest.mark.parametrize("curie", CURIES)
+@pytest.mark.parametrize("drug_chemical_conflate", [False, True])
+def test_equivalent_identifiers(target_info, curie, drug_chemical_conflate):
+    """equivalent_identifiers must contain each identifier at most once,
+    and the unique count must match the values reported in the issue."""
+    nodenorm_url = target_info["NodeNormURL"]
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
+
+    response = _post(nodenorm_url, curie, drug_chemical_conflate=drug_chemical_conflate)
     assert response.ok, (
-        f"POST {url} returned HTTP {response.status_code} for {CURIES} "
+        f"POST {url} returned HTTP {response.status_code} for {curie!r} "
         f"(drug_chemical_conflate={drug_chemical_conflate}): {response.text[:500]}"
     )
+
     result = response.json()
     assert isinstance(result, dict), (
         f"Expected a dict response, got {type(result).__name__}: {str(result)[:500]}"
     )
 
+    node = result.get(curie)
+    assert isinstance(node, dict), (
+        f"{curie} returned null with drug_chemical_conflate={drug_chemical_conflate}"
+    )
+
+    equiv = node.get("equivalent_identifiers", [])
+    identifiers = [entry["identifier"] for entry in equiv]
+    counts: dict[str, int] = {}
+    for ident in identifiers:
+        counts[ident] = counts.get(ident, 0) + 1
+
+    identifier_list = _format_identifier_list(counts)
+    context = (
+        f"{curie} (drug_chemical_conflate={drug_chemical_conflate}): "
+        f"{len(identifiers)} total, {len(counts)} unique\n{identifier_list}"
+    )
+
+    duplicates = sorted(ident for ident, count in counts.items() if count > 1)
+    assert not duplicates, (
+        f"{curie} (drug_chemical_conflate={drug_chemical_conflate}) returned "
+        f"{len(identifiers)} equivalent_identifiers with {len(duplicates)} duplicated "
+        f"identifiers: {duplicates}\n{context}"
+    )
+
     expected_unique = EXPECTED_UNIQUE_COUNTS[drug_chemical_conflate]
-    for curie in CURIES:
-        node = result.get(curie)
-        assert node is not None, (
-            f"{curie} returned null with drug_chemical_conflate={drug_chemical_conflate}"
-        )
-        equiv = node.get("equivalent_identifiers", [])
-        identifiers = [entry["identifier"] for entry in equiv]
-        unique = set(identifiers)
-        duplicates = sorted({i for i in identifiers if identifiers.count(i) > 1})
-        assert not duplicates, (
-            f"{curie} (drug_chemical_conflate={drug_chemical_conflate}) returned "
-            f"{len(identifiers)} equivalent_identifiers with {len(duplicates)} duplicated "
-            f"identifiers: {duplicates}"
-        )
-        assert len(unique) == expected_unique, (
-            f"{curie} (drug_chemical_conflate={drug_chemical_conflate}) returned "
-            f"{len(unique)} unique equivalent_identifiers, expected {expected_unique}"
-        )
-
-
-@pytest.mark.parametrize("drug_chemical_conflate", [False, True])
-def test_equivalent_identifiers(target_info, drug_chemical_conflate):
-    """equivalent_identifiers must contain each identifier at most once,
-    and the unique count must match the values reported in the issue."""
-    nodenorm_url = target_info["NodeNormURL"]
-    response = _post(nodenorm_url, drug_chemical_conflate=drug_chemical_conflate)
-    _assert_equivalent_identifiers(
-        response, nodenorm_url, drug_chemical_conflate=drug_chemical_conflate
+    assert len(counts) == expected_unique, (
+        f"{curie} (drug_chemical_conflate={drug_chemical_conflate}) returned "
+        f"{len(counts)} unique equivalent_identifiers, expected {expected_unique}\n{context}"
     )
