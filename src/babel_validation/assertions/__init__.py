@@ -74,22 +74,33 @@ class NodeNormTest(AssertionHandler):
         if not param_sets:
             yield self.failed(f"No parameters provided in {label}")
             return
+        # Validate each param_set up front so malformed CURIEs are never sent to
+        # NodeNorm — not even in the cache-warming call below.
+        failures: dict[int, TestResult] = {}
+        for index, params in enumerate(param_sets):
+            if not params:
+                failures[index] = self.failed(f"No parameters in param_set {index} in {label}")
+                continue
+            invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
+            if invalid:
+                failures[index] = self.failed(
+                    f"Malformed CURIE(s) {invalid} in param_set {index} in {label}: "
+                    f"expected format PREFIX:LOCAL_ID (e.g. CHEBI:15365)"
+                )
         # warm the cache only for params that are CURIEs (deduplicated); skip if empty
         # (normalize_curies raises ValueError on an empty list)
-        curies_to_warm = list({p for params in param_sets for p in self.curie_params(params)})
+        curies_to_warm = list({
+            p
+            for index, params in enumerate(param_sets)
+            if index not in failures
+            for p in self.curie_params(params)
+        })
         if curies_to_warm:
             nodenorm.normalize_curies(curies_to_warm)
         results = []
         for index, params in enumerate(param_sets):
-            if not params:
-                results.append(self.failed(f"No parameters in param_set {index} in {label}"))
-                continue
-            invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
-            if invalid:
-                results.append(self.failed(
-                    f"Malformed CURIE(s) {invalid} in param_set {index} in {label}: "
-                    f"expected format PREFIX:LOCAL_ID (e.g. CHEBI:15365)"
-                ))
+            if index in failures:
+                results.append(failures[index])
                 continue
             results.extend(self.test_param_set(params, nodenorm, label))
         if not results:
