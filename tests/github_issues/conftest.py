@@ -97,8 +97,37 @@ def _get_all_test_issue_ids() -> list[str]:
         return ids
 
 
+def _deselected_by_markexpr(metafunc) -> bool:
+    """True if a -m marker expression is active that would deselect this test.
+
+    Parametrizing ``test_github_issue`` fetches issues from GitHub at collection
+    time. When the user runs e.g. ``pytest -m unit`` that test is deselected
+    anyway (it carries no ``unit`` marker), so we must avoid the network round
+    trip. pytest only applies ``-m`` deselection *after* generation, so we
+    evaluate the expression ourselves against the markers on the test.
+    """
+    markexpr = metafunc.config.getoption("markexpr")
+    if not markexpr:
+        return False
+    try:
+        from _pytest.mark.expression import Expression
+    except ImportError:
+        # Internal API moved; fall back to the (network-using) default.
+        return False
+    own_markers = {m.name for m in metafunc.definition.iter_markers()}
+    try:
+        return not Expression.compile(markexpr).evaluate(lambda name: name in own_markers)
+    except Exception:
+        # Unparseable expression — let pytest handle it; don't suppress tests.
+        return False
+
+
 def pytest_generate_tests(metafunc):
     if "github_issue_id" not in metafunc.fixturenames:
+        return
+    if _deselected_by_markexpr(metafunc):
+        # Skip the GitHub fetch entirely; this test won't run under this -m filter.
+        metafunc.parametrize("github_issue_id", [], ids=[])
         return
     issue_id_filter = metafunc.config.getoption("issue", default=[])
     if issue_id_filter:
