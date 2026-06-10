@@ -41,6 +41,15 @@ from src.babel_validation.services.nodenorm import CachedNodeNorm
 _logger = logging.getLogger(__name__)
 
 
+def _to_list(value, context: str) -> list:
+    """Normalize a YAML value that may be a bare string or a list; raise on anything else."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return value
+    raise ValueError(f"{context}: expected str or list, got {type(value).__name__}")
+
+
 class GitHubIssueTest:
     """Represents one assertion extracted from a GitHub issue body — an assertion name paired with a list of param_sets to evaluate."""
 
@@ -183,26 +192,14 @@ class GitHubIssuesTestCases:
                             f"YAML block in issue {github_issue_id}: assertion '{assertion}' has a null "
                             f"param list — use an empty list [] or remove the entry"
                         )
-                    if isinstance(original_param_sets, str):
-                        normalized_param_sets = [original_param_sets]
-                    elif isinstance(original_param_sets, list):
-                        normalized_param_sets = original_param_sets
-                    else:
-                        raise ValueError(
-                            f"YAML block in issue {github_issue_id}: assertion '{assertion}' must be a "
-                            f"string or list, got {type(original_param_sets).__name__}"
-                        )
-                    param_sets = []
-                    for param_set in normalized_param_sets:
-                        if isinstance(param_set, str):
-                            param_sets.append([param_set])
-                        elif isinstance(param_set, list):
-                            param_sets.append(param_set)
-                        else:
-                            raise ValueError(
-                                f"YAML block in issue {github_issue_id}: assertion '{assertion}' contains "
-                                f"an unsupported parameter set type {type(param_set).__name__}"
-                            )
+                    normalized = _to_list(
+                        original_param_sets,
+                        f"YAML block in issue {github_issue_id}: assertion '{assertion}'"
+                    )
+                    param_sets = [
+                        _to_list(ps, f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set")
+                        for ps in normalized
+                    ]
                     testrows.append(GitHubIssueTest(github_issue_id, github_issue, assertion, param_sets))
 
         return testrows

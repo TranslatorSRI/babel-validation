@@ -79,25 +79,23 @@ class NodeNormTest(AssertionHandler):
         curies_to_warm = list({p for params in param_sets for p in self.curie_params(params)})
         if curies_to_warm:
             nodenorm.normalize_curies(curies_to_warm)
-        found = False
+        results = []
         for index, params in enumerate(param_sets):
             if not params:
-                yield self.failed(f"No parameters in param_set {index} in {label}")
-                found = True
+                results.append(self.failed(f"No parameters in param_set {index} in {label}"))
                 continue
             invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
             if invalid:
-                yield self.failed(
+                results.append(self.failed(
                     f"Malformed CURIE(s) {invalid} in param_set {index} in {label}: "
                     f"expected format PREFIX:LOCAL_ID (e.g. CHEBI:15365)"
-                )
-                found = True
+                ))
                 continue
-            for result in self.test_param_set(params, nodenorm, label):
-                found = True
-                yield result
-        if not found:
+            results.extend(self.test_param_set(params, nodenorm, label))
+        if not results:
             yield self.failed(f"No test results returned in {label}")
+            return
+        yield from results
 
     def test_param_set(self, params: list[str], nodenorm, label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per param_set.
@@ -126,17 +124,16 @@ class NameResTest(AssertionHandler):
         if not param_sets:
             yield self.failed(f"No parameters provided in {label}")
             return
-        found = False
+        results = []
         for index, params in enumerate(param_sets):
             if not params:
-                yield self.failed(f"No parameters in param_set {index} in {label}")
-                found = True
+                results.append(self.failed(f"No parameters in param_set {index} in {label}"))
                 continue
-            for result in self.test_param_set(params, nodenorm, nameres, pass_if_found_in_top, label):
-                found = True
-                yield result
-        if not found:
+            results.extend(self.test_param_set(params, nodenorm, nameres, pass_if_found_in_top, label))
+        if not results:
             yield self.failed(f"No test results returned in {label}")
+            return
+        yield from results
 
     def test_param_set(self, params: list[str], nodenorm, nameres,
                        pass_if_found_in_top: int, label: str = "") -> Iterator[TestResult]:
