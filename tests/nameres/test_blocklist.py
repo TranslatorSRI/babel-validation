@@ -4,12 +4,30 @@ import requests
 import pytest
 
 from src.babel_validation.sources.google_sheets.blocklist import load_blocklist_from_gsheet
+from tests._pytest_helpers import deselected_by_markexpr
 
-# Parameterize blocklist entries.
-blocklist_entries = load_blocklist_from_gsheet()
+# The blocklist Google Sheet is downloaded lazily in pytest_generate_tests so
+# that runs which deselect these tests (e.g. `pytest -m unit`) never hit the
+# network.
+_blocklist_entries = None
 
 
-@pytest.mark.parametrize("blocklist_entry", blocklist_entries)
+def _get_blocklist_entries():
+    global _blocklist_entries
+    if _blocklist_entries is None:
+        _blocklist_entries = load_blocklist_from_gsheet()
+    return _blocklist_entries
+
+
+def pytest_generate_tests(metafunc):
+    if "blocklist_entry" not in metafunc.fixturenames:
+        return
+    if deselected_by_markexpr(metafunc):
+        metafunc.parametrize("blocklist_entry", [])
+        return
+    metafunc.parametrize("blocklist_entry", _get_blocklist_entries())
+
+
 def test_check_blocklist_entry(target_info, blocklist_entry, categories_include):
     """
     Test whether a NameRes instance has blocked every item from a blocklist.

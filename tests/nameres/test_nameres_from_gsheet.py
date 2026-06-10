@@ -2,15 +2,37 @@ import urllib.parse
 import requests
 import pytest
 from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
+from tests._pytest_helpers import deselected_by_markexpr
 
 # Configuration options
 NAMERES_TIMEOUT = 10 # If we don't get a response in 10 seconds, that's a fail.
 
-# We generate a set of tests from the GoogleSheetTestCases.
-gsheet = GoogleSheetTestCases()
+# The Google Sheet is downloaded lazily in pytest_generate_tests so that runs
+# which deselect these tests (e.g. `pytest -m unit`) never hit the network.
+_gsheet = None
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows('test_nameres_from_gsheet.test_label', test_nodenorm=False, test_nameres=True))
+def _get_gsheet() -> GoogleSheetTestCases:
+    global _gsheet
+    if _gsheet is None:
+        _gsheet = GoogleSheetTestCases()
+    return _gsheet
+
+
+def pytest_generate_tests(metafunc):
+    if "test_row" not in metafunc.fixturenames:
+        return
+    if deselected_by_markexpr(metafunc):
+        metafunc.parametrize("test_row", [])
+        return
+    metafunc.parametrize(
+        "test_row",
+        _get_gsheet().test_rows(
+            'test_nameres_from_gsheet.test_label', test_nodenorm=False, test_nameres=True
+        ),
+    )
+
+
 def test_label(target_info, test_row, test_category):
     nameres_url = target_info['NameResURL']
     limit = target_info['NameResLimit']
