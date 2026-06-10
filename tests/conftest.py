@@ -28,26 +28,24 @@ def get_targets_ini_path(config):
     return config_path
 
 
+def _silent_unlink(path: str) -> None:
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
 def pytest_configure(config):
     # Delete the Google Sheet CSV cache at the start of each run so tests always
     # use a fresh download. Only the controller does this — xdist workers skip it
     # so they can share the cache file written by the controller.
     if not os.environ.get('PYTEST_XDIST_WORKER'):
         for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
-            try:
-                os.unlink(f)
-            except FileNotFoundError:
-                pass
-            try:
-                os.unlink(f.removesuffix('.csv') + '.lock')
-            except FileNotFoundError:
-                pass
+            _silent_unlink(f)
+            _silent_unlink(f.removesuffix('.csv') + '.lock')
         tmpdir = tempfile.gettempdir()
         for name in ('babel_validation_issues_cache.json', 'babel_validation_issues_cache.lock'):
-            try:
-                os.unlink(os.path.join(tmpdir, name))
-            except FileNotFoundError:
-                pass
+            _silent_unlink(os.path.join(tmpdir, name))
 
 
 def pytest_addoption(parser):

@@ -58,35 +58,46 @@ def _get_github_issues_test_cases() -> GitHubIssuesTestCases:
 
 def _issue_id(issue: Issue.Issue) -> str:
     """Derive a test ID from an issue without making extra API calls."""
-    parts = issue.html_url.split('/')
-    return f"{parts[3]}/{parts[4]}#{issue.number}"
+    return f"{issue.repository.full_name}#{issue.number}"
+
+
+def _record_auth_error(e: GithubException) -> None:
+    global _github_auth_error
+    _github_auth_error = f"{_AUTH_HELP}\n\nOriginal error: {e}"
+
+
+_cached_ids: list[str] | None = None
 
 
 def _get_all_test_issue_ids() -> list[str]:
     """Return IDs of all issues that contain tests, using a file-based cache."""
-    global _github_auth_error
+    global _cached_ids
+    if _cached_ids is not None:
+        return _cached_ids
     with FileLock(_LOCK_FILE):
         if _CACHE_FILE.exists():
             try:
-                return json.loads(_CACHE_FILE.read_text())
+                _cached_ids = json.loads(_CACHE_FILE.read_text())
+                return _cached_ids
             except (json.JSONDecodeError, OSError):
                 _CACHE_FILE.unlink(missing_ok=True)
         try:
             issues = list(_get_github_issues_test_cases().get_issues_with_tests())
         except GithubException as e:
             if e.status == 401:
-                _github_auth_error = f"{_AUTH_HELP}\n\nOriginal error: {e}"
-                return [_AUTH_ERROR_ID]
+                _record_auth_error(e)
+                _cached_ids = [_AUTH_ERROR_ID]
+                return _cached_ids
             raise
         ids = [_issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
             _fetched_issues_cache[id_] = issue
         _CACHE_FILE.write_text(json.dumps(ids))
+        _cached_ids = ids
         return ids
 
 
 def pytest_generate_tests(metafunc):
-    global _github_auth_error
     if "github_issue_id" not in metafunc.fixturenames:
         return
     issue_id_filter = metafunc.config.getoption("issue", default=[])
@@ -95,7 +106,7 @@ def pytest_generate_tests(metafunc):
             issues = _get_github_issues_test_cases().get_issues_by_ids(issue_id_filter)
         except GithubException as e:
             if e.status == 401:
-                _github_auth_error = f"{_AUTH_HELP}\n\nOriginal error: {e}"
+                _record_auth_error(e)
                 metafunc.parametrize("github_issue_id", [_AUTH_ERROR_ID], ids=[_AUTH_ERROR_ID])
                 return
             raise
