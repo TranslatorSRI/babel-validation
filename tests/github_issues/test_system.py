@@ -108,6 +108,34 @@ class TestTooManyParams:
 
 
 @pytest.mark.unit
+class TestTooFewParams:
+    """Comparison assertions require 2+ CURIEs; a single CURIE must fail loudly,
+    not pass (ResolvesWith) or fail (DoesNotResolveWith) vacuously."""
+
+    def _results(self, fixture, wiki_syntax):
+        mock = _mock_issue(wiki_syntax)
+        tests = fixture.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        return list(tests[0].test_with_nodenorm(MagicMock()))
+
+    def test_resolveswith_single_curie_fails(self, github_issues_test_cases):
+        results = self._results(
+            github_issues_test_cases, "{{BabelTest|ResolvesWith|CHEBI:15365}}"
+        )
+        assert len(results) == 1
+        assert results[0].status == TestStatus.Failed
+        assert "at least two" in results[0].message
+
+    def test_doesnotresolvewith_single_curie_fails(self, github_issues_test_cases):
+        results = self._results(
+            github_issues_test_cases, "{{BabelTest|DoesNotResolveWith|CHEBI:15365}}"
+        )
+        assert len(results) == 1
+        assert results[0].status == TestStatus.Failed
+        assert "at least two" in results[0].message
+
+
+@pytest.mark.unit
 class TestMalformedYaml:
     """A YAML block that matches the detection regex but is not valid YAML raises yaml.YAMLError."""
 

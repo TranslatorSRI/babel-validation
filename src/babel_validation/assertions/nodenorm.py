@@ -73,6 +73,13 @@ class ResolvesWithHandler(NodeNormTest):
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
+        if len(params) < 2:
+            yield self.failed(
+                f"ResolvesWith requires at least two CURIEs per param_set in {label}, "
+                f"but got {len(params)}: {params}"
+            )
+            return
+
         first_good, results = _compare_resolutions(params, nodenorm)
 
         if first_good is None:
@@ -112,6 +119,13 @@ class DoesNotResolveWithHandler(NodeNormTest):
 
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
+        if len(params) < 2:
+            yield self.failed(
+                f"DoesNotResolveWith requires at least two CURIEs per param_set in {label}, "
+                f"but got {len(params)}: {params}"
+            )
+            return
+
         first_good, results = _compare_resolutions(params, nodenorm)
 
         # Every CURIE must resolve — an unresolved CURIE is a configuration error.
