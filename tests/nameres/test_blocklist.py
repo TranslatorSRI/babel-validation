@@ -17,7 +17,7 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
     :param target_info: The test target information.
     """
     nameres_url = target_info['NameResURL']
-    nameres_url_reverse_lookup = nameres_url + 'synonyms'
+    nameres_synonyms_url = nameres_url + 'synonyms'
 
     # If there is any test category provided, this test is not relevant and we can skip it.
     if categories_include:
@@ -41,16 +41,16 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
 
     # Someday we would like to do this with the query as well, but that would require some work.
     # So we only test the CURIE for now.
-    response = requests.get(nameres_url_reverse_lookup, params={
+    response = requests.get(nameres_synonyms_url, params={
         'preferred_curies': blocklist_entry.CURIE,
     })
     assert response.ok, (
-        f"Request to {nameres_url_reverse_lookup}?preferred_curies={blocklist_entry.CURIE} "
+        f"Request to {nameres_synonyms_url}?preferred_curies={blocklist_entry.CURIE} "
         f"failed with HTTP {response.status_code}: {response.text}"
     )
     result = response.json()[blocklist_entry.CURIE]
 
     if flag_expect_present:
-        assert result != {}, f"Expected {blocklist_entry.CURIE} to be present on {nameres_url_reverse_lookup}, but found: {result}"
+        assert result != {}, f"Expected {blocklist_entry.CURIE} to be present on {nameres_synonyms_url}, but found: {result}"
     else:
-        assert result == {}, f"Expected {blocklist_entry.CURIE} to be absent on {nameres_url_reverse_lookup}, but found: {result}"
+        assert result == {}, f"Expected {blocklist_entry.CURIE} to be absent on {nameres_synonyms_url}, but found: {result}"
