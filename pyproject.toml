@@ -38,6 +38,9 @@ build-backend = "hatchling.build"
 packages = ["src"]
 
 [tool.pytest.ini_options]
+# Without testpaths, a bare `pytest` would also scan the website directories
+# (including node_modules) during collection.
+testpaths = ["tests"]
 timeout = 300
 markers = [
     "unit: unit tests that do not require network access",
