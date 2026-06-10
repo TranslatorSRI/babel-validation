@@ -95,7 +95,9 @@ class GitHubIssuesTestCases:
     - A closed issue has test cases that are now failing (and so should be reopened).
     """
 
-    _BABELTEST_RE = re.compile(r'{{BabelTest\|.*?}}')
+    # Case-insensitive, matching the case-insensitivity of assertion names.
+    # Group 1 captures everything between '{{BabelTest|' and '}}'.
+    _BABELTEST_RE = re.compile(r'{{BabelTest\|(.*?)}}', re.IGNORECASE)
     _BABELTEST_YAML_RE = re.compile(r'```yaml\s+babel_tests:\s+.*?\s+```', re.DOTALL)
 
     def __init__(self, github_token: str, github_repositories):
@@ -154,20 +156,19 @@ class GitHubIssuesTestCases:
         # Look for BabelTest syntax.
         testrows = []
 
-        babeltest_matches = re.findall(self._BABELTEST_RE, github_issue.body)
-        if babeltest_matches:
-            for match in babeltest_matches:
-                self.logger.info("Found BabelTest in issue %s: %s", github_issue_id, match)
+        for babeltest_match in self._BABELTEST_RE.finditer(github_issue.body):
+            match = babeltest_match.group(0)
+            self.logger.info("Found BabelTest in issue %s: %s", github_issue_id, match)
 
-                # Figure out parameters.
-                test_string = match.removeprefix("{{BabelTest|").removesuffix("}}")
-                params = test_string.split("|")
-                if not params or not params[0]:
-                    raise ValueError(f"Missing assertion name in BabelTest in issue {github_issue_id}: {match}")
-                # Wiki syntax: params[0] is the assertion name; params[1:] form a single
-                # param_set (may be empty for assertions like Needed), so param_sets is a
-                # one-element list: [params[1:]].
-                testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
+            # Figure out parameters.
+            test_string = babeltest_match.group(1)
+            params = test_string.split("|")
+            if not params or not params[0]:
+                raise ValueError(f"Missing assertion name in BabelTest in issue {github_issue_id}: {match}")
+            # Wiki syntax: params[0] is the assertion name; params[1:] form a single
+            # param_set (may be empty for assertions like Needed), so param_sets is a
+            # one-element list: [params[1:]].
+            testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
 
         babeltest_yaml_matches = re.findall(self._BABELTEST_YAML_RE, github_issue.body)
         if babeltest_yaml_matches:

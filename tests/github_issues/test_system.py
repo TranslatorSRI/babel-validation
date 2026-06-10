@@ -173,6 +173,24 @@ class TestEmptyOrNullBabelTests:
 
 
 @pytest.mark.unit
+class TestWikiMarkerCaseInsensitivity:
+    """The {{BabelTest|...}} marker is case-insensitive, like assertion names."""
+
+    @pytest.mark.parametrize("marker", ["BabelTest", "babeltest", "BABELTEST", "Babeltest"])
+    def test_wiki_marker_any_case_parsed(self, github_issues_test_cases, marker):
+        mock = _mock_issue(f"{{{{{marker}|Resolves|CHEBI:15365}}}}")
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].assertion == "Resolves"
+        assert tests[0].param_sets == [["CHEBI:15365"]]
+
+    def test_wiki_marker_any_case_detected(self, github_issues_test_cases):
+        assert github_issues_test_cases.issue_has_tests(
+            _mock_issue("{{babeltest|Resolves|CHEBI:12345}}")
+        ) is True
+
+
+@pytest.mark.unit
 class TestIssueHasTests:
     """Documents issue_has_tests() behaviour for various body contents."""
 

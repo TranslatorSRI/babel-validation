@@ -39,7 +39,7 @@ babel_tests:
 ```
 ````
 
-Assertion names are case-insensitive.
+Assertion names are case-insensitive, as is the `{{BabelTest|...}}` marker itself.
 
 ## Param Sets
 
