@@ -18,12 +18,12 @@ class BlocklistEntry:
     """
     Query: Optional[str] = None
     CURIE: Optional[str] = None
-    Blocked: str = None
-    Status: str = None
-    Issue: str = None
-    TreatsOnly: str = None
-    Submitter: str = None
-    Comment: str = None
+    Blocked: Optional[str] = None
+    Status: Optional[str] = None
+    Issue: Optional[str] = None
+    TreatsOnly: Optional[str] = None
+    Submitter: Optional[str] = None
+    Comment: Optional[str] = None
 
     def is_blocked(self):
         """ Is this term supposed to be blocked? """
