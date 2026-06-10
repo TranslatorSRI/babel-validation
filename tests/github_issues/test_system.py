@@ -5,10 +5,18 @@ import pytest
 import yaml
 
 from src.babel_validation.core.testrow import TestStatus
+from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
 
 pytestmark = pytest.mark.unit
 
 INVALID_NAME = "NotARealAssertion"
+
+
+@pytest.fixture
+def github_issues_test_cases():
+    """Override the conftest fixture: these unit tests never hit the GitHub API,
+    so build the parser with a dummy token rather than requiring GITHUB_TOKEN."""
+    return GitHubIssuesTestCases("unit-test-dummy-token", ["test-org/test-repo"])
 
 
 def _mock_issue(body: str, number: int = 999) -> MagicMock:
