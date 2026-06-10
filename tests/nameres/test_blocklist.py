@@ -42,9 +42,12 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
     # Someday we would like to do this with the query as well, but that would require some work.
     # So we only test the CURIE for now.
     response = requests.get(nameres_url_reverse_lookup, params={
-        'curies': blocklist_entry.CURIE,
+        'preferred_curies': blocklist_entry.CURIE,
     })
-    assert response.ok
+    assert response.ok, (
+        f"Request to {nameres_url_reverse_lookup}?preferred_curies={blocklist_entry.CURIE} "
+        f"failed with HTTP {response.status_code}: {response.text}"
+    )
     result = response.json()[blocklist_entry.CURIE]
 
     if flag_expect_present:
