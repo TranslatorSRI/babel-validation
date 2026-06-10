@@ -6,6 +6,11 @@ from typing import Optional
 import requests
 
 
+# The Translator Blocklist is stored in a private GitHub repository; however,
+# we are currently using a spreadsheet to manage "Red Team" exercises where
+# multiple Translator members try out different offensive terms and log them
+# into a single spreadsheet. Eventually this test will support both, but since
+# my immediate need is to check the spreadsheet, I'll start with that.
 @dataclass(frozen=True)
 class BlocklistEntry:
     """
@@ -13,12 +18,12 @@ class BlocklistEntry:
     """
     Query: Optional[str] = None
     CURIE: Optional[str] = None
-    Blocked: str = None
-    Status: str = None
-    Issue: str = None
-    TreatsOnly: str = None
-    Submitter: str = None
-    Comment: str = None
+    Blocked: Optional[str] = None
+    Status: Optional[str] = None
+    Issue: Optional[str] = None
+    TreatsOnly: Optional[str] = None
+    Submitter: Optional[str] = None
+    Comment: Optional[str] = None
 
     def is_blocked(self):
         """ Is this term supposed to be blocked? """
@@ -33,6 +38,7 @@ class BlocklistEntry:
 
         :return: A BlocklistEntry with the filled in fields.
         """
+
         return BlocklistEntry(
             Query=row.get('String (optional)', None),
             CURIE=row.get('CURIE (optional)', None),
