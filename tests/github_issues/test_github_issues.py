@@ -38,7 +38,7 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
         ))
 
     count_subtests = 0
-    count_subtests_failed = 0
+    failed_messages = []
     for test_issue in tests:
         results_nodenorm = test_issue.test_with_nodenorm(nodenorm)
         results_nameres = test_issue.test_with_nameres(nodenorm, nameres)
@@ -46,13 +46,20 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
         for result in itertools.chain(results_nodenorm, results_nameres):
             count_subtests += 1
 
+            if is_open:
+                # Don't assert inside subtests for open issues: subtest failures
+                # don't respect the xfail marker on the parent test, so they would
+                # be reported as real failures. Collect them and xfail below instead.
+                if result.status == TestStatus.Failed:
+                    failed_messages.append(f"{github_issue_id} ({github_issue.state}): {result.message}")
+                continue
+
             with subtests.test(msg=github_issue_id):
                 match result:
                     case TestResult(status=TestStatus.Passed, message=message):
                         assert True, f"{github_issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Failed, message=message):
-                        count_subtests_failed += 1
                         assert False, f"{github_issue_id} ({github_issue.state}): {message}"
 
                     case TestResult(status=TestStatus.Skipped, message=message):
@@ -62,16 +69,19 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
                         assert False, f"Unknown result from {github_issue_id}: {result}"
 
     # For open issues: xfail so the result stays in the xfail family.
-    # - Some subtests failed → xfail with a count summary (expected outcome).
-    # - All subtests passed  → the xfail marker added above makes this XPASS,
+    # - Some assertions failed → xfail with a count summary (expected outcome).
+    # - All assertions passed  → the xfail marker added above makes this XPASS,
     #   which (strict=True) reports as a failure and signals the issue is closeable.
-    # - No subtests ran      → xfail as a configuration error.
+    # - No assertions ran      → xfail as a configuration error.
     if is_open:
         if count_subtests == 0:
             pytest.xfail(f"Open issue {github_issue_id} produced no test results — check assertion configuration")
-        elif count_subtests_failed > 0:
-            pct = count_subtests_failed / count_subtests
+        elif failed_messages:
+            pct = len(failed_messages) / count_subtests
+            details = "\n".join(failed_messages[:5])
+            if len(failed_messages) > 5:
+                details += f"\n... and {len(failed_messages) - 5} more"
             pytest.xfail(
-                f"Open issue {github_issue_id} has {count_subtests_failed:,} failing subtests "
-                f"out of {count_subtests:,} ({pct:.0%})"
+                f"Open issue {github_issue_id} has {len(failed_messages):,} failing assertions "
+                f"out of {count_subtests:,} ({pct:.0%}):\n{details}"
             )
