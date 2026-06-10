@@ -12,6 +12,9 @@ from src.babel_validation.core.testrow import TestResult, TestStatus
 def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases, subtests):
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
     nameres = CachedNameRes.from_url(target_info['NameResURL'])
+    # NameRes assertions pass if the expected CURIE is in the top N results; N
+    # comes from targets.ini (NameResXFailIfInTop) rather than being hardcoded.
+    pass_if_found_in_top = int(target_info.get('NameResXFailIfInTop', 5))
     tests = github_issues_test_cases.get_test_issues_from_issue(github_issue)
     if not tests:
         pytest.skip(f"No tests found in issue {github_issue}")
@@ -41,7 +44,7 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
     failed_messages = []
     for test_issue in tests:
         results_nodenorm = test_issue.test_with_nodenorm(nodenorm)
-        results_nameres = test_issue.test_with_nameres(nodenorm, nameres)
+        results_nameres = test_issue.test_with_nameres(nodenorm, nameres, pass_if_found_in_top)
 
         for result in itertools.chain(results_nodenorm, results_nameres):
             count_subtests += 1
