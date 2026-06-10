@@ -59,7 +59,9 @@ class CachedNodeNorm:
         cache_key = (curie, frozenset(params.items()))
         if cache_key in self.cache:
             return self.cache[cache_key]
-        return self.normalize_curies([curie], **params)[curie]
+        # Use .get(): NodeNorm normally echoes every requested CURIE (null when
+        # unresolvable), but don't crash if it ever omits one.
+        return self.normalize_curies([curie], **params).get(curie)
 
     def clear_curie(self, curie):
         keys_to_delete = [k for k in self.cache if k[0] == curie]
