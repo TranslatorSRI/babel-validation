@@ -36,7 +36,7 @@ from src.babel_validation.services.nodenorm import CachedNodeNorm
 # --- YAML emission ---------------------------------------------------------
 
 class _FlowList(list):
-    """List subclass that yaml.safe_dump emits in inline flow style."""
+    """List subclass that _BabelTestDumper emits in inline flow style."""
 
 
 def _represent_flow_list(dumper, data):
@@ -45,7 +45,12 @@ def _represent_flow_list(dumper, data):
     )
 
 
-yaml.SafeDumper.add_representer(_FlowList, _represent_flow_list)
+class _BabelTestDumper(yaml.SafeDumper):
+    """Module-local dumper so the _FlowList representer doesn't mutate the global
+    yaml.SafeDumper (which would change YAML output process-wide for other code)."""
+
+
+_BabelTestDumper.add_representer(_FlowList, _represent_flow_list)
 
 
 # --- Data structures -------------------------------------------------------
@@ -182,8 +187,9 @@ def emit_yaml(
             for assertion, entries in blocks.items()
         }
     }
-    body = yaml.safe_dump(
+    body = yaml.dump(
         data,
+        Dumper=_BabelTestDumper,
         sort_keys=False,
         default_flow_style=False,
         allow_unicode=True,
