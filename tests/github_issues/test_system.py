@@ -194,7 +194,7 @@ class TestEmptyOrNullBabelTests:
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
     def test_yaml_empty_assertion_params(self, github_issues_test_cases):
-        # Resolves: [] → GitHubIssueTest with empty param_sets (no crash)
+        # Resolves: [] → Assertion with empty param_sets (no crash)
         mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves: []\n```")
         tests = github_issues_test_cases.get_test_issues_from_issue(mock)
         assert len(tests) == 1
