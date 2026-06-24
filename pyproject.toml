@@ -5,37 +5,48 @@ description = "A set of programs for validating the output of the Babel pipeline
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
+# Runtime dependencies needed to USE the library (fetch GitHub-issue tests,
+# parse them, and run them against NodeNorm/NameRes). PyGitHub is a core
+# dependency because the test definitions live in GitHub issues, so every
+# consumer needs it to obtain them.
 dependencies = [
-    "black>=25.9.0",
     "click>=8.1",
     "pyyaml>=6.0",
     "requests>=2.32.5",
     "tqdm>=4.67.1",
     "filelock",
-    "deepdiff>=8.6.1",
     "python-dotenv>=0.9.9",
-    "openapi-spec-validator>=0.7.2",
     "pygithub>=2.8.1",
+]
+
+[project.urls]
+Repository = "https://github.com/TranslatorSRI/babel-validation"
+
+# Tooling for developing babel-validation itself (its pytest suite + formatter).
+# A uv dependency-group is auto-installed by `uv run` / `uv sync` for local work
+# and CI, but — unlike an extra — is NOT shipped to library consumers.
+[dependency-groups]
+dev = [
+    "black>=25.9.0",
+    "deepdiff>=8.6.1",
+    "openapi-spec-validator>=0.7.2",
     "pytest>=9.0.2",
     "pytest-timeout>=2.4.0",
     "pytest-xdist[psutil]",
     "pytest-subtests",
 ]
 
-[project.urls]
-Repository = "https://github.com/TranslatorSRI/babel-validation"
-
 [project.scripts]
-csv-to-babeltests = "src.babel_validation.tools.csv_to_babeltests:main"
+csv-to-babeltests = "babel_validation.tools.csv_to_babeltests:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# Package the entire `src/` directory so existing imports
-# (`from src.babel_validation.X import Y`) continue to work after install.
-packages = ["src"]
+# src-layout: ship `src/babel_validation` as the top-level import package
+# `babel_validation`, so consumers `import babel_validation` (not `src.…`).
+packages = ["src/babel_validation"]
 
 [tool.pytest.ini_options]
 # Without testpaths, a bare `pytest` would also scan the website directories
