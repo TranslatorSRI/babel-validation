@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from src.babel_validation.core.testrow import TestStatus
-from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
+from babel_validation.core.testrow import TestStatus
+from babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
 
 pytestmark = pytest.mark.unit
 

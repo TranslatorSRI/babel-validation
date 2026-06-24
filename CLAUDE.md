@@ -91,4 +91,4 @@ When writing new tests:
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
 - GitHub-issue-driven tests are picked up automatically by `tests/github_issues/test_github_issues.py` via `GitHubIssuesTestCases`
-- Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
+- Import shared classes from `babel_validation.*` (e.g. `from babel_validation.services.nodenorm import CachedNodeNorm`)

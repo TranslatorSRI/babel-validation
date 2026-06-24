@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED — do not edit by hand.
-     Regenerate with: uv run python -m src.babel_validation.assertions.gen_docs -->
+     Regenerate with: uv run python -m babel_validation.assertions.gen_docs -->
 
 # BabelTest Assertion Types
 
@@ -240,4 +240,4 @@ babel_tests:
 
 3. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`.
 
-4. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`.
+4. Run `uv run python -m babel_validation.assertions.gen_docs` to regenerate `README.md`.

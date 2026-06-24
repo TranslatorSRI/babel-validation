@@ -9,7 +9,7 @@ import pytest
 from filelock import FileLock
 from github import GithubException, Issue
 
-from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
+from babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
 from tests._pytest_helpers import deselected_by_markexpr
 
 _github_token = None

@@ -1,4 +1,4 @@
-from src.babel_validation.assertions import AssertionHandler
+from babel_validation.assertions import AssertionHandler
 
 
 class NeededHandler(AssertionHandler):

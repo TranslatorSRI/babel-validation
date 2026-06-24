@@ -28,9 +28,9 @@ from pathlib import Path
 import click
 import yaml
 
-from src.babel_validation.assertions import ASSERTION_HANDLERS
-from src.babel_validation.core.testrow import TestStatus
-from src.babel_validation.services.nodenorm import CachedNodeNorm
+from babel_validation.assertions import ASSERTION_HANDLERS
+from babel_validation.core.testrow import TestStatus
+from babel_validation.services.nodenorm import CachedNodeNorm
 
 
 # --- YAML emission ---------------------------------------------------------

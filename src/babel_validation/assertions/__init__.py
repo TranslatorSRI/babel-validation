@@ -16,13 +16,13 @@ Adding a new assertion type
 3. Set PARAMETERS, WIKI_EXAMPLES, and YAML_PARAMS class attributes for documentation.
 4. Override test_param_set().
 5. Import it here and add an instance to ASSERTION_HANDLERS.
-6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate README.md.
+6. Run `uv run python -m babel_validation.assertions.gen_docs` to regenerate README.md.
 """
 
 import re
 from typing import Iterator
 
-from src.babel_validation.core.testrow import TestResult, TestStatus
+from babel_validation.core.testrow import TestResult, TestStatus
 
 
 class AssertionHandler:
@@ -166,12 +166,12 @@ class NameResTest(AssertionHandler):
 
 
 # Registry — import submodules after base classes are defined to avoid circular imports.
-from src.babel_validation.assertions.nodenorm import (  # noqa: E402
+from babel_validation.assertions.nodenorm import (  # noqa: E402
     ResolvesHandler, DoesNotResolveHandler, ResolvesWithHandler,
     ResolvesWithTypeHandler, DoesNotResolveWithHandler, HasLabelHandler,
 )
-from src.babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
-from src.babel_validation.assertions.common import NeededHandler  # noqa: E402
+from babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
+from babel_validation.assertions.common import NeededHandler  # noqa: E402
 
 ASSERTION_HANDLERS: dict[str, AssertionHandler] = {
     h.NAME: h for h in [
