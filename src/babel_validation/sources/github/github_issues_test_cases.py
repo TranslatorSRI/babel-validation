@@ -184,10 +184,20 @@ class GitHubIssuesTestCases:
                         f"YAML block in issue {github_issue_id} matched the detection pattern "
                         f"but contains no 'babel_tests' top-level key: {match!r}"
                     )
+                if not isinstance(babel_tests, dict):
+                    raise ValueError(
+                        f"YAML block in issue {github_issue_id}: 'babel_tests' must be a mapping of "
+                        f"assertion name to param sets, but got {type(babel_tests).__name__}: {babel_tests!r}"
+                    )
 
                 for assertion, original_param_sets in babel_tests.items():
                     # YAML syntax: each entry under an assertion key becomes one param_set.
                     # A bare string becomes a single-element param_set; a list is used as-is.
+                    if not isinstance(assertion, str):
+                        raise ValueError(
+                            f"YAML block in issue {github_issue_id}: assertion name must be a string, "
+                            f"but got {type(assertion).__name__}: {assertion!r}"
+                        )
                     if original_param_sets is None:
                         raise ValueError(
                             f"YAML block in issue {github_issue_id}: assertion '{assertion}' has a null "

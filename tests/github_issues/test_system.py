@@ -207,6 +207,19 @@ class TestEmptyOrNullBabelTests:
         assert len(tests) == 1
         assert tests[0].param_sets == [["CHEBI:15365"]]
 
+    def test_yaml_babel_tests_as_list_raises(self, github_issues_test_cases):
+        # babel_tests as a list (not a mapping) → clear ValueError, not an AttributeError on .items().
+        mock = _mock_issue("```yaml\nbabel_tests:\n  - Resolves\n```")
+        with pytest.raises(ValueError, match="must be a mapping"):
+            github_issues_test_cases.get_test_issues_from_issue(mock)
+
+    def test_yaml_non_string_assertion_name_raises(self, github_issues_test_cases):
+        # A non-string assertion key (e.g. an integer) → clear ValueError, not a later
+        # AttributeError when .lower() is called on the assertion name.
+        mock = _mock_issue("```yaml\nbabel_tests:\n  123:\n  - CHEBI:15365\n```")
+        with pytest.raises(ValueError, match="assertion name must be a string"):
+            github_issues_test_cases.get_test_issues_from_issue(mock)
+
 
 @pytest.mark.unit
 class TestWikiMarkerCaseInsensitivity:
