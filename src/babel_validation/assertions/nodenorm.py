@@ -44,7 +44,7 @@ class DoesNotResolveHandler(NodeNormTest):
             if not result:
                 yield self.passed(f"Could not resolve {curie} with NodeNormalization service {nodenorm} as expected")
             else:
-                yield self.failed(f"Resolved {curie} to {result['id']['identifier']} ({result['type'][0]}, \"{result['id']['label']}\") with NodeNormalization service {nodenorm}, but expected not to resolve")
+                yield self.failed(f"Resolved {curie} to {result['id']['identifier']} ({self.first_type(result)}, \"{result['id'].get('label', '')}\") with NodeNormalization service {nodenorm}, but expected not to resolve")
 
 
 def _compare_resolutions(
@@ -100,9 +100,9 @@ class ResolvesWithHandler(NodeNormTest):
             else:
                 yield self.failed(
                     f"Resolved {curie} to {result['id']['identifier']} "
-                    f"({result['type'][0]}, \"{result['id'].get('label', '')}\"), but expected "
+                    f"({self.first_type(result)}, \"{result['id'].get('label', '')}\"), but expected "
                     f"{canonical_id} "
-                    f"({first_good['type'][0]}, \"{first_good['id']['label']}\") on {nodenorm}"
+                    f"({self.first_type(first_good)}, \"{first_good['id'].get('label', '')}\") on {nodenorm}"
                 )
 
 
@@ -146,7 +146,7 @@ class DoesNotResolveWithHandler(NodeNormTest):
             yield self.failed(
                 f"All CURIEs {params} resolved to the same result "
                 f"{shared['id']['identifier']} "
-                f"({shared['type'][0]}, \"{shared['id']['label']}\") on {nodenorm}, "
+                f"({self.first_type(shared)}, \"{shared['id'].get('label', '')}\") on {nodenorm}, "
                 f"but expected them to resolve differently"
             )
         else:

@@ -116,10 +116,19 @@ class NodeNormTest(AssertionHandler):
         """
         raise NotImplementedError
 
+    @staticmethod
+    def first_type(result: dict) -> str:
+        """First Biolink type of a resolved node, or a placeholder if the node has none.
+
+        NodeNorm normally returns a non-empty `type` list, but guard against an empty
+        (or missing) one so message formatting never raises IndexError/KeyError."""
+        types = result.get('type') or []
+        return types[0] if types else 'unknown type'
+
     def resolved_message(self, curie: str, result: dict, nodenorm) -> str:
         """Standard pass-message when a CURIE resolves."""
         return (f"Resolved {curie} to {result['id']['identifier']} "
-                f"({result['type'][0]}, \"{result['id']['label']}\") "
+                f"({self.first_type(result)}, \"{result['id'].get('label', '')}\") "
                 f"with NodeNormalization service {nodenorm}")
 
 
