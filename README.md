@@ -61,6 +61,58 @@ ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss
 ======================================================= 41 passed, 1965 skipped, 4 xfailed in 10.11s ========================================================
 ```
 
+## Use as a library
+
+`babel_validation` is also installable as a library so other tools can reuse the
+GitHub-issue test framework. Test definitions live in GitHub issues (using the
+`{{BabelTest|...}}` or ```` ```yaml babel_tests: ```` syntax — see
+[`assertions/README.md`](./src/babel_validation/assertions/README.md)), so the library
+needs a GitHub token to fetch them.
+
+Install it from GitHub in a `uv`-based project:
+
+```shell
+$ uv add "babel-validation @ git+https://github.com/TranslatorSRI/babel-validation"
+```
+
+**Run every issue test against a chosen NodeNorm/NameRes pair and report results**
+(e.g. an interactive UI, or comparing environments):
+
+```python
+from babel_validation import GitHubIssuesTestCases, CachedNodeNorm, CachedNameRes, run_issue_tests
+
+cases = GitHubIssuesTestCases(github_token, ["NCATSTranslator/Babel"])
+reports = run_issue_tests(
+    cases,
+    nodenorm=CachedNodeNorm.from_url("https://nodenorm.transltr.io/"),
+    nameres=CachedNameRes.from_url("https://name-lookup.transltr.io/"),
+)
+for r in reports:
+    if r.closeable:
+        print(f"{r.issue_id} now passes — consider closing ({r.url})")
+    elif r.reopened:
+        print(f"{r.issue_id} regressed — consider reopening ({r.url})")
+        for failure in r.failed_results:
+            print(f"    {failure.assertion} {failure.param_set}: {failure.message}")
+```
+
+**Parse the assertions and run them against your own data** (e.g. a Babel pipeline
+checking its local DuckDB/JSON output before the data reaches NodeNorm). Each
+`Assertion` exposes the assertion name and its param sets so you can implement your
+own executor:
+
+```python
+from babel_validation import GitHubIssuesTestCases
+
+cases = GitHubIssuesTestCases(github_token, ["NCATSTranslator/Babel"])
+for issue in cases.get_issues_with_tests():
+    for assertion in cases.get_test_issues_from_issue(issue):
+        # assertion.assertion -> e.g. "Resolves" / "HasLabel" / "ResolvesWithType"
+        # assertion.param_sets -> list[list[str]]; assertion.issue_state -> "open"|"closed"
+        for param_set in assertion.param_sets:
+            ...  # check param_set against your local data
+```
+
 ## Log Analysis
 
 The Jupyter Notebook in `log-analysis/` contains some basic analysis of the

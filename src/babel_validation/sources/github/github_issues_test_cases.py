@@ -23,6 +23,7 @@ param_sets  — The full list of param_sets for one assertion in one issue.
                         ["MONDO:0005015", "DOID:9351"]]
 """
 
+import itertools
 import json
 import logging
 import re
@@ -50,29 +51,52 @@ def _to_list(value, context: str) -> list:
     raise ValueError(f"{context}: expected str or list, got {type(value).__name__}")
 
 
-class GitHubIssueTest:
-    """Represents one assertion extracted from a GitHub issue body — an assertion name paired with a list of param_sets to evaluate."""
+class Assertion:
+    """One assertion extracted from a GitHub issue body — an assertion name paired with a
+    list of param_sets to evaluate, plus plain metadata about the issue it came from.
 
-    def __init__(self, github_issue_id: str, github_issue: Issue.Issue, assertion: str, param_sets: list[list[str]] = None):
+    This is the high-level object downstream consumers interact with. It deliberately stores
+    only plain strings (no live PyGitHub ``Issue``) so it is picklable and trivial to build in
+    tests or other tools that fetched the issue some other way. Consumers that run their own
+    executor (e.g. against a local database) can read ``assertion``/``param_sets`` and the
+    handler's ``curie_params()`` directly; consumers that want to test against live services
+    can call :meth:`run` (or the per-service ``test_with_*`` methods).
+    """
+
+    def __init__(self, assertion: str, param_sets: list[list[str]] = None, *,
+                 issue_id: str = "", issue_url: str = "", issue_state: str = ""):
         """
-        :param github_issue_id: Human-readable issue identifier, e.g. "org/repo#42".
-        :param github_issue: The PyGitHub Issue object this test was extracted from.
         :param assertion: The assertion name (case-insensitive), e.g. "Resolves" or "HasLabel".
-                          Must match a key in ASSERTION_HANDLERS.
+                          Must match a key in ASSERTION_HANDLERS to be runnable.
         :param param_sets: A list of param_sets (list[list[str]]) to evaluate for this assertion.
                            Each inner list is one param_set — see module docstring for details.
+        :param issue_id: Human-readable issue identifier, e.g. "org/repo#42".
+        :param issue_url: The issue's html_url, for linking back from reports.
+        :param issue_state: The issue's state, "open" or "closed".
         """
         if not isinstance(param_sets, list) and param_sets is not None:
-            raise ValueError(f"param_sets must be a list when creating a GitHubIssueTest({github_issue}, {assertion}, {param_sets})")
-        self.github_issue = github_issue
+            raise ValueError(f"param_sets must be a list when creating an Assertion({assertion!r}, {param_sets!r})")
         self.assertion = assertion
         self.param_sets = param_sets if param_sets is not None else []
-        self.github_issue_id = github_issue_id
+        self.issue_id = issue_id
+        self.issue_url = issue_url
+        self.issue_state = issue_state
 
-        _logger.info("Creating GitHubIssueTest for %s %s(%s)", github_issue.html_url, assertion, param_sets)
+        _logger.info("Creating Assertion for %s %s(%s)", issue_url or issue_id, assertion, param_sets)
+
+    @property
+    def name(self) -> str:
+        """Alias for the assertion type name (reads more naturally than ``a.assertion``)."""
+        return self.assertion
+
+    @property
+    def is_known(self) -> bool:
+        """True if this assertion name maps to a registered handler."""
+        return self.assertion.lower() in ASSERTION_HANDLERS
 
     def __str__(self):
-        return f"{self.github_issue_id}: {self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
+        prefix = f"{self.issue_id}: " if self.issue_id else ""
+        return f"{prefix}{self.assertion}({len(self.param_sets)} param sets: {json.dumps(self.param_sets)})"
 
     def _get_handler(self):
         handler = ASSERTION_HANDLERS.get(self.assertion.lower())
@@ -85,6 +109,26 @@ class GitHubIssueTest:
 
     def test_with_nameres(self, nodenorm: CachedNodeNorm, nameres: CachedNameRes, pass_if_found_in_top=5) -> Iterator[TestResult]:
         return self._get_handler().test_with_nameres(self.param_sets, nodenorm, nameres, pass_if_found_in_top, label=str(self))
+
+    def run(self, nodenorm: CachedNodeNorm, nameres: CachedNameRes,
+            pass_if_found_in_top: int = 5) -> Iterator[tuple[list[str], TestResult]]:
+        """Yield ``(param_set, TestResult)`` pairs, evaluating each param_set against whichever
+        service(s) this assertion applies to. Running one param_set at a time lets callers
+        attribute every result back to its source param_set; ``CachedNodeNorm``/``CachedNameRes``
+        deduplicate network calls, so this is no more expensive than a batch run.
+
+        Raises ValueError if the assertion name is unknown (check :attr:`is_known` first)."""
+        handler = self._get_handler()
+        for param_set in self.param_sets:
+            for result in itertools.chain(
+                handler.test_with_nodenorm([param_set], nodenorm, label=str(self)),
+                handler.test_with_nameres([param_set], nodenorm, nameres, pass_if_found_in_top, label=str(self)),
+            ):
+                yield param_set, result
+
+
+# Backwards-compatible alias for the pre-1.0 name.
+GitHubIssueTest = Assertion
 
 
 class GitHubIssuesTestCases:
@@ -123,7 +167,7 @@ class GitHubIssuesTestCases:
         self.github_repositories = github_repositories
         self.logger.info("Configured GitHub repositories: %s", self.github_repositories)
 
-    def get_test_issues_from_issue(self, github_issue: Issue.Issue) -> list[GitHubIssueTest]:
+    def get_test_issues_from_issue(self, github_issue: Issue.Issue) -> list[Assertion]:
         """
         Extract test rows from a single GitHub issue.
 
@@ -149,6 +193,11 @@ class GitHubIssuesTestCases:
         self.logger.debug("Looking for tests in issue %s: %s (%s, %s)",
                           github_issue_id, github_issue.title, github_issue.state, github_issue.html_url)
 
+        # Capture the plain issue fields once so the Assertion objects don't hold a live
+        # PyGitHub Issue (keeps them picklable and easy to build in tests/other tools).
+        issue_meta = dict(issue_id=github_issue_id, issue_url=github_issue.html_url,
+                          issue_state=github_issue.state)
+
         # Is there an issue body at all?
         if not github_issue.body or github_issue.body.strip() == '':
             return []
@@ -168,7 +217,7 @@ class GitHubIssuesTestCases:
             # Wiki syntax: params[0] is the assertion name; params[1:] form a single
             # param_set (may be empty for assertions like Needed), so param_sets is a
             # one-element list: [params[1:]].
-            testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
+            testrows.append(Assertion(params[0], [params[1:]], **issue_meta))
 
         babeltest_yaml_matches = re.findall(self._BABELTEST_YAML_RE, github_issue.body)
         if babeltest_yaml_matches:
@@ -211,7 +260,7 @@ class GitHubIssuesTestCases:
                         _to_list(ps, f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set")
                         for ps in normalized
                     ]
-                    testrows.append(GitHubIssueTest(github_issue_id, github_issue, assertion, param_sets))
+                    testrows.append(Assertion(assertion, param_sets, **issue_meta))
 
         return testrows
 
