@@ -1,90 +1,77 @@
-import itertools
-import json
-
 import pytest
 
 from babel_validation.assertions import ASSERTION_HANDLERS
+from babel_validation.runner import run_assertions
 from babel_validation.services.nameres import CachedNameRes
 from babel_validation.services.nodenorm import CachedNodeNorm
-from babel_validation.core.testrow import TestResult, TestStatus
+from babel_validation.core.testrow import TestStatus
 
 
 def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases, subtests):
+    """Thin adapter around babel_validation.runner.run_assertions.
+
+    The library decides what each result *is* (pass/fail) and what the issue state *implies*
+    (open ⇒ expected-fail, closed ⇒ expected-pass); this function only maps the resulting
+    IssueReport onto pytest outcomes (xfail / subtests / skip / fail)."""
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
     nameres = CachedNameRes.from_url(target_info['NameResURL'])
     # NameRes assertions pass if the expected CURIE is in the top N results; N
     # comes from targets.ini (NameResXFailIfInTop) rather than being hardcoded.
     pass_if_found_in_top = int(target_info.get('NameResXFailIfInTop', 5))
-    tests = github_issues_test_cases.get_test_issues_from_issue(github_issue)
-    if not tests:
-        pytest.skip(f"No tests found in issue {github_issue}")
-        return
 
-    is_open = github_issue.state == "open"
+    assertions = github_issues_test_cases.get_test_issues_from_issue(github_issue)
+    if not assertions:
+        pytest.skip(f"No tests found in issue {github_issue_id}")
+
+    report = run_assertions(
+        github_issue_id, github_issue.html_url, github_issue.state, assertions,
+        nodenorm=nodenorm, nameres=nameres, pass_if_found_in_top=pass_if_found_in_top,
+    )
 
     # Unknown assertion types must fail hard, not XFAIL.
-    unknown = [f"'{t.assertion}'" for t in tests
-               if t.assertion.lower() not in ASSERTION_HANDLERS]
-    if unknown:
+    if report.unknown_assertions:
+        unknown = ", ".join(f"'{a}'" for a in report.unknown_assertions)
         pytest.fail(
-            f"Issue {github_issue_id} uses unknown assertion type(s): "
-            f"{', '.join(unknown)} with param sets {json.dumps([t.param_sets for t in tests])}. "
+            f"Issue {github_issue_id} uses unknown assertion type(s): {unknown}. "
             f"Valid types (case-insensitive): {sorted(ASSERTION_HANDLERS.keys())}"
         )
 
-    # Open issues are assumed to fail, so we set an xfail marker (but we set it to strict so
-    # that XPASSes are reported loudly).
-    if is_open:
+    # Open issues are assumed to fail, so we set a strict xfail marker (so XPASSes — issues that
+    # now pass and are therefore closeable — are reported loudly).
+    if report.is_open:
         request.node.add_marker(pytest.mark.xfail(
-            reason=f"Issue {github_issue.html_url} is expected to fail because the issue is open.",
+            reason=f"Issue {report.url} is expected to fail because the issue is open.",
             strict=True,
         ))
 
-    count_subtests = 0
-    failed_messages = []
-    for test_issue in tests:
-        results_nodenorm = test_issue.test_with_nodenorm(nodenorm)
-        results_nameres = test_issue.test_with_nameres(nodenorm, nameres, pass_if_found_in_top)
-
-        for result in itertools.chain(results_nodenorm, results_nameres):
-            count_subtests += 1
-
-            if is_open:
-                # Don't assert inside subtests for open issues: subtest failures
-                # don't respect the xfail marker on the parent test, so they would
-                # be reported as real failures. Collect them and xfail below instead.
-                if result.status == TestStatus.Failed:
-                    failed_messages.append(f"{github_issue_id} ({github_issue.state}): {result.message}")
-                continue
-
+    if not report.is_open:
+        # Closed issue: assert each result in its own subtest.
+        for r in report.results:
             with subtests.test(msg=github_issue_id):
-                match result:
-                    case TestResult(status=TestStatus.Passed, message=message):
-                        assert True, f"{github_issue_id} ({github_issue.state}): {message}"
+                if r.status == TestStatus.Passed:
+                    assert True, f"{github_issue_id} ({report.state}): {r.message}"
+                elif r.status == TestStatus.Failed:
+                    assert False, f"{github_issue_id} ({report.state}): {r.message}"
+                elif r.status == TestStatus.Skipped:
+                    pytest.skip(f"{github_issue_id} ({report.state}): {r.message}")
+                else:
+                    assert False, f"Unknown result from {github_issue_id}: {r.result}"
+        return
 
-                    case TestResult(status=TestStatus.Failed, message=message):
-                        assert False, f"{github_issue_id} ({github_issue.state}): {message}"
-
-                    case TestResult(status=TestStatus.Skipped, message=message):
-                        pytest.skip(f"{github_issue_id} ({github_issue.state}): {message}")
-
-                    case _:
-                        assert False, f"Unknown result from {github_issue_id}: {result}"
-
-    # For open issues: xfail so the result stays in the xfail family.
-    # - Some assertions failed → xfail with a count summary (expected outcome).
-    # - All assertions passed  → the xfail marker added above makes this XPASS,
-    #   which (strict=True) reports as a failure and signals the issue is closeable.
-    # - No assertions ran      → xfail as a configuration error.
-    if is_open:
-        if count_subtests == 0:
-            pytest.xfail(f"Open issue {github_issue_id} produced no test results — check assertion configuration")
-        elif failed_messages:
-            pct = len(failed_messages) / count_subtests
-            details = "\n".join(failed_messages[:5])
-            if len(failed_messages) > 5:
-                details += f"\n... and {len(failed_messages) - 5} more"
-            pytest.xfail(
-                f"Open issue {github_issue_id} has {len(failed_messages):,} failing assertions "
-                f"out of {count_subtests:,} ({pct:.0%}):\n{details}"
-            )
+    # Open issue: keep the result in the xfail family.
+    # - No results        → xfail as a configuration error.
+    # - Some failures     → xfail with a count summary (the expected outcome).
+    # - All passed        → the strict xfail marker above makes this XPASS, reported as a
+    #                       failure, signaling the issue is closeable.
+    if not report.results:
+        pytest.xfail(f"Open issue {github_issue_id} produced no test results — check assertion configuration")
+    failed = report.failed_results
+    if failed:
+        details = "\n".join(f"{github_issue_id} ({report.state}): {r.message}" for r in failed[:5])
+        if len(failed) > 5:
+            details += f"\n... and {len(failed) - 5} more"
+        pct = len(failed) / len(report.results)
+        pytest.xfail(
+            f"Open issue {github_issue_id} has {len(failed):,} failing assertions "
+            f"out of {len(report.results):,} ({pct:.0%}):\n{details}"
+        )
