@@ -15,7 +15,7 @@ import requests
 from _pytest.mark import ParameterSet
 from filelock import FileLock
 
-from src.babel_validation.core.testrow import TestRow
+from babel_validation.core.testrow import TestRow
 
 
 class GoogleSheetTestCases:

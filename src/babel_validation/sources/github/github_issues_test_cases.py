@@ -33,10 +33,10 @@ import yaml
 from github import Github, Auth, Issue
 from tqdm import tqdm
 
-from src.babel_validation.assertions import ASSERTION_HANDLERS
-from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nameres import CachedNameRes
-from src.babel_validation.services.nodenorm import CachedNodeNorm
+from babel_validation.assertions import ASSERTION_HANDLERS
+from babel_validation.core.testrow import TestResult
+from babel_validation.services.nameres import CachedNameRes
+from babel_validation.services.nodenorm import CachedNodeNorm
 
 _logger = logging.getLogger(__name__)
 

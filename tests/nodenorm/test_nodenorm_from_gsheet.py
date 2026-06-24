@@ -1,7 +1,7 @@
 import urllib.parse
 import requests
 import pytest
-from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
+from babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
 from tests._pytest_helpers import deselected_by_markexpr
 
 # The Google Sheet is downloaded lazily in pytest_generate_tests so that runs

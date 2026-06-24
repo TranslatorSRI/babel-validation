@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.babel_validation.tools.csv_to_babeltests import (
+from babel_validation.tools.csv_to_babeltests import (
     BlockEntry,
     build_blocks,
     emit_yaml,
@@ -213,7 +213,7 @@ def test_emit_yaml_single_element_param_sets_emit_as_bare_strings():
 
 def test_emitted_assertion_names_match_handler_registry():
     """The names build_blocks emits must each resolve in ASSERTION_HANDLERS."""
-    from src.babel_validation.assertions import ASSERTION_HANDLERS
+    from babel_validation.assertions import ASSERTION_HANDLERS
     blocks, _ = build_blocks(
         ROWS,
         curie_column="OutputID", label_column="Label",

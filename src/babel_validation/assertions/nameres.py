@@ -2,10 +2,10 @@ import json
 import logging
 from typing import Iterator
 
-from src.babel_validation.assertions import NameResTest
-from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nameres import CachedNameRes
-from src.babel_validation.services.nodenorm import CachedNodeNorm
+from babel_validation.assertions import NameResTest
+from babel_validation.core.testrow import TestResult
+from babel_validation.services.nameres import CachedNameRes
+from babel_validation.services.nodenorm import CachedNodeNorm
 
 
 class SearchByNameHandler(NameResTest):
