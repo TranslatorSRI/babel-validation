@@ -12,7 +12,7 @@ class SearchByNameHandler(NameResTest):
     """Test that a name search returns an expected CURIE in the top-N results in NameRes."""
     NAME = "searchbyname"
     DESCRIPTION = (
-        "Each param_set must have at least two elements: a search query string and an expected CURIE. "
+        "Each param_set must have exactly two elements: a search query string and an expected CURIE. "
         "The test passes if the CURIE's normalized identifier appears within the top N results "
         "(default N=5) when NameRes looks up the search query."
     )
