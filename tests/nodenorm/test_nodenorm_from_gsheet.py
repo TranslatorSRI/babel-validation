@@ -1,14 +1,35 @@
-import itertools
 import urllib.parse
 import requests
 import pytest
-from common.google_sheet_test_cases import GoogleSheetTestCases, TestRow
+from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
+from tests._pytest_helpers import deselected_by_markexpr
 
-# We generate a set of tests from the GoogleSheetTestCases.
-gsheet = GoogleSheetTestCases()
+# The Google Sheet is downloaded lazily in pytest_generate_tests so that runs
+# which deselect these tests (e.g. `pytest -m unit`) never hit the network.
+_gsheet = None
 
 
-@pytest.mark.parametrize("test_row", gsheet.test_rows('test_nodenorm_from_gsheet.test_row', test_nodenorm=True, test_nameres=False))
+def _get_gsheet() -> GoogleSheetTestCases:
+    global _gsheet
+    if _gsheet is None:
+        _gsheet = GoogleSheetTestCases()
+    return _gsheet
+
+
+def pytest_generate_tests(metafunc):
+    if "test_row" not in metafunc.fixturenames:
+        return
+    if deselected_by_markexpr(metafunc):
+        metafunc.parametrize("test_row", [])
+        return
+    metafunc.parametrize(
+        "test_row",
+        _get_gsheet().test_rows(
+            'test_nodenorm_from_gsheet.test_row', test_nodenorm=True, test_nameres=False
+        ),
+    )
+
+
 def test_normalization(target_info, test_row, test_category):
     nodenorm_url = target_info['NodeNormURL']
 
