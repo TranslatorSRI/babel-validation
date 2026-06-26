@@ -18,7 +18,7 @@ class SearchByNameHandler(NameResTest):
     )
     PARAMETERS = (
         "Each param_set: the **search query string** and the **expected CURIE**. "
-        "The CURIE is normalized via NodeNorm (drug/chemical conflation enabled) before matching."
+        "The CURIE is normalized via NodeNorm before matching."
     )
     WIKI_EXAMPLES = ["{{BabelTest|SearchByName|water|CHEBI:15377}}"]
     YAML_PARAMS = "    - [water, CHEBI:15377]\n    - [diabetes, MONDO:0005015]"
@@ -34,13 +34,13 @@ class SearchByNameHandler(NameResTest):
             return
 
         [search_query, expected_curie_from_test] = params
-        expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test, drug_chemical_conflate='true')
+        expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test)
         if not expected_curie_result:
             yield self.failed(f"Unable to normalize CURIE {expected_curie_from_test} in {label}")
             return
 
         expected_curie = expected_curie_result['id']['identifier']
-        expected_curie_label = expected_curie_result['id']['label']
+        expected_curie_label = expected_curie_result['id'].get('label', '')
         expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
 
         results = nameres.lookup(search_query, autocomplete='false', limit=pass_if_found_in_top)

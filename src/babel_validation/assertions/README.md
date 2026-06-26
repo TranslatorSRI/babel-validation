@@ -190,7 +190,7 @@ These assertions test the [NameRes](https://name-lookup.transltr.io/docs) servic
 
 Each param_set must have at least two elements: a search query string and an expected CURIE. The test passes if the CURIE's normalized identifier appears within the top N results (default N=5) when NameRes looks up the search query.
 
-**Parameters:** Each param_set: the **search query string** and the **expected CURIE**. The CURIE is normalized via NodeNorm (drug/chemical conflation enabled) before matching.
+**Parameters:** Each param_set: the **search query string** and the **expected CURIE**. The CURIE is normalized via NodeNorm before matching.
 
 **Wiki syntax:**
 ```
