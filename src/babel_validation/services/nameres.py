@@ -1,3 +1,27 @@
+"""
+Cached client for the NameRes ``bulk-lookup`` and ``lookup`` APIs.
+
+Caching model
+-------------
+Each response is stored under the key ``(query, frozenset(params.items()))``.
+Entries are never evicted automatically; call ``delete_query()`` to force
+a fresh lookup for a specific query string.
+
+Cache-warming pattern
+---------------------
+When you need to look up many query strings for the same logical task, call
+``bulk_lookup()`` once with the full list.  That issues a single HTTP POST to
+the ``bulk-lookup`` endpoint and populates the cache.  Subsequent
+``bulk_lookup()`` calls for any subset of those queries are served from cache.
+
+Endpoint differences
+--------------------
+``bulk_lookup()`` targets ``/bulk-lookup`` and sends the query list as a JSON
+body.  ``lookup()`` targets the separate ``/lookup`` endpoint and sends its
+parameters as a URL query string.  These are distinct API endpoints with
+different response shapes; ``lookup()`` does NOT delegate to ``bulk_lookup()``.
+"""
+
 import logging
 import time
 
@@ -16,11 +40,29 @@ class CachedNameRes:
 
     @staticmethod
     def from_url(nameres_url: str) -> 'CachedNameRes':
+        """Return the singleton ``CachedNameRes`` for *nameres_url*.
+
+        The singleton ensures that cache entries accumulated during one part of
+        a test run are reused by later parts that share the same URL.  Prefer
+        this over direct construction unless you explicitly want a fresh cache.
+        """
         if nameres_url not in cached_nameres_by_url:
             cached_nameres_by_url[nameres_url] = CachedNameRes(nameres_url)
         return cached_nameres_by_url[nameres_url]
 
     def bulk_lookup(self, queries: list[str], **params) -> dict[str, dict]:
+        """Look up *queries* in bulk, returning a ``{query: result}`` mapping.
+
+        Already-cached queries are served from the cache; the remainder are
+        fetched from NameRes in a single HTTP POST to ``bulk-lookup``.
+        The response is merged with the cached results before returning.
+
+        *queries* must be a non-empty list — the NameRes API rejects empty
+        requests, so this method raises ``ValueError`` immediately.
+
+        Use this as the cache-warming call; subsequent ``bulk_lookup()`` calls
+        for any subset of these queries will be free.
+        """
         if not queries:
             raise ValueError(f"queries must not be empty when calling bulk_lookup({queries}, {params}) on {self}")
         if not isinstance(queries, list):
@@ -55,6 +97,16 @@ class CachedNameRes:
         return result
 
     def lookup(self, query, **params):
+        """Look up a single *query* string via the NameRes ``/lookup`` endpoint.
+
+        This targets a different endpoint from ``bulk_lookup()`` — parameters
+        are sent as URL query string fields, and the response is a list of
+        result dicts rather than a mapping.  Results are cached per
+        ``(query, params)`` combination.
+
+        This method does NOT delegate to ``bulk_lookup()``.  To cache-warm for
+        single lookups, call this method (or ``bulk_lookup()``) upfront.
+        """
         cache_key = (query, frozenset(params.items()))
         if cache_key in self.cache:
             return self.cache[cache_key]
@@ -71,6 +123,11 @@ class CachedNameRes:
         return result
 
     def delete_query(self, query):
+        """Remove all cached results for *query* (across every param variant).
+
+        The next call to ``lookup()`` or ``bulk_lookup()`` for this query will
+        issue a fresh HTTP request.
+        """
         keys_to_delete = [k for k in self.cache if k[0] == query]
         for k in keys_to_delete:
             del self.cache[k]

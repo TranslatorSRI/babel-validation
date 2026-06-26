@@ -1,3 +1,21 @@
+"""
+Cached client for the NodeNorm ``get_normalized_nodes`` API.
+
+Caching model
+-------------
+Each response is stored under the key ``(curie, frozenset(params.items()))``.
+Entries are never evicted automatically; call ``clear_curie()`` to force
+a fresh lookup for a specific identifier.
+
+Cache-warming pattern
+---------------------
+When you need to normalize many CURIEs for the same logical task (e.g. all
+CURIEs referenced in a GitHub issue), call ``normalize_curies()`` once with
+the full list.  That issues a single HTTP request and populates the cache.
+Subsequent ``normalize_curie()`` calls for any of those identifiers return
+immediately from cache — no additional HTTP traffic.
+"""
+
 import logging
 import time
 
@@ -16,11 +34,30 @@ class CachedNodeNorm:
 
     @staticmethod
     def from_url(nodenorm_url: str) -> 'CachedNodeNorm':
+        """Return the singleton ``CachedNodeNorm`` for *nodenorm_url*.
+
+        The singleton ensures that cache entries accumulated during one part of
+        a test run are reused by later parts that share the same URL.  Prefer
+        this over direct construction unless you explicitly want a fresh cache.
+        """
         if nodenorm_url not in cached_node_norms_by_url:
             cached_node_norms_by_url[nodenorm_url] = CachedNodeNorm(nodenorm_url)
         return cached_node_norms_by_url[nodenorm_url]
 
     def normalize_curies(self, curies: list[str], **params) -> dict[str, dict]:
+        """Normalize *curies* in bulk, returning a ``{curie: result}`` mapping.
+
+        Already-cached CURIEs are served from the cache; the remainder are
+        fetched from NodeNorm in a single HTTP POST to ``get_normalized_nodes``.
+        The response is merged with the cached results before returning.
+
+        *curies* must be a non-empty list — the NodeNorm API rejects empty
+        requests, so this method raises ``ValueError`` immediately.
+
+        Values in the returned dict are ``None`` for CURIEs NodeNorm could not
+        resolve.  Use this as the cache-warming call; subsequent
+        ``normalize_curie()`` calls for these identifiers will be free.
+        """
         if not curies:
             raise ValueError(f"curies must not be empty when calling normalize_curies({curies}, {params}) on {self}")
         if not isinstance(curies, list):
@@ -56,14 +93,28 @@ class CachedNodeNorm:
         return result
 
     def normalize_curie(self, curie, **params):
+        """Normalize a single *curie*, returning the NodeNorm result or ``None``.
+
+        Checks the cache first; on a miss, delegates to ``normalize_curies()``
+        (one HTTP call) and returns the result.  If you expect to normalize many
+        CURIEs, call ``normalize_curies()`` upfront so this method never makes
+        an HTTP call.
+
+        Uses ``.get()`` rather than direct indexing so that a NodeNorm response
+        that silently omits a requested CURIE returns ``None`` instead of
+        raising ``KeyError``.
+        """
         cache_key = (curie, frozenset(params.items()))
         if cache_key in self.cache:
             return self.cache[cache_key]
-        # Use .get(): NodeNorm normally echoes every requested CURIE (null when
-        # unresolvable), but don't crash if it ever omits one.
         return self.normalize_curies([curie], **params).get(curie)
 
     def clear_curie(self, curie):
+        """Remove all cached results for *curie* (across every param variant).
+
+        The next call to ``normalize_curie()`` or ``normalize_curies()`` for
+        this identifier will issue a fresh HTTP request.
+        """
         keys_to_delete = [k for k in self.cache if k[0] == curie]
         for k in keys_to_delete:
             del self.cache[k]
