@@ -32,3 +32,6 @@ packages = ["src"]
 # (including node_modules) during collection.
 testpaths = ["tests"]
 timeout = 300
+markers = [
+    "unit: unit tests that do not require network access",
+]
