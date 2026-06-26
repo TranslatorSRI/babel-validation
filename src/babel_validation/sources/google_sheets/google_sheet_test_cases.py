@@ -15,7 +15,7 @@ import requests
 from _pytest.mark import ParameterSet
 from filelock import FileLock
 
-from src.babel_validation.core.testrow import TestRow
+from ...core.testrow import TestRow
 
 
 class GoogleSheetTestCases:
@@ -39,7 +39,7 @@ class GoogleSheetTestCases:
 
         self.google_sheet_id = google_sheet_id
 
-        sheet_hash = hashlib.md5(google_sheet_id.encode()).hexdigest()[:8]
+        sheet_hash = hashlib.md5(google_sheet_id.encode()).hexdigest()
         cache_file = Path(tempfile.gettempdir()) / f"babel_validation_gsheet_{sheet_hash}.csv"
         lock_file = cache_file.with_suffix(".lock")
 
