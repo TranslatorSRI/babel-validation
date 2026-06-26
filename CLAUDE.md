@@ -46,21 +46,29 @@ cd website && npm install && npm run dev   # Dev server at localhost:4321
 
 ## Architecture
 
+### Library (`src/babel_validation/`)
+
+Shared library code used by the tests and potentially other consumers.
+
+- `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
+- `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
+- `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
+- `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
+
 ### Test Framework (`tests/`)
 
 The core of this project. Tests validate NodeNorm and NameRes services across multiple deployment environments.
 
 **Target system:** `tests/targets.ini` defines endpoints for each environment (dev, prod, test, ci, exp, localhost). Tests use `target_info` fixture to get URLs. The `conftest.py` parametrizes tests across targets via `--target` CLI option; default is `dev`.
 
-**Google Sheet integration:** ~2000+ test cases are pulled from a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/). `tests/common/google_sheet_test_cases.py` fetches and parses these into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
+**Google Sheet integration:** ~2000+ test cases are pulled from a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/). `src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses these into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
 
 **Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
 
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
-- `tests/nodenorm/by_issue/` — Tests tied to specific GitHub issues
-- `tests/common/` — Shared utilities (`GoogleSheetTestCases`, `TestRow`)
+- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
 
 ### Web Applications
 
@@ -79,4 +87,5 @@ When writing new tests:
 - Use the `target_info` fixture to get NodeNorm/NameRes URLs from targets.ini
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
-- Issue-specific tests go in `tests/nodenorm/by_issue/` or `tests/github_issues/`
+- Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
