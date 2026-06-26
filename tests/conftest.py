@@ -28,7 +28,13 @@ def get_targets_ini_path(config):
     return config_path
 
 
-def _silent_unlink(path: str) -> None:
+def unlink_if_exists(path: str) -> None:
+    """
+    Unlink the file at `path` if it exists.
+
+    :param path: The path to the file to unlink.
+    :return: None
+    """
     try:
         os.unlink(path)
     except FileNotFoundError:
@@ -41,8 +47,8 @@ def pytest_configure(config):
     # so they can share the cache file written by the controller.
     if not os.environ.get('PYTEST_XDIST_WORKER'):
         for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
-            _silent_unlink(f)
-            _silent_unlink(f.removesuffix('.csv') + '.lock')
+            unlink_if_exists(f)
+            unlink_if_exists(f.removesuffix('.csv') + '.lock')
 
 
 def pytest_addoption(parser):
