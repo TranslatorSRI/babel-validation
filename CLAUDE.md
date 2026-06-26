@@ -88,4 +88,4 @@ When writing new tests:
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
-- Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
+- Import shared classes from `babel_validation.*` (e.g. `from babel_validation.services.nodenorm import CachedNodeNorm`)
