@@ -43,6 +43,9 @@ def pytest_configure(config):
         for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
             _silent_unlink(f)
             _silent_unlink(f.removesuffix('.csv') + '.lock')
+        tmpdir = tempfile.gettempdir()
+        for name in ('babel_validation_issues_cache.json', 'babel_validation_issues_cache.lock'):
+            _silent_unlink(os.path.join(tmpdir, name))
 
 
 def pytest_addoption(parser):
@@ -65,6 +68,14 @@ def pytest_addoption(parser):
         default=[],
         action='append',
         help="The categories of tests to exclude."
+    )
+
+    # Only test particular GitHub issues.
+    parser.addoption(
+        '--issue',
+        default=[],
+        action='append',
+        help="One or more GitHub issues to test. Should be specified as either 'organization/repo#110', 'repo#110' or '110'"
     )
 
 
@@ -140,3 +151,9 @@ def test_category(request):
             return True
 
     return category_test
+
+
+# --issue is consumed by tests/github_issues/conftest.py; this fixture exposes it to any test that wants it.
+@pytest.fixture
+def selected_github_issues(pytestconfig):
+    return pytestconfig.getoption('issue')
