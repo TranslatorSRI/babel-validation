@@ -20,7 +20,14 @@ pytest --target all                    # Run against all targets in targets.ini
 pytest --category "Unit Tests"         # Filter by Google Sheet category
 pytest --category-exclude "Slow"       # Exclude a category
 pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
-pytest tests/nodenorm/test_nodenorm_from_gsheet.py -k "row=42"  # Run a specific test row
+pytest -m unit                         # Offline unit suite (no network/token) — what CI runs on PRs
+```
+
+To run a single Google Sheet row, pass its full node ID (NOT `-k "row=42"` — pytest's
+`-k` expression parser rejects the `=`):
+
+```bash
+pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=42]"
 ```
 
 ### Code Formatting
@@ -92,3 +99,19 @@ When writing new tests:
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
 - GitHub-issue-driven tests are picked up automatically by `tests/github_issues/test_github_issues.py` via `GitHubIssuesTestCases`
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
+
+## Gotchas (learned the hard way)
+
+- **Offline vs. networked tests.** `pytest -m unit` is the offline suite CI runs on PRs (no
+  network, no `GITHUB_TOKEN`). Network-backed modules (Google Sheet, GitHub issues) defer all
+  fetching to `pytest_generate_tests` and call `tests/_pytest_helpers.deselected_by_markexpr`
+  so a marker-deselected run never hits the network. If you add a module that fetches at
+  import/collection time, replicate that pattern or you'll break `-m unit`.
+- **`src/babel_validation` is importable only because** `[tool.hatch.build.targets.wheel]` in
+  `pyproject.toml` packages `src/`. Imports use the full `src.babel_validation.*` path.
+- **Black is not strictly enforced** — `black --check` flags much of the existing tree. Match
+  the surrounding style of the file you're editing; don't mass-reformat (it creates huge,
+  review-hostile diffs).
+- **Commits are signed via 1Password's SSH agent** (`op-ssh-sign`). It can lock mid-session;
+  a `failed to fill whole buffer` / `failed to write commit object` error means 1Password
+  needs unlocking, not a git problem.
