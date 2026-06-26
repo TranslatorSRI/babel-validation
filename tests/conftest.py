@@ -1,7 +1,10 @@
 #
 # conftest.py - pytest configuration settings
 #
+import glob
+import os
 import os.path
+import tempfile
 
 import pytest
 import configparser
@@ -25,6 +28,26 @@ def get_targets_ini_path(config):
     return config_path
 
 
+def _silent_unlink(path: str) -> None:
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+def pytest_configure(config):
+    # Delete the Google Sheet CSV cache at the start of each run so tests always
+    # use a fresh download. Only the controller does this — xdist workers skip it
+    # so they can share the cache file written by the controller.
+    if not os.environ.get('PYTEST_XDIST_WORKER'):
+        for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
+            _silent_unlink(f)
+            _silent_unlink(f.removesuffix('.csv') + '.lock')
+        tmpdir = tempfile.gettempdir()
+        for name in ('babel_validation_issues_cache.json', 'babel_validation_issues_cache.lock'):
+            _silent_unlink(os.path.join(tmpdir, name))
+
+
 def pytest_addoption(parser):
     # The target environment(s) to target.
     parser.addoption(
@@ -45,6 +68,14 @@ def pytest_addoption(parser):
         default=[],
         action='append',
         help="The categories of tests to exclude."
+    )
+
+    # Only test particular GitHub issues.
+    parser.addoption(
+        '--issue',
+        default=[],
+        action='append',
+        help="One or more GitHub issues to test. Should be specified as either 'organization/repo#110', 'repo#110' or '110'"
     )
 
 
@@ -120,3 +151,8 @@ def test_category(request):
             return True
 
     return category_test
+
+# --issue is consumed by tests/github_issues/conftest.py; this fixture exposes it to any test that wants it.
+@pytest.fixture
+def selected_github_issues(pytestconfig):
+    return pytestconfig.getoption('issue')
