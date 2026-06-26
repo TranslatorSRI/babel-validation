@@ -15,7 +15,7 @@ target/
 # macOS
 .DS_Store
 
-# --- Python (GitHub Python.gitignore template) ---
+# --- Python (GitHub Python.gitignore template from https://github.com/github/gitignore/blob/main/Python.gitignore) ---
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
