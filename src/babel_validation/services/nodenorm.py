@@ -4,7 +4,7 @@ Cached client for the NodeNorm ``get_normalized_nodes`` API.
 Caching model
 -------------
 Each response is stored under the key ``(curie, frozenset(params.items()))``.
-Entries are never evicted automatically; call ``clear_curie()`` to force
+Entries are never evicted automatically; call ``invalidate_curie()`` to force
 a fresh lookup for a specific identifier.
 
 Cache-warming pattern
@@ -18,10 +18,25 @@ immediately from cache — no additional HTTP traffic.
 
 import logging
 import time
+from typing import Protocol
 
 import requests
 
 cached_node_norms_by_url = {}
+
+
+class NodeNormService(Protocol):
+    """Interface that callers should depend on.
+
+    Type parameters against this Protocol rather than ``CachedNodeNorm``
+    directly so that a future drop-in library replacement requires no caller
+    changes.
+    """
+
+    def normalize_curies(self, curies: list[str], **params) -> dict[str, dict | None]: ...
+    def normalize_curie(self, curie: str, **params) -> dict | None: ...
+    def invalidate_curie(self, curie: str) -> None: ...
+
 
 class CachedNodeNorm:
     def __init__(self, nodenorm_url: str):
@@ -44,7 +59,7 @@ class CachedNodeNorm:
             cached_node_norms_by_url[nodenorm_url] = CachedNodeNorm(nodenorm_url)
         return cached_node_norms_by_url[nodenorm_url]
 
-    def normalize_curies(self, curies: list[str], **params) -> dict[str, dict]:
+    def normalize_curies(self, curies: list[str], **params) -> dict[str, dict | None]:
         """Normalize *curies* in bulk, returning a ``{curie: result}`` mapping.
 
         Already-cached CURIEs are served from the cache; the remainder are
@@ -92,7 +107,7 @@ class CachedNodeNorm:
 
         return result
 
-    def normalize_curie(self, curie, **params):
+    def normalize_curie(self, curie: str, **params) -> dict | None:
         """Normalize a single *curie*, returning the NodeNorm result or ``None``.
 
         Checks the cache first; on a miss, delegates to ``normalize_curies()``
@@ -109,7 +124,7 @@ class CachedNodeNorm:
             return self.cache[cache_key]
         return self.normalize_curies([curie], **params).get(curie)
 
-    def clear_curie(self, curie):
+    def invalidate_curie(self, curie: str) -> None:
         """Remove all cached results for *curie* (across every param variant).
 
         The next call to ``normalize_curie()`` or ``normalize_curies()`` for

@@ -4,7 +4,7 @@ Cached client for the NameRes ``bulk-lookup`` and ``lookup`` APIs.
 Caching model
 -------------
 Each response is stored under the key ``(query, frozenset(params.items()))``.
-Entries are never evicted automatically; call ``delete_query()`` to force
+Entries are never evicted automatically; call ``invalidate_query()`` to force
 a fresh lookup for a specific query string.
 
 Cache-warming pattern
@@ -24,10 +24,25 @@ different response shapes; ``lookup()`` does NOT delegate to ``bulk_lookup()``.
 
 import logging
 import time
+from typing import Protocol
 
 import requests
 
 cached_nameres_by_url = {}
+
+
+class NameResService(Protocol):
+    """Interface that callers should depend on.
+
+    Type parameters against this Protocol rather than ``CachedNameRes``
+    directly so that a future drop-in library replacement requires no caller
+    changes.
+    """
+
+    def bulk_lookup(self, queries: list[str], **params) -> dict[str, dict]: ...
+    def lookup(self, query: str, **params) -> list[dict]: ...
+    def invalidate_query(self, query: str) -> None: ...
+
 
 class CachedNameRes:
     def __init__(self, nameres_url: str):
@@ -96,7 +111,7 @@ class CachedNameRes:
 
         return result
 
-    def lookup(self, query, **params):
+    def lookup(self, query: str, **params) -> list[dict]:
         """Look up a single *query* string via the NameRes ``/lookup`` endpoint.
 
         This targets a different endpoint from ``bulk_lookup()`` — parameters
@@ -122,7 +137,7 @@ class CachedNameRes:
         self.cache[cache_key] = result
         return result
 
-    def delete_query(self, query):
+    def invalidate_query(self, query: str) -> None:
         """Remove all cached results for *query* (across every param variant).
 
         The next call to ``lookup()`` or ``bulk_lookup()`` for this query will
