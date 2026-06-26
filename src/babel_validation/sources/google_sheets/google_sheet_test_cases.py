@@ -26,15 +26,13 @@ class GoogleSheetTestCases:
     def __str__(self):
         return f"Google Sheet Test Cases ({len(self.rows)} test cases from {self.google_sheet_id})"
 
-    # How long a cached download stays valid. pytest deletes the cache at the
-    # start of every run (see tests/conftest.py), so this TTL mainly protects
-    # other consumers (e.g. csv-to-babeltests) from reading stale data forever.
-    CACHE_TTL_SECONDS = 3600
-
-    def __init__(self, google_sheet_id="11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no"):
+    def __init__(self, google_sheet_id="11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no", cache_ttl_seconds: int = 3600):
         """ Create a Google Sheet test case.
 
-        :param google_sheet_id The Google Sheet identifier to download test cases from.
+        :param google_sheet_id: The Google Sheet identifier to download test cases from.
+        :param cache_ttl_seconds: How long a cached download stays valid. pytest deletes the cache at the
+            start of every run (see tests/conftest.py), so this TTL mainly protects other consumers
+            (e.g. csv-to-babeltests) from reading stale data forever.
         """
 
         self.google_sheet_id = google_sheet_id
@@ -44,7 +42,7 @@ class GoogleSheetTestCases:
         lock_file = cache_file.with_suffix(".lock")
 
         with FileLock(lock_file):
-            if cache_file.exists() and time.time() - cache_file.stat().st_mtime < self.CACHE_TTL_SECONDS:
+            if cache_file.exists() and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds:
                 self.csv_content = cache_file.read_text(encoding="utf-8")
             else:
                 csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
