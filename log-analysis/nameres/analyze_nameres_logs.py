@@ -45,7 +45,7 @@ def imports():
     import numpy as np
     import altair as alt
 
-    return Path, asdict, ast, dataclass, datetime, json, mo, np, pd, re
+    return Path, alt, asdict, ast, dataclass, datetime, json, mo, np, pd, re
 
 
 @app.cell
@@ -259,6 +259,231 @@ def latency_table(df, pd):
 
     latency_table = pd.DataFrame(_rows)
     latency_table
+    return
+
+
+@app.cell(hide_code=True)
+def viz_header(mo):
+    mo.md(r"""
+    # Visualizations
+
+    Interactive charts characterizing NameRes query performance. Because latency is
+    extremely heavy-tailed (a handful of requests take seconds while most take
+    ~13 ms), several charts default to a log scale. Use the controls to switch
+    metric and scale.
+    """)
+    return
+
+
+@app.cell
+def viz_setup(alt, mo):
+    # Altair caps embedded data at 5,000 rows by default; we have ~10k, so lift it.
+    alt.data_transformers.disable_max_rows()
+    mo.md("_Altair row limit disabled for this session._")
+    return
+
+
+@app.cell
+def viz_controls(mo):
+    metric_choice = mo.ui.dropdown(
+        options={
+            "Total request (took_ms)": "took_ms",
+            "Solr wait (solr_wait_ms)": "solr_wait_ms",
+            "App overhead (app_overhead_ms)": "app_overhead_ms",
+        },
+        value="Total request (took_ms)",
+        label="Latency metric",
+    )
+    use_log = mo.ui.checkbox(value=True, label="Log scale")
+    max_ms = mo.ui.slider(
+        start=50, stop=2000, step=50, value=500,
+        label="Max ms (linear scale only)", show_value=True,
+    )
+    mo.hstack([metric_choice, use_log, max_ms], justify="start", gap=2)
+    return max_ms, metric_choice, use_log
+
+
+@app.cell
+def latency_hist(alt, df, max_ms, metric_choice, mo, np, use_log):
+    _metric = metric_choice.value
+
+    if use_log.value:
+        _d = df[df[_metric] > 0].assign(_logv=np.log10(df.loc[df[_metric] > 0, _metric]))
+        _x = alt.X("_logv:Q", bin=alt.Bin(maxbins=60), title=f"log10({_metric})")
+    else:
+        _d = df[df[_metric] <= max_ms.value]
+        _x = alt.X(f"{_metric}:Q", bin=alt.Bin(maxbins=60), title=f"{_metric} (ms)")
+
+    _hist = (
+        alt.Chart(_d)
+        .mark_bar(opacity=0.75)
+        .encode(
+            _x,
+            alt.Y("count()", title="requests", stack=None),
+            alt.Color("mode:N", title="Query mode"),
+            tooltip=[alt.Tooltip("count()", title="requests"), "mode:N"],
+        )
+        .properties(height=280, title=f"Distribution of {_metric}")
+    )
+    mo.ui.altair_chart(_hist)
+    return
+
+
+@app.cell
+def box_by_mode(alt, df):
+    # Total latency by mode (log scale, since the tail spans ~5 orders of magnitude).
+    _bm = (
+        alt.Chart(df[df["took_ms"] > 0])
+        .mark_boxplot(extent=1.5)
+        .encode(
+            alt.X("mode:N", title="Query mode"),
+            alt.Y("took_ms:Q", scale=alt.Scale(type="log"), title="Total latency (ms, log)"),
+            alt.Color("mode:N", legend=None),
+        )
+        .properties(height=320, title="Total latency by query mode")
+    )
+    _bm
+    return
+
+
+@app.cell
+def solr_by_limit(alt, df):
+    # Solr wait by requested result limit, split by mode.
+    _bl = (
+        alt.Chart(df[df["solr_wait_ms"] > 0])
+        .mark_boxplot(extent=1.5)
+        .encode(
+            alt.X("limit:O", title="limit (requested results)"),
+            alt.Y("solr_wait_ms:Q", scale=alt.Scale(type="log"), title="Solr wait (ms, log)"),
+            alt.Color("mode:N", title="Query mode"),
+            alt.XOffset("mode:N"),
+        )
+        .properties(height=320, title="Solr wait time by result limit and mode")
+    )
+    _bl
+    return
+
+
+@app.cell
+def latency_vs_qlen(alt, df, mo):
+    # Median and p95 Solr wait vs query length (chars), aggregated per length & mode.
+    _q = df[df["query_length"] <= 40]
+    _agg = (
+        _q.groupby(["query_length", "mode"])
+        .agg(
+            median_ms=("solr_wait_ms", "median"),
+            p95_ms=("solr_wait_ms", lambda s: s.quantile(0.95)),
+            n=("solr_wait_ms", "size"),
+        )
+        .reset_index()
+    )
+    _median_line = (
+        alt.Chart(_agg)
+        .mark_line(point=True)
+        .encode(
+            alt.X("query_length:Q", title="Query length (chars)"),
+            alt.Y("median_ms:Q", title="Solr wait (ms)"),
+            alt.Color("mode:N", title="Query mode"),
+            tooltip=["query_length", "mode", "median_ms", "p95_ms", "n"],
+        )
+        .properties(height=300, title="Median Solr wait vs query length (queries ≤ 40 chars)")
+    )
+    mo.ui.altair_chart(_median_line)
+    return
+
+
+@app.cell
+def qlen_dist(alt, df):
+    # Distribution of query lengths (capped at 40 chars for readability).
+    _qd = (
+        alt.Chart(df[df["query_length"] <= 40])
+        .mark_bar()
+        .encode(
+            alt.X("query_length:Q", bin=alt.Bin(maxbins=40), title="Query length (chars)"),
+            alt.Y("count()", title="requests"),
+            alt.Color("mode:N", title="Query mode"),
+        )
+        .properties(height=280, title="Query length distribution")
+    )
+    _qd
+    return
+
+
+@app.cell(hide_code=True)
+def time_caption(mo):
+    mo.md(r"""
+    ### Temporal coverage
+
+    **Caveat:** this export is a capped/non-uniform sample of log lines (CloudWatch
+    returns at most 10,000 rows), so the counts below reflect *what is in the export*,
+    not true NameRes traffic volume. It is shown only to confirm the time span the
+    sample covers.
+    """)
+    return
+
+
+@app.cell
+def time_chart(alt, df):
+    _daily = df.set_index("time").resample("D").size().reset_index(name="lines")
+    _tc = (
+        alt.Chart(_daily)
+        .mark_bar()
+        .encode(
+            alt.X("time:T", title="Day"),
+            alt.Y("lines:Q", title="log lines in export"),
+            tooltip=["time:T", "lines:Q"],
+        )
+        .properties(height=240, title="Sampled log lines per day")
+    )
+    _tc
+    return
+
+
+@app.cell(hide_code=True)
+def slow_header(mo):
+    mo.md(r"""
+    # Slow queries
+
+    NameRes logs a `WARNING: SLOW QUERY` when a lookup crosses its slow-query
+    threshold. These are the requests an ElasticSearch backend would most need to
+    improve on. Below: how the slow-query rate varies by mode and result limit, and
+    the actual slowest queries in the sample.
+    """)
+    return
+
+
+@app.cell
+def slow_rate(alt, df):
+    _slow = (
+        df.groupby(["limit", "mode"])["slow_query"].mean().reset_index()
+    )
+    _sr = (
+        alt.Chart(_slow)
+        .mark_bar()
+        .encode(
+            alt.X("limit:O", title="limit (requested results)"),
+            alt.Y("slow_query:Q", title="fraction slow", axis=alt.Axis(format="%")),
+            alt.Color("mode:N", title="Query mode"),
+            alt.XOffset("mode:N"),
+            tooltip=["limit", "mode", alt.Tooltip("slow_query:Q", format=".1%")],
+        )
+        .properties(height=300, title="Slow-query rate by result limit and mode")
+    )
+    _sr
+    return
+
+
+@app.cell
+def slowest_queries(df):
+    # The actual slowest lookups in the sample (by Solr wait time).
+    slowest_queries = (
+        df.nlargest(25, "solr_wait_ms")[
+            ["time", "query", "mode", "limit", "num_biolink_types",
+             "has_exclude_prefixes", "solr_wait_ms", "took_ms"]
+        ]
+        .reset_index(drop=True)
+    )
+    slowest_queries
     return
 
 
