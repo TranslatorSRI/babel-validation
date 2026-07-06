@@ -13,6 +13,8 @@ dependencies = [
     "openapi-spec-validator>=0.7.2",
     "pytest>=8.4.2",
     "pytest-timeout>=2.4.0",
+    "pandas>=3.0.3",
+    "numpy>=2.4.6",
 ]
 
 [project.urls]
