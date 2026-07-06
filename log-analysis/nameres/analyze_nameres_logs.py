@@ -193,6 +193,72 @@ def dataframe(asdict, entries: "list[QueryLogEntry]", np, pd):
 
     df = df.sort_values("time").reset_index(drop=True)
     df
+    return (df,)
+
+
+@app.cell(hide_code=True)
+def measures_header(mo):
+    mo.md(r"""
+    # Overall measures
+
+    Headline numbers for the whole log, then a latency breakdown by query mode.
+    NameRes reports two latencies per request: **`took_ms`** (total request time)
+    and **`solr_wait_ms`** (time waiting for Solr). Their difference is the
+    **app overhead** spent inside the NameRes web layer.
+    """)
+    return
+
+
+@app.cell
+def overall_stats(df, mo):
+    _n = len(df)
+    _span = df["time"].max() - df["time"].min()
+    _reqs_per_day = _n / (_span.total_seconds() / 86400) if _span.total_seconds() else float("nan")
+
+    mo.md(f"""
+    - **Time range:** {df['time'].min()} → {df['time'].max()} &nbsp; ({_span})
+    - **Total lookups:** {_n:,} &nbsp; (~{_reqs_per_day:,.0f} / day)
+    - **Unique query strings:** {df['query'].nunique():,}
+    - **Mode split:** {int(df['autocomplete'].sum()):,} autocomplete / {int((~df['autocomplete']).sum()):,} exact
+    - **Slow queries (WARNING):** {int(df['slow_query'].sum()):,} ({df['slow_query'].mean() * 100:.2f}%)
+    - **Total latency:** median {df['took_ms'].median():.2f} ms, mean {df['took_ms'].mean():.2f} ms, max {df['took_ms'].max():,.2f} ms
+    - **Solr wait:** median {df['solr_wait_ms'].median():.2f} ms, mean {df['solr_wait_ms'].mean():.2f} ms, max {df['solr_wait_ms'].max():,.2f} ms
+    - **App overhead:** median {df['app_overhead_ms'].median():.2f} ms, mean {df['app_overhead_ms'].mean():.2f} ms
+    - **Query length (chars):** median {int(df['query_length'].median())}, mean {df['query_length'].mean():.1f}, max {df['query_length'].max()}
+    - **Filters used:** biolink_types {df['has_biolink_filter'].mean() * 100:.0f}%, only_prefixes {df['has_only_prefixes'].mean() * 100:.0f}%, exclude_prefixes {df['has_exclude_prefixes'].mean() * 100:.0f}%, only_taxa {df['has_taxa_filter'].mean() * 100:.0f}%
+    """)
+    return
+
+
+@app.cell
+def latency_table(df, pd):
+    def latency_summary_rows(frame: pd.DataFrame, scope: str) -> list[dict]:
+        """Percentile summary for each latency metric over `frame`."""
+        rows = []
+        for metric in ["took_ms", "solr_wait_ms", "app_overhead_ms"]:
+            s = frame[metric]
+            rows.append(
+                {
+                    "scope": scope,
+                    "metric": metric,
+                    "count": len(frame),
+                    "mean": round(s.mean(), 2),
+                    "p50": round(s.median(), 2),
+                    "p90": round(s.quantile(0.90), 2),
+                    "p95": round(s.quantile(0.95), 2),
+                    "p99": round(s.quantile(0.99), 2),
+                    "max": round(s.max(), 2),
+                }
+            )
+        return rows
+
+
+    _rows = latency_summary_rows(df, "overall")
+    for _mode, _grp in df.groupby("mode"):
+        _rows += latency_summary_rows(_grp, _mode)
+
+    latency_table = pd.DataFrame(_rows)
+    latency_table
     return
 
 
