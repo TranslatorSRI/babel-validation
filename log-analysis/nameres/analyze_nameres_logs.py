@@ -487,5 +487,103 @@ def slowest_queries(df):
     return
 
 
+@app.cell(hide_code=True)
+def bench_header(mo):
+    mo.md(r"""
+    # Benchmark export
+
+    To compare Solr against an ElasticSearch implementation, we distill the log into
+    a **replayable benchmark**: one case per unique `(query, params)` combination,
+    each carrying the parameters needed to reissue the lookup plus the **observed
+    Solr baseline latency**. Replaying these cases against both backends and
+    comparing to `baseline_solr` gives an apples-to-apples latency comparison on
+    real production queries.
+    """)
+    return
+
+
+@app.cell
+def bench_build(df, mo, pd):
+    def build_benchmark_cases(frame: pd.DataFrame) -> list[dict]:
+        """Deduplicate to one case per unique (query, params) and attach the observed
+        Solr baseline latency for each case."""
+        _join = lambda xs: "|".join(xs)
+        src = frame.assign(
+            _bt=frame["biolink_types"].apply(_join),
+            _op=frame["only_prefixes"].apply(_join),
+            _ep=frame["exclude_prefixes"].apply(_join),
+            _ot=frame["only_taxa"].apply(_join),
+        )
+        key = ["query", "autocomplete", "highlighting", "offset", "limit",
+               "_bt", "_op", "_ep", "_ot"]
+
+        cases = []
+        for _, g in src.groupby(key, sort=False):
+            r0 = g.iloc[0]
+            cases.append(
+                {
+                    "query": r0["query"],
+                    "autocomplete": bool(r0["autocomplete"]),
+                    "highlighting": bool(r0["highlighting"]),
+                    "offset": int(r0["offset"]),
+                    "limit": int(r0["limit"]),
+                    "biolink_types": list(r0["biolink_types"]),
+                    "only_prefixes": list(r0["only_prefixes"]),
+                    "exclude_prefixes": list(r0["exclude_prefixes"]),
+                    "only_taxa": list(r0["only_taxa"]),
+                    "baseline_solr": {
+                        "n_observed": int(len(g)),
+                        "solr_wait_ms_p50": round(float(g["solr_wait_ms"].median()), 3),
+                        "solr_wait_ms_p95": round(float(g["solr_wait_ms"].quantile(0.95)), 3),
+                        "took_ms_p50": round(float(g["took_ms"].median()), 3),
+                        "ever_slow": bool(g["slow_query"].any()),
+                        "first_seen": g["time"].min().isoformat(),
+                        "last_seen": g["time"].max().isoformat(),
+                    },
+                }
+            )
+        return cases
+
+
+    benchmark_cases = build_benchmark_cases(df)
+    benchmark_df = pd.json_normalize(benchmark_cases)
+    mo.vstack([
+        mo.md(f"**{len(benchmark_cases):,}** unique benchmark cases "
+              f"(from {len(df):,} log rows)."),
+        benchmark_df,
+    ])
+    return (benchmark_cases,)
+
+
+@app.cell
+def bench_export(LOG_PATH, Path, benchmark_cases, df, json, mo):
+    BENCHMARK_DIR = Path("benchmark")
+    BENCHMARK_DIR.mkdir(exist_ok=True)
+    benchmark_path = BENCHMARK_DIR / "nameres_solr_benchmark_2026-07-06.json"
+
+    benchmark_payload = {
+        "source_log": LOG_PATH.name,
+        "generated_from_rows": int(len(df)),
+        "num_cases": len(benchmark_cases),
+        "cases": benchmark_cases,
+    }
+    _benchmark_json = json.dumps(benchmark_payload, indent=2)
+    benchmark_path.write_text(_benchmark_json)
+
+    mo.vstack([
+        mo.md(
+            f"Wrote **{len(benchmark_cases):,}** benchmark cases to "
+            f"`{benchmark_path}` ({len(_benchmark_json) / 1e6:.2f} MB)."
+        ),
+        mo.download(
+            data=_benchmark_json.encode("utf-8"),
+            filename=benchmark_path.name,
+            mimetype="application/json",
+            label="Download benchmark JSON",
+        ),
+    ])
+    return
+
+
 if __name__ == "__main__":
     app.run()

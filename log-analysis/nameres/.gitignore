@@ -1,2 +1,5 @@
 # marimo session/output snapshot cache — not source, regenerated on run.
 __marimo__/
+
+# Generated benchmark artifacts — regenerated from the (uncommitted) logs.
+benchmark/
