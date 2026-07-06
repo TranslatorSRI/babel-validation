@@ -32,3 +32,8 @@ packages = ["src"]
 # (including node_modules) during collection.
 testpaths = ["tests"]
 timeout = 300
+
+[dependency-groups]
+dev = [
+    "marimo[recommended]>=0.23.13",
+]
