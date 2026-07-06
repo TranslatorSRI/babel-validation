@@ -1,0 +1,3 @@
+# Raw NameRes log exports are large and not checked into the repository.
+# Download them separately and place them in this directory.
+*.json
