@@ -18,6 +18,8 @@ dependencies = [
     "pytest-timeout>=2.4.0",
     "pytest-xdist[psutil]",
     "pytest-subtests",
+    "pandas>=3.0.3",
+    "numpy>=2.4.6",
 ]
 
 [project.urls]
