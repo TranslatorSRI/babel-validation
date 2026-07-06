@@ -585,5 +585,44 @@ def bench_export(LOG_PATH, Path, benchmark_cases, df, json, mo):
     return
 
 
+@app.cell(hide_code=True)
+def next_steps(mo):
+    mo.md(r"""
+    # Next steps
+
+    This notebook loads and characterizes the **Solr** production logs and emits a
+    replayable benchmark. To turn it into a Solr-vs-ElasticSearch comparison, the
+    planned follow-up work is:
+
+    1. **Replay harness.** Issue each benchmark case (from
+       `benchmark/nameres_solr_benchmark_*.json`) against a live NameRes endpoint —
+       once against the Solr backend, once against the ElasticSearch backend —
+       recording measured latency per case. Reuse `CachedNameRes`
+       (`src/babel_validation/services/nameres.py`) for the API calls.
+
+    2. **Latency comparison.** Join the replayed ES/Solr latencies back to each
+       case's `baseline_solr` to produce per-case and aggregate speedup/regression
+       tables and charts (e.g. ES p50/p95 vs Solr, by mode and limit). Watch the
+       pathological cases first: short autocomplete queries at high `limit`.
+
+    3. **Result-quality parity, not just speed.** The current benchmark compares
+       latency only. A fuller benchmark should also compare the **result sets** each
+       backend returns (do the top-N hits match?), so an ES speedup isn't bought at
+       the cost of relevance.
+
+    4. **More representative input.** This export is a capped, non-uniform 10k-row
+       CloudWatch sample. Pull a larger and/or time-stratified sample for
+       benchmarking, and re-run the loader (the parser handles the same log format).
+
+    5. **Extra breakdowns.** Latency by `biolink_types` filter set, by
+       prefix/taxa filters, and by pod / image tag (`pod_name`, `image_tag` are
+       already parsed) to check for per-instance or per-version effects.
+
+    6. **CSV export variant.** Emit a flattened CSV alongside the JSON for
+       spreadsheet-based review (list params joined with `|`).
+    """)
+    return
+
+
 if __name__ == "__main__":
     app.run()
