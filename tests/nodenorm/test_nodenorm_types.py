@@ -12,6 +12,55 @@ import requests
 def nodenorm_url(target_info):
     return target_info['NodeNormURL']
 
+
+def check_biolink_types(nodenorm_url, expected, conflate, drug_chemical_conflate, allowed_individual_types):
+    """
+    Query get_normalized_nodes for every CURIE in `expected` and compare the returned Biolink types.
+
+    Every mismatch across every CURIE is collected and reported in a single assertion, so that one
+    bad clique doesn't hide the others. `allowed_individual_types` is called with the types actually
+    returned for the clique and should return the set of types each equivalent identifier may have.
+    """
+    response = requests.post(nodenorm_url + "get_normalized_nodes", json={
+        "curies": list(expected.keys()),
+        "conflate": conflate,
+        "drug_chemical_conflate": drug_chemical_conflate,
+        "individual_types": True,
+    })
+    response.raise_for_status()
+    results = response.json()
+
+    errors = []
+    for curie, expected_types in expected.items():
+        result = results.get(curie)
+        if result is None:
+            errors.append(f"{curie}: no result returned")
+            continue
+
+        actual_types = result['type']
+        if actual_types != expected_types:
+            missing = [t for t in expected_types if t not in actual_types]
+            extra = [t for t in actual_types if t not in expected_types]
+            reordered = not missing and not extra
+            errors.append(
+                f"{curie}: Biolink types differ ({'reordered only' if reordered else 'membership differs'})\n"
+                f"  expected: {expected_types}\n"
+                f"  actual:   {actual_types}\n"
+                f"  missing from actual: {missing}\n"
+                f"  unexpected in actual: {extra}"
+            )
+
+        allowed = allowed_individual_types(actual_types)
+        for eq in result['equivalent_identifiers']:
+            if eq['type'] not in allowed:
+                errors.append(
+                    f"{curie}: equivalent identifier {eq['identifier']} has type {eq['type']}, "
+                    f"expected one of {sorted(allowed)}"
+                )
+
+    assert not errors, f"{len(errors)} difference(s) found:\n\n" + "\n\n".join(errors)
+
+
 def test_unconflated_biolink_types(nodenorm_url):
     """
     Check a few Biolink types without conflation turned on.
@@ -81,26 +130,14 @@ def test_unconflated_biolink_types(nodenorm_url):
         ]
     }
 
-    response = requests.post(nodenorm_url + "get_normalized_nodes", json={
-        "curies": list(curies_and_expected_results.keys()),
-        "conflate": False,
-        "drug_chemical_conflate": False,
-        "individual_types": True,
-    })
-    results = response.json()
-
-    # Pull out each Biolink types list and compare to expected results.
-    for query_curie in curies_and_expected_results.keys():
-        result = results[query_curie]
-
-        # Compare Biolink types with expected results.
-        biolink_types = result['type']
-        assert biolink_types == curies_and_expected_results[query_curie]
-
-        # Check the individual types, which -- without conflation -- should be identical to the first Biolink type.
-        first_biolink_type = biolink_types[0]
-        for equivalent_identifiers in result['equivalent_identifiers']:
-            assert equivalent_identifiers['type'] == first_biolink_type
+    # Without conflation, every individual type should be identical to the first Biolink type.
+    check_biolink_types(
+        nodenorm_url,
+        curies_and_expected_results,
+        conflate=False,
+        drug_chemical_conflate=False,
+        allowed_individual_types=lambda actual_types: {actual_types[0]},
+    )
 
 
 def test_geneprotein_conflated_biolink_types(nodenorm_url):
@@ -144,25 +181,14 @@ def test_geneprotein_conflated_biolink_types(nodenorm_url):
         ]
     }
 
-    response = requests.post(nodenorm_url + "get_normalized_nodes", json={
-        "curies": list(curies_and_expected_results.keys()),
-        "conflate": True,
-        "drug_chemical_conflate": False,
-        "individual_types": True,
-    })
-    results = response.json()
-
-    # Pull out each Biolink types list and compare to expected results.
-    for query_curie in curies_and_expected_results.keys():
-        result = results[query_curie]
-
-        # Compare Biolink types with expected results.
-        biolink_types = result['type']
-        assert biolink_types == curies_and_expected_results[query_curie]
-
-        # Check the individual types, which -- with GeneProtein conflation -- should be either 'biolink:Gene' or 'biolink:Protein'.
-        for equivalent_identifiers in result['equivalent_identifiers']:
-            assert equivalent_identifiers['type'] in {'biolink:Gene', 'biolink:Protein'}
+    # With GeneProtein conflation, every individual type should be either 'biolink:Gene' or 'biolink:Protein'.
+    check_biolink_types(
+        nodenorm_url,
+        curies_and_expected_results,
+        conflate=True,
+        drug_chemical_conflate=False,
+        allowed_individual_types=lambda actual_types: {'biolink:Gene', 'biolink:Protein'},
+    )
 
 
 def test_drugchemical_conflated_biolink_types(nodenorm_url):
@@ -200,30 +226,18 @@ def test_drugchemical_conflated_biolink_types(nodenorm_url):
         ]
     }
 
-    response = requests.post(nodenorm_url + "get_normalized_nodes", json={
-        "curies": list(curies_and_expected_results.keys()),
-        "conflate": False,
-        "drug_chemical_conflate": True,
-        "individual_types": True,
-    })
-    results = response.json()
-
-    # Pull out each Biolink types list and compare to expected results.
-    for query_curie in curies_and_expected_results.keys():
-        result = results[query_curie]
-
-        # Compare Biolink types with expected results.
-        biolink_types = result['type']
-        assert biolink_types == curies_and_expected_results[query_curie]
-
-        # Check the individual types, which -- without conflation -- should be one of the chemical types.
-        first_biolink_type = biolink_types[0]
-        for equivalent_identifiers in result['equivalent_identifiers']:
-            assert equivalent_identifiers['type'] in {
-                'biolink:Drug',
-                'biolink:SmallMolecule',
-                'biolink:ChemicalEntity',
-            }
+    # With DrugChemical conflation, every individual type should be one of the chemical types.
+    check_biolink_types(
+        nodenorm_url,
+        curies_and_expected_results,
+        conflate=False,
+        drug_chemical_conflate=True,
+        allowed_individual_types=lambda actual_types: {
+            'biolink:Drug',
+            'biolink:SmallMolecule',
+            'biolink:ChemicalEntity',
+        },
+    )
 
 
 
@@ -313,22 +327,11 @@ def test_fully_conflated_biolink_types(nodenorm_url):
         ]
     }
 
-    response = requests.post(nodenorm_url + "get_normalized_nodes", json={
-        "curies": list(curies_and_expected_results.keys()),
-        "conflate": True,
-        "drug_chemical_conflate": True,
-        "individual_types": True,
-    })
-    results = response.json()
-
-    # Pull out each Biolink types list and compare to expected results.
-    for query_curie in curies_and_expected_results.keys():
-        result = results[query_curie]
-
-        # Compare Biolink types with expected results.
-        biolink_types = result['type']
-        assert biolink_types == curies_and_expected_results[query_curie]
-
-        # Check the individual types, which -- with full conflation -- should be one of the Biolink types for the overall clique.
-        for equivalent_identifiers in result['equivalent_identifiers']:
-            assert equivalent_identifiers['type'] in biolink_types
+    # With full conflation, every individual type should be one of the Biolink types for the overall clique.
+    check_biolink_types(
+        nodenorm_url,
+        curies_and_expected_results,
+        conflate=True,
+        drug_chemical_conflate=True,
+        allowed_individual_types=set,
+    )
