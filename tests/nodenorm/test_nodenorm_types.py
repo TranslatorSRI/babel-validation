@@ -4,6 +4,16 @@
 # is correct. These tests are intended to cover whether all the Biolink types are correct, for both normal entries
 # and conflated entries.
 #
+# The expected values below are the baseline as of NodeNorm on `exp` (2026-07-24). They differ from
+# dev/prod/test/ci, which still return the previous baseline; see the PR discussion for whether these
+# changes should be accepted or fixed in NodeNorm. The three differences are:
+#   1. `biolink:OntologyClass` is now included for cliques that previously lacked it (MESH:D014867,
+#      NCIT:C34373), inserted after the second-most-specific type.
+#   2. `biolink:GeneOrGeneProductOrGeneFamily` is a new type on gene cliques, after
+#      `biolink:GeneOrGeneProduct`.
+#   3. Because of (1), `biolink:OntologyClass` now appears in the main clique's types for
+#      MESH:D014867 rather than being appended by DrugChemical conflation, so its position moves.
+#
 
 import pytest
 import requests
@@ -69,6 +79,7 @@ def test_unconflated_biolink_types(nodenorm_url):
         "MESH:D014867": [
             "biolink:SmallMolecule",
             "biolink:MolecularEntity",
+            "biolink:OntologyClass",
             "biolink:ChemicalEntity",
             "biolink:PhysicalEssence",
             "biolink:ChemicalOrDrugOrTreatment",
@@ -80,6 +91,7 @@ def test_unconflated_biolink_types(nodenorm_url):
         "NCIT:C34373": [
             "biolink:Disease",
             "biolink:DiseaseOrPhenotypicFeature",
+            "biolink:OntologyClass",
             "biolink:BiologicalEntity",
             "biolink:ThingWithTaxon",
             "biolink:NamedThing"
@@ -87,6 +99,7 @@ def test_unconflated_biolink_types(nodenorm_url):
         "NCBIGene:22059": [
             'biolink:Gene',
             'biolink:GeneOrGeneProduct',
+            'biolink:GeneOrGeneProductOrGeneFamily',
             'biolink:GenomicEntity',
             'biolink:ChemicalEntityOrGeneOrGeneProduct',
             'biolink:PhysicalEssence',
@@ -148,6 +161,7 @@ def test_geneprotein_conflated_biolink_types(nodenorm_url):
         "NCBIGene:22059": [
             'biolink:Gene',
             'biolink:GeneOrGeneProduct',
+            'biolink:GeneOrGeneProductOrGeneFamily',
             'biolink:GenomicEntity',
             'biolink:ChemicalEntityOrGeneOrGeneProduct',
             'biolink:PhysicalEssence',
@@ -165,6 +179,7 @@ def test_geneprotein_conflated_biolink_types(nodenorm_url):
         "PR:Q9Y6J0": [
             'biolink:Gene',
             'biolink:GeneOrGeneProduct',
+            'biolink:GeneOrGeneProductOrGeneFamily',
             'biolink:GenomicEntity',
             'biolink:ChemicalEntityOrGeneOrGeneProduct',
             'biolink:PhysicalEssence',
@@ -199,6 +214,7 @@ def test_drugchemical_conflated_biolink_types(nodenorm_url):
         "MESH:D014867": [
             "biolink:SmallMolecule",
             "biolink:MolecularEntity",
+            "biolink:OntologyClass",
             "biolink:ChemicalEntity",
             "biolink:PhysicalEssence",
             "biolink:ChemicalOrDrugOrTreatment",
@@ -207,7 +223,6 @@ def test_drugchemical_conflated_biolink_types(nodenorm_url):
             "biolink:NamedThing",
             "biolink:PhysicalEssenceOrOccurrent",
             'biolink:Drug',
-            'biolink:OntologyClass',
             'biolink:MolecularMixture',
             'biolink:ChemicalMixture',
         ],
@@ -249,6 +264,7 @@ def test_fully_conflated_biolink_types(nodenorm_url):
         "MESH:D014867": [
             "biolink:SmallMolecule",
             "biolink:MolecularEntity",
+            "biolink:OntologyClass",
             "biolink:ChemicalEntity",
             "biolink:PhysicalEssence",
             "biolink:ChemicalOrDrugOrTreatment",
@@ -257,13 +273,13 @@ def test_fully_conflated_biolink_types(nodenorm_url):
             "biolink:NamedThing",
             "biolink:PhysicalEssenceOrOccurrent",
             'biolink:Drug',
-            'biolink:OntologyClass',
             'biolink:MolecularMixture',
             'biolink:ChemicalMixture',
         ],
         "NCIT:C34373": [
             "biolink:Disease",
             "biolink:DiseaseOrPhenotypicFeature",
+            "biolink:OntologyClass",
             "biolink:BiologicalEntity",
             "biolink:ThingWithTaxon",
             "biolink:NamedThing"
@@ -271,6 +287,7 @@ def test_fully_conflated_biolink_types(nodenorm_url):
         "NCBIGene:22059": [
             'biolink:Gene',
             'biolink:GeneOrGeneProduct',
+            'biolink:GeneOrGeneProductOrGeneFamily',
             'biolink:GenomicEntity',
             'biolink:ChemicalEntityOrGeneOrGeneProduct',
             'biolink:PhysicalEssence',
@@ -301,6 +318,7 @@ def test_fully_conflated_biolink_types(nodenorm_url):
         "PR:Q9Y6J0": [
             'biolink:Gene',
             'biolink:GeneOrGeneProduct',
+            'biolink:GeneOrGeneProductOrGeneFamily',
             'biolink:GenomicEntity',
             'biolink:ChemicalEntityOrGeneOrGeneProduct',
             'biolink:PhysicalEssence',
