@@ -63,8 +63,8 @@ class CachedNodeNorm:
         """Normalize *curies* in bulk, returning a ``{curie: result}`` mapping.
 
         Already-cached CURIEs are served from the cache; the remainder are
-        fetched from NodeNorm in a single HTTP POST to ``get_normalized_nodes``.
-        The response is merged with the cached results before returning.
+        fetched from NodeNorm in a single HTTP POST to ``get_normalized_nodes``
+        and cached.  The return value is then assembled from the cache.
 
         *curies* must be a non-empty list — the NodeNorm API rejects empty
         requests, so this method raises ``ValueError`` immediately.
