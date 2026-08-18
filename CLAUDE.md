@@ -26,8 +26,12 @@ pytest tests/nodenorm/test_nodenorm_from_gsheet.py -k "row=42"  # Run a specific
 ### Code Formatting
 
 ```bash
-black tests/    # Format Python test code
+uv run ruff check --fix .   # Lint (import sorting, pyupgrade, pyflakes) and auto-fix
+uv run ruff format .        # Format Python code
 ```
+
+Both run on every pull request; settings live in `pyproject.toml` and are kept in sync with
+[Babel](https://github.com/NCATSTranslator/Babel).
 
 ### Vue Website (website-vue3-vite/)
 
@@ -78,7 +82,7 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 
 ## Key Dependencies
 
-- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, black
+- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, ruff
 - `uv` for Python dependency management (no requirements.txt — uses pyproject.toml)
 
 ## Testing Patterns

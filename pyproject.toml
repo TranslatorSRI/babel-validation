@@ -6,7 +6,7 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "black>=25.9.0",
+    "ruff>=0.14.14",
     "requests>=2.32.5",
     "filelock",
     "deepdiff>=8.6.1",
@@ -31,3 +31,27 @@ packages = ["src/babel_validation"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 timeout = 300
+# Canonical marker definitions. Every test that talks to a live service or downloads the
+# Google Sheet is unmarked, so `pytest -m unit` is the offline subset CI can run on every PR.
+markers = [
+    "unit: fast offline tests with no external dependencies",
+]
+
+# Linting/formatting configuration, kept in sync with NCATSTranslator/Babel.
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade
+]
+
+ignore = [
+    "E501",  # let Ruff handle wrapping consistently
+]
+
+fixable = ["ALL"]
+unfixable = []
