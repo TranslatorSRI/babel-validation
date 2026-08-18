@@ -228,18 +228,17 @@ def test_lookup_sends_a_query_string_to_the_lookup_endpoint(monkeypatch):
 
 
 def test_lookup_and_bulk_lookup_share_one_cache_namespace(monkeypatch):
-    """Pins a collision rather than endorsing it -- see the PR discussion.
+    """The shared keyspace is deliberate; this pins it so a change is noticed.
 
     Both methods key the cache on ``(query, params)`` with no note of which
     endpoint produced the entry, so a `lookup()` result is handed straight back
     to a later `bulk_lookup()` for the same query and params, with no request
-    made. Today that happens to be harmless: NameRes `/lookup` returns a list
-    of hits and `/bulk-lookup` returns one such list per string, so the cached
-    value is the right shape for both. It is undocumented, though -- the module
-    docstring says the two endpoints have "different response shapes" -- and it
-    only stays harmless while that coincidence holds.
+    made. That is correct as long as the two endpoints stay interchangeable for
+    equal parameters -- `/lookup` returns a list of hits, `/bulk-lookup` returns
+    that same list under the string it was asked about -- which is the premise
+    the module docstring now records.
 
-    If the endpoints ever diverge, this test fails, which is the point.
+    If NameRes ever makes them disagree, this test fails, which is the point.
     """
     recorder = Recorder([{"curie": "MONDO:0005148"}])
     monkeypatch.setattr(nameres_module.requests, "post", recorder)
