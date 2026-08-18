@@ -127,14 +127,15 @@ def _render_handler(h: AssertionHandler) -> str:
 
 def generate_readme() -> str:
     sections = [INTRO]
-    seen_groups: set[str] = set()
 
-    for h in ASSERTION_HANDLERS.values():
-        service = _applies_to(h)
-        if service not in seen_groups:
-            seen_groups.add(service)
-            sections.append(_GROUP_HEADERS[service] + "\n")
-        sections.append(_render_handler(h))
+    # Group by service rather than by registration order, so a handler added
+    # anywhere in ASSERTION_HANDLERS still renders under the right heading.
+    for service, header in _GROUP_HEADERS.items():
+        handlers = [h for h in ASSERTION_HANDLERS.values() if _applies_to(h) == service]
+        if not handlers:
+            continue
+        sections.append(header + "\n")
+        sections.extend(_render_handler(h) for h in handlers)
 
     sections.append(ADDING_NEW)
     return "\n".join(sections)
