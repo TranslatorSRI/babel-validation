@@ -11,14 +11,14 @@ from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
 
 def test_openapi_json(target_info):
-    nodenorm_url = target_info['NodeNormURL']
+    nodenorm_url = target_info["NodeNormURL"]
 
-    url = urllib.parse.urljoin(nodenorm_url, 'openapi.json')
+    url = urllib.parse.urljoin(nodenorm_url, "openapi.json")
     response = requests.get(url)
     assert response.ok, f"Could not GET {url}: {response}"
 
     openapi_json = response.json()
-    assert openapi_json['info']['x-translator']['infores'] == 'infores:sri-node-normalizer'
+    assert openapi_json["info"]["x-translator"]["infores"] == "infores:sri-node-normalizer"
 
     try:
         validate_url(url)

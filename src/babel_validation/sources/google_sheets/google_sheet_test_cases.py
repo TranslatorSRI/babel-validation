@@ -27,7 +27,7 @@ class GoogleSheetTestCases:
         return f"Google Sheet Test Cases ({len(self.rows)} test cases from {self.google_sheet_id})"
 
     def __init__(self, google_sheet_id="11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no", cache_ttl_seconds: int = 3600):
-        """ Create a Google Sheet test case.
+        """Create a Google Sheet test case.
 
         :param google_sheet_id: The Google Sheet identifier to download test cases from.
         :param cache_ttl_seconds: How long a cached download stays valid. pytest deletes the cache at the
@@ -57,7 +57,9 @@ class GoogleSheetTestCases:
             for row in reader:
                 self.rows.append(row)
 
-    def test_rows(self, test_id_prefix: str, test_nodenorm: bool = False, test_nameres: bool = False) -> list[ParameterSet]:
+    def test_rows(
+        self, test_id_prefix: str, test_nodenorm: bool = False, test_nameres: bool = False
+    ) -> list[ParameterSet]:
         """
         self.rows is the raw list of rows we got back from the Google Sheets. This method transforms that into
         a list of TestRows.
@@ -66,6 +68,7 @@ class GoogleSheetTestCases:
 
         :return: A list of TestRows for the rows in this file.
         """
+
         def has_nonempty_value(d: dict):
             return not all(not s for s in d.values())
 
@@ -83,30 +86,36 @@ class GoogleSheetTestCases:
                     if tr.ExpectPassInNodeNorm:
                         trows.append(pytest.param(tr, id=row_id))
                     else:
-                        trows.append(pytest.param(
-                            tr,
-                            marks=pytest.mark.xfail(
-                                reason=f"Test row {row_count} is marked as not expected to pass NodeNorm in the "
-                                       f"Google Sheet: {tr}",
-                                strict=True),
-                            id=row_id
-                        ))
+                        trows.append(
+                            pytest.param(
+                                tr,
+                                marks=pytest.mark.xfail(
+                                    reason=f"Test row {row_count} is marked as not expected to pass NodeNorm in the "
+                                    f"Google Sheet: {tr}",
+                                    strict=True,
+                                ),
+                                id=row_id,
+                            )
+                        )
 
                 if test_nameres:
                     if tr.ExpectPassInNameRes:
                         trows.append(pytest.param(tr, id=row_id))
                     else:
-                        trows.append(pytest.param(
-                            tr,
-                            marks=pytest.mark.xfail(
-                                reason=f"Test row {row_count} is marked as not expected to pass NameRes in the "
-                                       f"Google Sheet: {tr}",
-                                strict=True),
-                            id=row_id
-                        ))
+                        trows.append(
+                            pytest.param(
+                                tr,
+                                marks=pytest.mark.xfail(
+                                    reason=f"Test row {row_count} is marked as not expected to pass NameRes in the "
+                                    f"Google Sheet: {tr}",
+                                    strict=True,
+                                ),
+                                id=row_id,
+                            )
+                        )
 
         return trows
 
     def categories(self):
-        """ Return a dict of all the categories of tests available with their counts. """
-        return Counter(map(lambda t: t.get('Category', ''), self.rows))
+        """Return a dict of all the categories of tests available with their counts."""
+        return Counter(map(lambda t: t.get("Category", ""), self.rows))

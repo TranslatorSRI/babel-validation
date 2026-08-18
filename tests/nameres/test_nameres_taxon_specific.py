@@ -9,17 +9,18 @@ import requests
 
 
 def test_taxon_specific_diabetes_without_only_taxa(target_info):
-    nameres_url = target_info['NameResURL']
+    nameres_url = target_info["NameResURL"]
 
-    response = requests.get(nameres_url + 'lookup', params={'string': 'diabetes'})
+    response = requests.get(nameres_url + "lookup", params={"string": "diabetes"})
     response.raise_for_status()
     best_result = response.json()[0]
-    assert best_result['curie'] == 'UMLS:C0011847'
+    assert best_result["curie"] == "UMLS:C0011847"
+
 
 def test_taxon_specific_diabetes_with_only_taxa(target_info):
-    nameres_url = target_info['NameResURL']
+    nameres_url = target_info["NameResURL"]
 
-    response = requests.get(nameres_url + 'lookup', params={'string': 'diabetes', 'only_taxa': 'NCBITaxon:9606'})
+    response = requests.get(nameres_url + "lookup", params={"string": "diabetes", "only_taxa": "NCBITaxon:9606"})
     response.raise_for_status()
     best_result = response.json()[0]
-    assert best_result['curie'] == 'UMLS:C0011847'
+    assert best_result["curie"] == "UMLS:C0011847"

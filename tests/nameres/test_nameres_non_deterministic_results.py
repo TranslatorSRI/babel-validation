@@ -11,8 +11,9 @@ import requests
 
 # We've been told that these queries are sometimes non-deterministic.
 non_deterministic_queries = [
-    "Non-Hodgkin lymphomas",            # From https://github.com/NCATSTranslator/NameResolution/issues/220
+    "Non-Hodgkin lymphomas",  # From https://github.com/NCATSTranslator/NameResolution/issues/220
 ]
+
 
 @pytest.mark.parametrize("non_deterministic_query", non_deterministic_queries)
 def test_non_deterministic_results(target_info, non_deterministic_query, repeat_count=100):
@@ -35,11 +36,11 @@ def test_non_deterministic_results(target_info, non_deterministic_query, repeat_
 
     :return: None. Asserts if all responses match the first one or fail otherwise.
     """
-    nameres_lookup_url = target_info['NameResURL'] + 'lookup'
+    nameres_lookup_url = target_info["NameResURL"] + "lookup"
     nameres_query = {
-        'string': non_deterministic_query,
-        'autocomplete': 'false',
-        'limit': 100,
+        "string": non_deterministic_query,
+        "autocomplete": "false",
+        "limit": 100,
     }
 
     # Here's what we're going to do:
