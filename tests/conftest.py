@@ -28,12 +28,21 @@ def get_targets_ini_path(config):
     return config_path
 
 
-def _silent_unlink(path: str) -> None:
+def unlink_if_exists(path: str) -> None:
+    """
+    Unlink the file at `path` if it exists.
+
+    Any OSError is swallowed, not just FileNotFoundError: the caches below use
+    fixed names in the shared temp dir, so on a shared box or a self-hosted
+    runner one may be owned by another user. A stale cache we can't delete must
+    not abort the entire session out of pytest_configure.
+
+    :param path: The path to the file to unlink.
+    :return: None
+    """
     try:
         os.unlink(path)
     except OSError:
-        # Missing is the common case; a shared temp dir can also hand us a stale
-        # cache owned by another user. Neither should abort the whole session.
         pass
 
 
@@ -43,11 +52,11 @@ def pytest_configure(config):
     # so they can share the cache file written by the controller.
     if not os.environ.get('PYTEST_XDIST_WORKER'):
         for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
-            _silent_unlink(f)
-            _silent_unlink(f.removesuffix('.csv') + '.lock')
+            unlink_if_exists(f)
+            unlink_if_exists(f.removesuffix('.csv') + '.lock')
         tmpdir = tempfile.gettempdir()
         for name in ('babel_validation_issues_cache.json', 'babel_validation_issues_cache.lock'):
-            _silent_unlink(os.path.join(tmpdir, name))
+            unlink_if_exists(os.path.join(tmpdir, name))
 
 
 def pytest_addoption(parser):
@@ -153,6 +162,7 @@ def test_category(request):
             return True
 
     return category_test
+
 
 # --issue is consumed by tests/github_issues/conftest.py; this fixture exposes it to any test that wants it.
 @pytest.fixture
