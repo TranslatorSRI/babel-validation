@@ -1,11 +1,18 @@
 # This is a test for https://github.com/TranslatorSRI/NodeNormalization/issues/229
-
+import pytest
 import requests
 import urllib
 
 
 def test_nodenorm_229(target_info):
     nodenorm_url = target_info["NodeNormURL"]
+
+    # We can't test this unless NodeNorm has a /query endpoint.
+    query_url = urllib.parse.urljoin(nodenorm_url, "query")
+    response = requests.head(query_url)
+    if response.status_code == 404:
+        pytest.skip(f"NodeNorm {nodenorm_url} not have a /query endpoint, cannot test issue #229")
+        return
 
     input_json = {
         "message": {
@@ -498,8 +505,7 @@ def test_nodenorm_229(target_info):
         },
     }
 
-    url = urllib.parse.urljoin(nodenorm_url, "query")
-    response = requests.post(url, json=input_json)
+    response = requests.post(query_url, json=input_json)
     assert response.ok, f"Could not POST test content to {url}: {response.json()}"
     actual_output = response.json()
 
