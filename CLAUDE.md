@@ -20,7 +20,14 @@ pytest --target all                    # Run against all targets in targets.ini
 pytest --category "Unit Tests"         # Filter by Google Sheet category
 pytest --category-exclude "Slow"       # Exclude a category
 pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
-pytest tests/nodenorm/test_nodenorm_from_gsheet.py -k "row=42"  # Run a specific test row
+pytest -m unit                         # Offline unit suite (no network/token) — what CI runs on PRs
+```
+
+To run a single Google Sheet row, pass its full node ID (NOT `-k "row=42"` — pytest's
+`-k` expression parser rejects the `=`):
+
+```bash
+pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=42]"
 ```
 
 ### Code Formatting
@@ -54,6 +61,7 @@ Shared library code used by the tests and potentially other consumers.
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
+- `sources/github/github_issues_test_cases.py` — `GitHubIssueTest` and `GitHubIssuesTestCases`: pull test cases embedded in GitHub issues (wiki or YAML syntax) and evaluate them against NodeNorm/NameRes
 
 ### Test Framework (`tests/`)
 
@@ -69,6 +77,7 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
 - `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
+- `tests/github_issues/` — Dynamically-generated tests pulled from GitHub issue bodies via `GitHubIssuesTestCases`
 
 ### Web Applications
 
@@ -88,4 +97,21 @@ When writing new tests:
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- GitHub-issue-driven tests are picked up automatically by `tests/github_issues/test_github_issues.py` via `GitHubIssuesTestCases`
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
+
+## Gotchas (learned the hard way)
+
+- **Offline vs. networked tests.** `pytest -m unit` is the offline suite CI runs on PRs (no
+  network, no `GITHUB_TOKEN`). Network-backed modules (Google Sheet, GitHub issues) defer all
+  fetching to `pytest_generate_tests` and call `tests/_pytest_helpers.deselected_by_markexpr`
+  so a marker-deselected run never hits the network. If you add a module that fetches at
+  import/collection time, replicate that pattern or you'll break `-m unit`.
+- **`src/babel_validation` is importable only because** `[tool.hatch.build.targets.wheel]` in
+  `pyproject.toml` packages `src/`. Imports use the full `src.babel_validation.*` path.
+- **Black is not strictly enforced** — `black --check` flags much of the existing tree. Match
+  the surrounding style of the file you're editing; don't mass-reformat (it creates huge,
+  review-hostile diffs).
+- **Commits are signed via 1Password's SSH agent** (`op-ssh-sign`). It can lock mid-session;
+  a `failed to fill whole buffer` / `failed to write commit object` error means 1Password
+  needs unlocking, not a git problem.

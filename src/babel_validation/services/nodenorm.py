@@ -69,8 +69,12 @@ class CachedNodeNorm:
         *curies* must be a non-empty list — the NodeNorm API rejects empty
         requests, so this method raises ``ValueError`` immediately.
 
-        Values in the returned dict are ``None`` for CURIEs NodeNorm could not
-        resolve.  Use this as the cache-warming call; subsequent
+        The returned dict always has one entry per requested CURIE, even if
+        NodeNorm omits one from its response — callers that iterate the result
+        (e.g. ``DoesNotResolveWithHandler``) would otherwise pass vacuously.
+        Values are ``None`` for CURIEs NodeNorm could not resolve.
+
+        Use this as the cache-warming call; subsequent
         ``normalize_curie()`` calls for these identifiers will be free.
         """
         if not curies:
@@ -84,8 +88,9 @@ class CachedNodeNorm:
         cached_curies = {c for c in curies_set if (c, params_key) in self.cache}
         curies_to_be_queried = curies_set - cached_curies
 
-        # Make query.
-        result = {}
+        # Make query. Seeded with every requested CURIE so callers can rely on one
+        # entry per input even if NodeNorm omits a key from its response.
+        result = {c: None for c in curies_set}
         if curies_to_be_queried:
             api_params = dict(params)
             api_params['curies'] = list(curies_to_be_queried)
@@ -93,7 +98,7 @@ class CachedNodeNorm:
             self.logger.debug("Called NodeNorm %s with params %s", self, api_params)
             response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=api_params, timeout=30)
             response.raise_for_status()
-            result = response.json()
+            result.update(response.json())
 
             for curie in curies_to_be_queried:
                 self.cache[(curie, params_key)] = result.get(curie, None)

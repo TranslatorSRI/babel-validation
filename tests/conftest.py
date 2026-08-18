@@ -32,12 +32,17 @@ def unlink_if_exists(path: str) -> None:
     """
     Unlink the file at `path` if it exists.
 
+    Any OSError is swallowed, not just FileNotFoundError: the caches below use
+    fixed names in the shared temp dir, so on a shared box or a self-hosted
+    runner one may be owned by another user. A stale cache we can't delete must
+    not abort the entire session out of pytest_configure.
+
     :param path: The path to the file to unlink.
     :return: None
     """
     try:
         os.unlink(path)
-    except FileNotFoundError:
+    except OSError:
         pass
 
 
@@ -49,6 +54,9 @@ def pytest_configure(config):
         for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
             unlink_if_exists(f)
             unlink_if_exists(f.removesuffix('.csv') + '.lock')
+        tmpdir = tempfile.gettempdir()
+        for name in ('babel_validation_issues_cache.json', 'babel_validation_issues_cache.lock'):
+            unlink_if_exists(os.path.join(tmpdir, name))
 
 
 def pytest_addoption(parser):
@@ -71,6 +79,14 @@ def pytest_addoption(parser):
         default=[],
         action='append',
         help="The categories of tests to exclude."
+    )
+
+    # Only test particular GitHub issues.
+    parser.addoption(
+        '--issue',
+        default=[],
+        action='append',
+        help="One or more GitHub issues to test. Should be specified as either 'organization/repo#110', 'repo#110' or '110'"
     )
 
 
@@ -146,3 +162,9 @@ def test_category(request):
             return True
 
     return category_test
+
+
+# --issue is consumed by tests/github_issues/conftest.py; this fixture exposes it to any test that wants it.
+@pytest.fixture
+def selected_github_issues(pytestconfig):
+    return pytestconfig.getoption('issue')
