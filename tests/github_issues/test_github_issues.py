@@ -35,8 +35,12 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
     # Open issues are assumed to fail, so we set an xfail marker (but we set it to strict so
     # that XPASSes are reported loudly).
     if is_open:
+        # raises=AssertionError is load-bearing: without it, xfail absorbs *any*
+        # exception, so a NodeNorm outage or a bug in our own parsing would report
+        # XFAIL and turn every open issue green.
         request.node.add_marker(pytest.mark.xfail(
             reason=f"Issue {github_issue.html_url} is expected to fail because the issue is open.",
+            raises=AssertionError,
             strict=True,
         ))
 

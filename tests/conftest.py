@@ -31,7 +31,9 @@ def get_targets_ini_path(config):
 def _silent_unlink(path: str) -> None:
     try:
         os.unlink(path)
-    except FileNotFoundError:
+    except OSError:
+        # Missing is the common case; a shared temp dir can also hand us a stale
+        # cache owned by another user. Neither should abort the whole session.
         pass
 
 
