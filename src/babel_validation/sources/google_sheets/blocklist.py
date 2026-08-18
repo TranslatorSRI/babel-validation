@@ -1,7 +1,6 @@
 import csv
 import io
 from dataclasses import dataclass
-from typing import Optional
 
 import requests
 
@@ -16,14 +15,14 @@ class BlocklistEntry:
     """
     A single Blocklist entry.
     """
-    Query: Optional[str] = None
-    CURIE: Optional[str] = None
-    Blocked: Optional[str] = None
-    Status: Optional[str] = None
-    Issue: Optional[str] = None
-    TreatsOnly: Optional[str] = None
-    Submitter: Optional[str] = None
-    Comment: Optional[str] = None
+    Query: str | None = None
+    CURIE: str | None = None
+    Blocked: str | None = None
+    Status: str | None = None
+    Issue: str | None = None
+    TreatsOnly: str | None = None
+    Submitter: str | None = None
+    Comment: str | None = None
 
     def is_blocked(self):
         """ Is this term supposed to be blocked? """

@@ -1,7 +1,8 @@
 # This is a test for https://github.com/TranslatorSRI/NodeNormalization/issues/229
 
-import requests
 import urllib
+
+import requests
 
 
 def test_nodenorm_229(target_info):
@@ -504,8 +505,7 @@ def test_nodenorm_229(target_info):
     actual_output = response.json()
 
     # For this issue, we are primarily interested in the results.
-    input_results = input_json["message"]["results"]
     expected_results = expected_output["message"]["results"]
     actual_results = actual_output["message"]["results"]
 
-    assert actual_results == expected_results, f"Did not receive the expected results."
+    assert actual_results == expected_results, "Did not receive the expected results."

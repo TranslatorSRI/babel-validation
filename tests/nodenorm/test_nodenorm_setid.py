@@ -9,6 +9,7 @@
 import pytest
 import requests
 
+
 @pytest.fixture
 def nodenorm_url(target_info):
     return target_info['NodeNormURL']

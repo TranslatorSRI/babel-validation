@@ -1,6 +1,8 @@
 import urllib.parse
-import requests
+
 import pytest
+import requests
+
 from babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
 from tests._pytest_helpers import deselected_by_markexpr
 
@@ -36,10 +38,6 @@ def test_normalization(target_info, test_row, test_category):
     category = test_row.Category
     if not test_category(category):
         pytest.skip(f"Skipping category {category} because of the category filter.")
-
-    source = test_row.Source
-    source_url = test_row.SourceURL
-    source_info = f"{source} ({source_url})"
 
     preferred_label = test_row.PreferredLabel
 

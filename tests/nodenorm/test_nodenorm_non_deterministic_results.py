@@ -7,10 +7,9 @@
 #
 import json
 
+import deepdiff
 import pytest
 import requests
-import deepdiff
-
 
 # We've been told that these queries are sometimes non-deterministic.
 non_deterministic_queries = [

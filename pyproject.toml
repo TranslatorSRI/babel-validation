@@ -40,6 +40,9 @@ markers = [
 # Linting/formatting configuration, kept in sync with NCATSTranslator/Babel.
 [tool.ruff]
 line-length = 120
+# log-analysis/ holds exploratory notebooks, not maintained code: one cell does not even parse.
+# Linting them would gate CI on scratch work nobody imports.
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = [

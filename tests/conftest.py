@@ -1,13 +1,13 @@
 #
 # conftest.py - pytest configuration settings
 #
+import configparser
 import glob
 import os
 import os.path
 import tempfile
 
 import pytest
-import configparser
 
 
 def get_targets_ini_path(config):
