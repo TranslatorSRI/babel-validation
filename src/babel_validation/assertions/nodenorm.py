@@ -37,6 +37,10 @@ class DoesNotResolveHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolve|FAKENS:99999}}"]
     YAML_PARAMS = "    - FAKENS:99999"
 
+    # A param that isn't even a well-formed CURIE trivially does not resolve, and
+    # asserting that is the whole point of this assertion — so don't reject it.
+    VALIDATE_CURIES = False
+
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
         for curie in params:
@@ -55,6 +59,8 @@ def _compare_resolutions(
     first_good_result is None if every CURIE failed to resolve.
     per_curie_results maps each CURIE to its result (None if unresolvable).
     """
+    # normalize_curies() guarantees one entry per requested CURIE, in the order
+    # requested, so first_good is deterministically the first param that resolved.
     per_curie = nodenorm.normalize_curies(params)
     first_good = next((r for r in per_curie.values() if r is not None), None)
     return first_good, per_curie
