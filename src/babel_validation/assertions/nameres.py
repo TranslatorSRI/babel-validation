@@ -23,6 +23,12 @@ class SearchByNameHandler(NameResTest):
     WIKI_EXAMPLES = ["{{BabelTest|SearchByName|water|CHEBI:15377}}"]
     YAML_PARAMS = "    - [water, CHEBI:15377]\n    - [diabetes, MONDO:0005015]"
 
+    def curie_params(self, params: list[str]) -> list[str]:
+        # params[0] is a free-text search query; only the expected CURIE is a CURIE.
+        # Slicing (rather than indexing) keeps malformed param_sets out of validation
+        # so test_param_set() can report the arity problem instead.
+        return params[1:2]
+
     def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
                        nameres: CachedNameRes, pass_if_found_in_top: int = 5,
                        label: str = "") -> Iterator[TestResult]:

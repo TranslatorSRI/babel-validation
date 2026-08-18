@@ -30,11 +30,60 @@ class AssertionHandler:
     NAME: str           # lowercase assertion name as used in issue bodies
     DESCRIPTION: str    # one-line human-readable description
 
+    # Whether CURIE params should be rejected up front if they are not well-formed.
+    # Assertions about deliberately-invalid identifiers turn this off.
+    VALIDATE_CURIES = True
+
+    _CURIE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$')
+
     def passed(self, message: str) -> TestResult:
         return TestResult(status=TestStatus.Passed, message=message)
 
     def failed(self, message: str) -> TestResult:
         return TestResult(status=TestStatus.Failed, message=message)
+
+    def curie_params(self, params: list[str]) -> list[str]:
+        """Return the subset of params that are CURIEs (for prewarming and validation).
+        Default: all params are CURIEs. Subclasses override when some params are non-CURIEs."""
+        return params
+
+    def prepare_param_sets(self, param_sets: list[list[str]], nodenorm,
+                           label: str = "") -> tuple[list[list[str]], dict[int, TestResult]]:
+        """Strip params, reject unusable param_sets, and warm the NodeNorm cache.
+
+        Returns ``(stripped_param_sets, failures)``, where *failures* maps a
+        param_set index to the TestResult explaining why it was rejected.
+        Rejected param_sets are excluded from cache warming, so (unless
+        VALIDATE_CURIES is off) malformed CURIEs are never sent to NodeNorm.
+        """
+        stripped = [[param.strip() for param in params] for params in param_sets]
+
+        failures: dict[int, TestResult] = {}
+        for index, params in enumerate(stripped):
+            if not params:
+                failures[index] = self.failed(f"No parameters in param_set {index} in {label}")
+                continue
+            if not self.VALIDATE_CURIES:
+                continue
+            invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
+            if invalid:
+                failures[index] = self.failed(
+                    f"Malformed CURIE(s) {invalid} in param_set {index} in {label}: "
+                    f"expected format PREFIX:LOCAL_ID (e.g. CHEBI:15365)"
+                )
+
+        # Warm the cache in a single request, deduplicated; skip if empty
+        # (normalize_curies raises ValueError on an empty list).
+        curies_to_warm = list({
+            p
+            for index, params in enumerate(stripped)
+            if index not in failures
+            for p in self.curie_params(params)
+        })
+        if curies_to_warm:
+            nodenorm.normalize_curies(curies_to_warm)
+
+        return stripped, failures
 
     def test_with_nodenorm(self, param_sets: list[list[str]], nodenorm,
                            label: str = "") -> Iterator[TestResult]:
@@ -54,41 +103,12 @@ class NodeNormTest(AssertionHandler):
     Subclasses implement test_param_set() instead of test_with_nodenorm().
     """
 
-    _CURIE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$')
-
-    def curie_params(self, params: list[str]) -> list[str]:
-        """Return the subset of params that are CURIEs (for prewarming and validation).
-        Default: all params are CURIEs. Subclasses override when some params are non-CURIEs."""
-        return params
-
     def test_with_nodenorm(self, param_sets: list[list[str]], nodenorm,
                            label: str = "") -> Iterator[TestResult]:
         if not param_sets:
             yield self.failed(f"No parameters provided in {label}")
             return
-        # Validate each param_set up front so malformed CURIEs are never sent to
-        # NodeNorm — not even in the cache-warming call below.
-        failures: dict[int, TestResult] = {}
-        for index, params in enumerate(param_sets):
-            if not params:
-                failures[index] = self.failed(f"No parameters in param_set {index} in {label}")
-                continue
-            invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
-            if invalid:
-                failures[index] = self.failed(
-                    f"Malformed CURIE(s) {invalid} in param_set {index} in {label}: "
-                    f"expected format PREFIX:LOCAL_ID (e.g. CHEBI:15365)"
-                )
-        # warm the cache only for params that are CURIEs (deduplicated); skip if empty
-        # (normalize_curies raises ValueError on an empty list)
-        curies_to_warm = list({
-            p
-            for index, params in enumerate(param_sets)
-            if index not in failures
-            for p in self.curie_params(params)
-        })
-        if curies_to_warm:
-            nodenorm.normalize_curies(curies_to_warm)
+        param_sets, failures = self.prepare_param_sets(param_sets, nodenorm, label)
         results = []
         for index, params in enumerate(param_sets):
             if index in failures:
@@ -132,10 +152,11 @@ class NameResTest(AssertionHandler):
         if not param_sets:
             yield self.failed(f"No parameters provided in {label}")
             return
+        param_sets, failures = self.prepare_param_sets(param_sets, nodenorm, label)
         results = []
         for index, params in enumerate(param_sets):
-            if not params:
-                results.append(self.failed(f"No parameters in param_set {index} in {label}"))
+            if index in failures:
+                results.append(failures[index])
                 continue
             results.extend(self.test_param_set(params, nodenorm, nameres, pass_if_found_in_top, label))
         if not results:
