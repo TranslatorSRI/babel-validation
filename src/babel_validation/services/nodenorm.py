@@ -69,9 +69,12 @@ class CachedNodeNorm:
         *curies* must be a non-empty list — the NodeNorm API rejects empty
         requests, so this method raises ``ValueError`` immediately.
 
-        Values in the returned dict are ``None`` for CURIEs NodeNorm could not
-        resolve.  Use this as the cache-warming call; subsequent
-        ``normalize_curie()`` calls for these identifiers will be free.
+        The returned dict has exactly one entry per requested CURIE, in the
+        order requested, with a value of ``None`` for CURIEs NodeNorm could not
+        resolve or silently omitted from its response.  Callers may therefore
+        iterate it and trust that every CURIE they asked about is represented.
+        Use this as the cache-warming call; subsequent ``normalize_curie()``
+        calls for these identifiers will be free.
         """
         if not curies:
             raise ValueError(f"curies must not be empty when calling normalize_curies({curies}, {params}) on {self}")
@@ -85,7 +88,6 @@ class CachedNodeNorm:
         curies_to_be_queried = curies_set - cached_curies
 
         # Make query.
-        result = {}
         if curies_to_be_queried:
             api_params = dict(params)
             api_params['curies'] = list(curies_to_be_queried)
@@ -98,14 +100,15 @@ class CachedNodeNorm:
             for curie in curies_to_be_queried:
                 self.cache[(curie, params_key)] = result.get(curie, None)
 
-        for curie in cached_curies:
-            result[curie] = self.cache[(curie, params_key)]
-
         time_taken_sec = (time.time_ns() - time_started) / 1E9
         self.logger.info("Normalizing %d CURIEs %s (with %d CURIEs cached) with params %s on %s in %.3fs",
                          len(curies_to_be_queried), curies_to_be_queried, len(cached_curies), params, self, time_taken_sec)
 
-        return result
+        # Build the result from *curies*, not from the response: NodeNorm may
+        # silently omit a requested CURIE, and a missing key is invisible to a
+        # caller that iterates the returned dict. Every CURIE is in the cache by
+        # this point, either from a previous call or from the loop above.
+        return {curie: self.cache[(curie, params_key)] for curie in curies}
 
     def normalize_curie(self, curie: str, **params) -> dict | None:
         """Normalize a single *curie*, returning the NodeNorm result or ``None``.
