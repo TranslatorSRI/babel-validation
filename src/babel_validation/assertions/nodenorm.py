@@ -56,7 +56,9 @@ def _compare_resolutions(
     per_curie_results maps each CURIE to its result (None if unresolvable).
     """
     per_curie = nodenorm.normalize_curies(params)
-    first_good = next((r for r in per_curie.values() if r is not None), None)
+    # Walk params, not per_curie.values(): dict order depends on set iteration and
+    # cache state, which would make "but expected X" nondeterministic across runs.
+    first_good = next((per_curie[c] for c in params if per_curie.get(c) is not None), None)
     return first_good, per_curie
 
 
@@ -242,7 +244,7 @@ class ResolvesWithTypeHandler(NodeNormTest):
             if not node:
                 yield self.failed(f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
                 continue
-            biolink_types = node['type']
+            biolink_types = node.get('type') or []
             if expected_biolink_type in biolink_types:
                 yield self.passed(f"Biolink types {biolink_types} for CURIE {curie} includes expected Biolink type {expected_biolink_type}")
             else:

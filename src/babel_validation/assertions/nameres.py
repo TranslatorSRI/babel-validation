@@ -40,7 +40,7 @@ class SearchByNameHandler(NameResTest):
             return
 
         expected_curie = expected_curie_result['id']['identifier']
-        expected_curie_label = expected_curie_result['id']['label']
+        expected_curie_label = expected_curie_result['id'].get('label', '')
         expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
 
         results = nameres.lookup(search_query, autocomplete='false', limit=pass_if_found_in_top)

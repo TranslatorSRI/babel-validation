@@ -28,7 +28,7 @@ from pathlib import Path
 import click
 import yaml
 
-from src.babel_validation.assertions import ASSERTION_HANDLERS
+from src.babel_validation.assertions import ASSERTION_HANDLERS, NodeNormTest
 from src.babel_validation.core.testrow import TestStatus
 from src.babel_validation.services.nodenorm import CachedNodeNorm
 
@@ -227,7 +227,11 @@ def validate_blocks(
     for assertion, entries in blocks.items():
         handler = ASSERTION_HANDLERS[assertion.lower()]
         for entry in entries:
-            all_curies.update(handler.curie_params(entry.param_set))
+            # Filter as test_with_nodenorm does: a blank or malformed cell must never
+            # reach NodeNorm, not even via this batch warm-up. Malformed values still
+            # get their proper failure message from the per-entry run below.
+            all_curies.update(c for c in handler.curie_params(entry.param_set)
+                              if NodeNormTest._CURIE_RE.match(c))
     if all_curies:
         nodenorm.normalize_curies(list(all_curies))
 
