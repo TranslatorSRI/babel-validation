@@ -13,6 +13,7 @@ Babel Validation is a test suite and web tools for validating outputs from [Babe
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Run from repo root:
 
 ```bash
+pytest -m unit                         # Offline unit tests only — no network, no live services (what CI runs)
 pytest --target dev                    # Run all tests against dev environment (default if no --target)
 pytest --target prod                   # Run against production
 pytest --target dev --target prod      # Run against multiple targets
@@ -22,6 +23,10 @@ pytest --category-exclude "Slow"       # Exclude a category
 pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
 pytest tests/nodenorm/test_nodenorm_from_gsheet.py -k "row=42"  # Run a specific test row
 ```
+
+Note that `-m unit` and `--category "Unit Tests"` are unrelated despite the names. `-m unit`
+selects the offline tests in `tests/unit/`; `--category "Unit Tests"` selects Google Sheet rows
+whose Category column says "Unit Tests", and those still call a live NodeNorm or NameRes.
 
 ### Code Formatting
 
@@ -73,6 +78,13 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
 - `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
+- `tests/unit/` — Offline tests for the library in `src/babel_validation/` (service caching, Google Sheet parsing). Marked `@pytest.mark.unit`; these are the only tests that run without network access, so they are the ones CI runs on every PR.
+
+**Marking new tests:** a test belongs in `tests/unit/` with the `unit` marker only if it needs no
+network at all. Anything that reaches NodeNorm, NameRes, or the Google Sheet stays unmarked, which
+is what keeps `pytest -m unit` runnable offline. If a new module builds its parametrization from a
+network source at collection time, guard it with `deselected_by_markexpr` (see
+`tests/nodenorm/test_nodenorm_from_gsheet.py`) so `-m unit` does not pay for the fetch.
 
 ### Web Applications
 

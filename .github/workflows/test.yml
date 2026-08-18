@@ -1,0 +1,50 @@
+name: Tests
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint and format check with ruff
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      # version-file so CI runs the ruff in uv.lock. Without it the action installs the latest
+      # release, so a ruff that nobody has locally can fail this job on a PR that did not touch
+      # any Python. ruff is a standalone binary, so no setup-python step is needed.
+      #
+      # Pinned to an exact version because ruff-action publishes immutable releases from v4 on:
+      # there is no moving `v4` tag to track, and `@v4` fails to resolve.
+      - uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version-file: "uv.lock"
+          args: "check --output-format github"
+      - uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version-file: "uv.lock"
+          args: "format --check"
+
+  unit-tests:
+    name: Offline unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+      - run: uv sync --frozen
+      # Collection is a test in its own right: the gsheet modules build their
+      # parametrization in pytest_generate_tests, so an import error or a bad
+      # parametrize there fails here rather than at the start of a live run.
+      # It needs the network, since collecting everything downloads the sheet.
+      - run: uv run pytest --collect-only -q
+      # The offline subset. Everything that talks to NodeNorm, NameRes, or the
+      # Google Sheet is unmarked and deselected here; see the `unit` marker in
+      # pyproject.toml.
+      - run: uv run pytest -m unit -q
