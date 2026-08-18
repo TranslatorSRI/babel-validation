@@ -50,6 +50,28 @@ def _to_list(value, context: str) -> list:
     raise ValueError(f"{context}: expected str or list, got {type(value).__name__}")
 
 
+def _to_param(value, context: str) -> str:
+    """Coerce one YAML scalar to the str every assertion handler expects.
+
+    PyYAML resolves bare scalars by YAML 1.1 rules, so `NO` (nitric oxide) becomes
+    False and `12345` becomes int — both of which crash the handlers. Numbers are
+    safely stringified; ambiguous keywords are rejected with a fix-it message,
+    because the original spelling is already lost by the time we see them.
+    """
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{context}: YAML parsed this param as the boolean {value}. Bare NO/YES/ON/OFF/"
+            f"TRUE/FALSE are booleans in YAML — quote it (e.g. \"NO\") to use it as a string"
+        )
+    if value is None:
+        raise ValueError(f"{context}: param is null — quote it to use it as a string")
+    if isinstance(value, (list, dict)):
+        raise ValueError(
+            f"{context}: expected a scalar param, got {type(value).__name__}: {value!r}"
+        )
+    return str(value)
+
+
 class GitHubIssueTest:
     """Represents one assertion extracted from a GitHub issue body — an assertion name paired with a list of param_sets to evaluate."""
 
@@ -207,8 +229,11 @@ class GitHubIssuesTestCases:
                         original_param_sets,
                         f"YAML block in issue {github_issue_id}: assertion '{assertion}'"
                     )
+                    param_set_context = (
+                        f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set"
+                    )
                     param_sets = [
-                        _to_list(ps, f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set")
+                        [_to_param(p, param_set_context) for p in _to_list(ps, param_set_context)]
                         for ps in normalized
                     ]
                     testrows.append(GitHubIssueTest(github_issue_id, github_issue, assertion, param_sets))

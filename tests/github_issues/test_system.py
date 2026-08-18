@@ -312,3 +312,30 @@ class TestGetIssuesWithTests:
                 github_issues_test_cases.get_issues_with_tests(self._REPOS)
             )
         assert results == []
+
+
+class TestYamlScalarCoercion:
+    """PyYAML resolves bare scalars by YAML 1.1 rules; handlers all expect str."""
+
+    def test_numeric_params_are_stringified(self, github_issues_test_cases):
+        # A numeric label/identifier must not reach the handlers as an int.
+        mock = _mock_issue(
+            "```yaml\nbabel_tests:\n  HasLabel:\n  - [CHEBI:16480, 12345]\n```"
+        )
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert tests[0].param_sets == [["CHEBI:16480", "12345"]]
+
+    def test_bare_no_is_rejected_with_a_quoting_hint(self, github_issues_test_cases):
+        # 'NO' is nitric oxide, but YAML 1.1 reads it as False and the spelling is lost.
+        mock = _mock_issue(
+            "```yaml\nbabel_tests:\n  HasLabel:\n  - [CHEBI:16480, NO]\n```"
+        )
+        with pytest.raises(ValueError, match="quote it"):
+            github_issues_test_cases.get_test_issues_from_issue(mock)
+
+    def test_quoted_no_survives(self, github_issues_test_cases):
+        mock = _mock_issue(
+            '```yaml\nbabel_tests:\n  HasLabel:\n  - [CHEBI:16480, "NO"]\n```'
+        )
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert tests[0].param_sets == [["CHEBI:16480", "NO"]]
