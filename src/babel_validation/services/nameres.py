@@ -7,6 +7,14 @@ Each response is stored under the key ``(query, frozenset(params.items()))``.
 Entries are never evicted automatically; call ``invalidate_query()`` to force
 a fresh lookup for a specific query string.
 
+``lookup()`` and ``bulk_lookup()`` deliberately share this one keyspace, with
+no record of which endpoint produced an entry.  Given the same query and the
+same parameters the two endpoints are interchangeable -- ``/lookup`` returns a
+list of hits, and ``/bulk-lookup`` returns exactly that list under the string
+it was asked about -- so a result cached by either is a valid answer for the
+other, and one cache is fine.  This is what lets a ``bulk_lookup()`` be served
+with no HTTP call after a ``lookup()`` for the same string, and vice versa.
+
 Cache-warming pattern
 ---------------------
 When you need to look up many query strings for the same logical task, call
@@ -18,8 +26,10 @@ Endpoint differences
 --------------------
 ``bulk_lookup()`` targets ``/bulk-lookup`` and sends the query list as a JSON
 body.  ``lookup()`` targets the separate ``/lookup`` endpoint and sends its
-parameters as a URL query string.  These are distinct API endpoints with
-different response shapes; ``lookup()`` does NOT delegate to ``bulk_lookup()``.
+parameters as a URL query string.  Their return types differ accordingly --
+a ``{query: hits}`` mapping against a bare list of hits -- so ``lookup()`` does
+NOT delegate to ``bulk_lookup()``, even though, per the caching model above,
+the hits themselves are the same and share a cache.
 """
 
 import logging
@@ -54,7 +64,7 @@ class CachedNameRes:
         return f"CachedNameRes({self.nameres_url})"
 
     @staticmethod
-    def from_url(nameres_url: str) -> 'CachedNameRes':
+    def from_url(nameres_url: str) -> "CachedNameRes":
         """Return the singleton ``CachedNameRes`` for *nameres_url*.
 
         The singleton ensures that cache entries accumulated during one part of
@@ -92,7 +102,7 @@ class CachedNameRes:
         result = {}
         if queries_to_be_queried:
             api_params = dict(params)
-            api_params['strings'] = list(queries_to_be_queried)
+            api_params["strings"] = list(queries_to_be_queried)
 
             self.logger.debug("Called NameRes %s with params %s", self, api_params)
             response = requests.post(self.nameres_url + "bulk-lookup", json=api_params, timeout=30)
@@ -105,9 +115,15 @@ class CachedNameRes:
         for query in cached_queries:
             result[query] = self.cache[(query, params_key)]
 
-        time_taken_sec = (time.time_ns() - time_started) / 1E9
-        self.logger.info("Looked up %d queries (with %d cached) with params %s on %s in %.3fs",
-                         len(queries_to_be_queried), len(cached_queries), params, self, time_taken_sec)
+        time_taken_sec = (time.time_ns() - time_started) / 1e9
+        self.logger.info(
+            "Looked up %d queries (with %d cached) with params %s on %s in %.3fs",
+            len(queries_to_be_queried),
+            len(cached_queries),
+            params,
+            self,
+            time_taken_sec,
+        )
 
         return result
 
@@ -117,17 +133,21 @@ class CachedNameRes:
         This targets a different endpoint from ``bulk_lookup()`` — parameters
         are sent as URL query string fields, and the response is a list of
         result dicts rather than a mapping.  Results are cached per
-        ``(query, params)`` combination.
+        ``(query, params)`` combination, in the same keyspace ``bulk_lookup()``
+        uses: for a given query and parameters the two endpoints return the
+        same hits, so either may serve the other from cache.
 
-        This method does NOT delegate to ``bulk_lookup()``.  To cache-warm for
-        single lookups, call this method (or ``bulk_lookup()``) upfront.
+        This method does NOT delegate to ``bulk_lookup()`` — the two shape
+        their return values differently, and calling ``/bulk-lookup`` for a
+        single string would be the wrong request.  To cache-warm for single
+        lookups, call this method (or ``bulk_lookup()``) upfront.
         """
         cache_key = (query, frozenset(params.items()))
         if cache_key in self.cache:
             return self.cache[cache_key]
 
         api_params = dict(params)
-        api_params['string'] = query
+        api_params["string"] = query
         self.logger.debug("Querying NameRes with params %s", api_params)
 
         response = requests.post(self.nameres_url + "lookup", params=api_params, timeout=30)

@@ -7,18 +7,18 @@
 #
 import json
 
+import deepdiff
 import pytest
 import requests
-import deepdiff
-
 
 # We've been told that these queries are sometimes non-deterministic.
 non_deterministic_queries = [
-    [ # From https://github.com/NCATSTranslator/NameResolution/issues/220
+    [  # From https://github.com/NCATSTranslator/NameResolution/issues/220
         "MONDO:0018908",
         "UMLS:C2911293",
     ],
 ]
+
 
 @pytest.mark.parametrize("non_deterministic_query", non_deterministic_queries)
 def test_non_deterministic_results(target_info, non_deterministic_query, repeat_count=100):
@@ -41,12 +41,12 @@ def test_non_deterministic_results(target_info, non_deterministic_query, repeat_
     :raises AssertionError: If the results of repeated queries differ, indicating
                             non-determinism in the endpoint responses.
     """
-    nodenorm_normalize_url = target_info['NodeNormURL'] + 'get_normalized_nodes'
+    nodenorm_normalize_url = target_info["NodeNormURL"] + "get_normalized_nodes"
     nodenorm_query = {
-        'curies': non_deterministic_query,
-        'conflate': 'true',
-        'drug_chemical_conflate': 'true',
-        'individual_types': 'true',
+        "curies": non_deterministic_query,
+        "conflate": "true",
+        "drug_chemical_conflate": "true",
+        "individual_types": "true",
     }
 
     # Here's what we're going to do:

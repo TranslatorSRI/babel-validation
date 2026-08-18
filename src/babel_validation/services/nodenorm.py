@@ -48,7 +48,7 @@ class CachedNodeNorm:
         return f"CachedNodeNorm({self.nodenorm_url})"
 
     @staticmethod
-    def from_url(nodenorm_url: str) -> 'CachedNodeNorm':
+    def from_url(nodenorm_url: str) -> "CachedNodeNorm":
         """Return the singleton ``CachedNodeNorm`` for *nodenorm_url*.
 
         The singleton ensures that cache entries accumulated during one part of
@@ -88,7 +88,7 @@ class CachedNodeNorm:
         result = {}
         if curies_to_be_queried:
             api_params = dict(params)
-            api_params['curies'] = list(curies_to_be_queried)
+            api_params["curies"] = list(curies_to_be_queried)
 
             self.logger.debug("Called NodeNorm %s with params %s", self, api_params)
             response = requests.post(self.nodenorm_url + "get_normalized_nodes", json=api_params, timeout=30)
@@ -101,9 +101,16 @@ class CachedNodeNorm:
         for curie in cached_curies:
             result[curie] = self.cache[(curie, params_key)]
 
-        time_taken_sec = (time.time_ns() - time_started) / 1E9
-        self.logger.info("Normalizing %d CURIEs %s (with %d CURIEs cached) with params %s on %s in %.3fs",
-                         len(curies_to_be_queried), curies_to_be_queried, len(cached_curies), params, self, time_taken_sec)
+        time_taken_sec = (time.time_ns() - time_started) / 1e9
+        self.logger.info(
+            "Normalizing %d CURIEs %s (with %d CURIEs cached) with params %s on %s in %.3fs",
+            len(curies_to_be_queried),
+            curies_to_be_queried,
+            len(cached_curies),
+            params,
+            self,
+            time_taken_sec,
+        )
 
         return result
 

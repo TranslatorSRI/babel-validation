@@ -12,7 +12,17 @@ The best tests in this repository are Python tests stored in the [`./tests`](./t
 This includes both unit tests as well as "Google Sheet"-based tests, which uses
 a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?gid=0#gid=0) containing facts that we can use to test a NodeNorm instance.
 
-To run these tests, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
+The offline subset needs no services at all and runs in well under a second:
+
+```shell
+$ uv run pytest -m unit
+```
+
+These are the tests in [`./tests/unit`](./tests/unit/), covering the library in `src/babel_validation/`.
+They are what GitHub Actions runs on every pull request, alongside `ruff check` and `ruff format --check`.
+Everything else needs a live NodeNorm or NameRes, and is run on demand against a chosen target.
+
+To run those, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 You can then use `uv` to run the tests. The file [`tests/targets.ini`](./tests/targets.ini) allows you to
 control which NodeNorm instance is tested. The `[DEFAULT]` section applies defaults for all the environments.
 For example, to run all the tests on the `dev` instance, you can use `--target`:

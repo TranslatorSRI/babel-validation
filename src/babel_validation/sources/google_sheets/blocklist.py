@@ -1,7 +1,6 @@
 import csv
 import io
 from dataclasses import dataclass
-from typing import Optional
 
 import requests
 
@@ -16,18 +15,19 @@ class BlocklistEntry:
     """
     A single Blocklist entry.
     """
-    Query: Optional[str] = None
-    CURIE: Optional[str] = None
-    Blocked: Optional[str] = None
-    Status: Optional[str] = None
-    Issue: Optional[str] = None
-    TreatsOnly: Optional[str] = None
-    Submitter: Optional[str] = None
-    Comment: Optional[str] = None
+
+    Query: str | None = None
+    CURIE: str | None = None
+    Blocked: str | None = None
+    Status: str | None = None
+    Issue: str | None = None
+    TreatsOnly: str | None = None
+    Submitter: str | None = None
+    Comment: str | None = None
 
     def is_blocked(self):
-        """ Is this term supposed to be blocked? """
-        if self.Blocked is not None and self.Blocked == 'y':
+        """Is this term supposed to be blocked?"""
+        if self.Blocked is not None and self.Blocked == "y":
             return True
         return False
 
@@ -40,14 +40,14 @@ class BlocklistEntry:
         """
 
         return BlocklistEntry(
-            Query=row.get('String (optional)', None),
-            CURIE=row.get('CURIE (optional)', None),
-            Blocked=row['Blocked?'],
-            Status=row['Status (Feb 21, 2024)'],
-            Issue=row['Blocklist issue'],
+            Query=row.get("String (optional)", None),
+            CURIE=row.get("CURIE (optional)", None),
+            Blocked=row["Blocked?"],
+            Status=row["Status (Feb 21, 2024)"],
+            Issue=row["Blocklist issue"],
             TreatsOnly=row['Block for "treats" only?'],
-            Submitter=row['Submitter'],
-            Comment=row['Comment (optional)'],
+            Submitter=row["Submitter"],
+            Comment=row["Comment (optional)"],
         )
 
 
@@ -57,7 +57,7 @@ def load_blocklist_from_gsheet():
 
     :return: A list of BlocklistEntry.
     """
-    google_sheet_id = '1UR2eplHBvFRwaSIVOhlB44wpfNPY1z7AVzUkqzDqIWA'
+    google_sheet_id = "1UR2eplHBvFRwaSIVOhlB44wpfNPY1z7AVzUkqzDqIWA"
     csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
 
     response = requests.get(csv_url, timeout=10)
