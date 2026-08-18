@@ -29,4 +29,5 @@ packages = ["src/babel_validation"]
 # Without testpaths, a bare `pytest` would also scan the website directories
 # (including node_modules) during collection.
 testpaths = ["tests"]
+pythonpath = ["src"]
 timeout = 300
