@@ -2,7 +2,7 @@ from typing import Iterator
 
 from src.babel_validation.assertions import NodeNormTest, ParamsList
 from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nodenorm import CachedNodeNorm
+from src.babel_validation.services.nodenorm import NodeNormService
 
 
 class ResolvesHandler(NodeNormTest):
@@ -16,7 +16,7 @@ class ResolvesHandler(NodeNormTest):
     ]
     YAML_PARAMS = "    - CHEBI:15365\n    - [MONDO:0005015, DOID:9351]"
 
-    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
@@ -41,7 +41,7 @@ class DoesNotResolveHandler(NodeNormTest):
     # asserting that is the whole point of this assertion — so don't reject it.
     VALIDATE_CURIES = False
 
-    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
@@ -52,11 +52,16 @@ class DoesNotResolveHandler(NodeNormTest):
 
 
 def _compare_resolutions(
-    params: ParamsList, nodenorm: CachedNodeNorm
+    params: ParamsList, nodenorm: NodeNormService
 ) -> tuple[dict | None, dict[str, dict | None]]:
     """Resolve all params; return (first_good_result, per_curie_results).
 
-    first_good_result is None if every CURIE failed to resolve.
+    Shared by ResolvesWith and DoesNotResolveWith, which ask the same question
+    (do these CURIEs agree?) and differ only in which answer they expect.
+
+    first_good_result is None if every CURIE failed to resolve; otherwise it is
+    the result of the earliest param that resolved, and serves as the canonical
+    result the others are compared against.
     per_curie_results maps each CURIE to its result (None if unresolvable).
     """
     # normalize_curies() guarantees one entry per requested CURIE, in the order
@@ -77,7 +82,7 @@ class ResolvesWithHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWith|CHEBI:15365|PUBCHEM.COMPOUND:1}}"]
     YAML_PARAMS = "    - [CHEBI:15365, PUBCHEM.COMPOUND:1]\n    - [MONDO:0005015, DOID:9351]"
 
-    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(
@@ -123,7 +128,7 @@ class DoesNotResolveWithHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolveWith|CHEBI:15365|CHEBI:16856}}"]
     YAML_PARAMS = "    - [CHEBI:15365, CHEBI:16856]"
 
-    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(
@@ -179,7 +184,7 @@ class HasLabelHandler(NodeNormTest):
     def curie_params(self, params: ParamsList) -> ParamsList:
         return params[:1]
 
-    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
         if len(params) != 2:
             yield self.failed(
@@ -233,7 +238,7 @@ class ResolvesWithTypeHandler(NodeNormTest):
     def curie_params(self, params: ParamsList) -> ParamsList:
         return params[1:]
 
-    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(f"Too few parameters provided in params_list in {label}: {params}")

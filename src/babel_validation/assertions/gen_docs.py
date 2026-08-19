@@ -86,10 +86,20 @@ _GROUP_HEADERS: dict[str, str] = {
 
 
 def _display_name(h: AssertionHandler) -> str:
+    """The assertion name as written in issues (ResolvesHandler -> "Resolves").
+
+    Derived from the class name rather than NAME, which is lowercased for
+    case-insensitive matching and so reads poorly as a heading.
+    """
     return type(h).__name__.removesuffix("Handler")
 
 
 def _applies_to(h: AssertionHandler) -> str:
+    """Which service(s) this handler tests; also the key into _GROUP_HEADERS.
+
+    A handler that subclasses neither base overrides the test_with_* methods
+    directly and so applies to both.
+    """
     if isinstance(h, NodeNormTest):
         return "NodeNorm"
     if isinstance(h, NameResTest):
@@ -98,6 +108,11 @@ def _applies_to(h: AssertionHandler) -> str:
 
 
 def _render_handler(h: AssertionHandler) -> str:
+    """Render one handler's README section from its documentation attributes.
+
+    Reads them with getattr defaults so that a handler missing one still renders
+    (as an empty section) instead of breaking the whole README.
+    """
     name = _display_name(h)
     service = _applies_to(h)
     description = getattr(h, "DESCRIPTION", "")
@@ -126,6 +141,11 @@ def _render_handler(h: AssertionHandler) -> str:
 
 
 def generate_readme() -> str:
+    """Render the complete README.md content. Pure — writing it is the caller's job.
+
+    Kept side-effect free so test_assertions_docs.py can compare the rendered
+    output against the checked-in file without touching the filesystem.
+    """
     sections = [INTRO]
 
     # Group by service rather than by registration order, so a handler added

@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from src.babel_validation.core.testrow import TestResult, TestStatus
+from src.babel_validation.services.nameres import NameResService
+from src.babel_validation.services.nodenorm import NodeNormService
 
 # The parameters of a single assertion invocation, e.g. ["CHEBI:15365", "aspirin"]
 # for {{BabelTest|HasLabel|CHEBI:15365|aspirin}}. What each element means depends
@@ -45,9 +47,22 @@ class PreparedParamsList:
 
 
 class AssertionHandler:
-    """Base class for all BabelTest assertion handlers."""
-    NAME: str           # lowercase assertion name as used in issue bodies
-    DESCRIPTION: str    # one-line human-readable description
+    """Base class for all BabelTest assertion handlers.
+
+    A handler is a stateless singleton: one instance per assertion type lives in
+    ASSERTION_HANDLERS and is shared by every issue being evaluated. Do not store
+    per-evaluation state on ``self``.
+
+    Every handler declares the five documentation attributes below; gen_docs.py
+    renders README.md from them, so they are part of the handler's contract
+    rather than optional commentary.
+    """
+
+    NAME: str                  # lowercase assertion name as used in issue bodies
+    DESCRIPTION: str           # one-line human-readable description
+    PARAMETERS: str            # markdown describing what each param means
+    WIKI_EXAMPLES: list[str]   # complete {{BabelTest|...}} lines, shown verbatim
+    YAML_PARAMS: str           # indented YAML list entries for the babel_tests example
 
     # Whether CURIE params should be rejected up front if they are not well-formed.
     # Assertions about deliberately-invalid identifiers turn this off.
@@ -56,9 +71,11 @@ class AssertionHandler:
     _CURIE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$')
 
     def passed(self, message: str) -> TestResult:
+        """Build a passing TestResult. Handlers use this rather than TestResult directly."""
         return TestResult(status=TestStatus.Passed, message=message)
 
     def failed(self, message: str) -> TestResult:
+        """Build a failing TestResult. Handlers use this rather than TestResult directly."""
         return TestResult(status=TestStatus.Failed, message=message)
 
     def curie_params(self, params: ParamsList) -> ParamsList:
@@ -66,12 +83,20 @@ class AssertionHandler:
         Default: all params are CURIEs. Subclasses override when some params are non-CURIEs."""
         return params
 
-    def prepare_params_lists(self, params_lists: list[ParamsList], nodenorm,
+    def prepare_params_lists(self, params_lists: list[ParamsList],
+                             nodenorm: NodeNormService,
                              label: str = "") -> list[PreparedParamsList]:
         """Strip params, reject unusable params_lists, and warm the NodeNorm cache.
 
-        Returns one PreparedParamsList per input params_list, in order, each either
-        carrying stripped params or a failure explaining why it was rejected.
+        :param params_lists: the params_lists to prepare, as parsed from the issue.
+        :param nodenorm: service whose cache is warmed with every CURIE about to be
+            looked up, so the per-params_list evaluation costs no further HTTP calls.
+        :param label: human-readable identifier for the source being evaluated (an
+            issue number, a test name); appears in failure messages so a reader can
+            tell which assertion produced them.
+        :returns: one PreparedParamsList per input params_list, in order, each either
+            carrying stripped params or a failure explaining why it was rejected.
+
         Rejected params_lists are excluded from cache warming, so (unless
         VALIDATE_CURIES is off) malformed CURIEs are never sent to NodeNorm.
         """
@@ -106,15 +131,45 @@ class AssertionHandler:
             )
         return None
 
-    def test_with_nodenorm(self, params_lists: list[ParamsList], nodenorm,
+    def test_with_nodenorm(self, params_lists: list[ParamsList],
+                           nodenorm: NodeNormService,
                            label: str = "") -> Iterator[TestResult]:
-        """Evaluate this assertion against NodeNorm. Returns nothing if not applicable."""
+        """Evaluate this assertion against NodeNorm, yielding one TestResult per check.
+
+        The base implementation yields nothing, which is how an assertion declares
+        it has no NodeNorm meaning: a caller runs every handler against both
+        services and an empty iterator simply contributes no results.
+
+        :param params_lists: every params_list this assertion was invoked with; each
+            is evaluated independently, so one bad params_list does not sink the rest.
+        :param nodenorm: the NodeNorm service to evaluate against. Typically a
+            CachedNodeNorm for a specific deployment (dev, prod, ...), which is what
+            makes the same assertion runnable against several environments.
+        :param label: human-readable identifier for the source being evaluated; see
+            prepare_params_lists().
+        """
         return iter([])
 
-    def test_with_nameres(self, params_lists: list[ParamsList], nodenorm, nameres,
+    def test_with_nameres(self, params_lists: list[ParamsList],
+                          nodenorm: NodeNormService, nameres: NameResService,
                           pass_if_found_in_top: int = 5,
                           label: str = "") -> Iterator[TestResult]:
-        """Evaluate this assertion against NameRes. Returns nothing if not applicable."""
+        """Evaluate this assertion against NameRes, yielding one TestResult per check.
+
+        As with test_with_nodenorm(), yielding nothing means "not applicable".
+
+        NameRes assertions get *both* services: NameRes answers the lookup, and
+        NodeNorm normalizes the expected CURIE so that a lookup result can be
+        compared against it by canonical identifier rather than by exact string.
+
+        :param params_lists: every params_list this assertion was invoked with.
+        :param nodenorm: used to normalize expected CURIEs before comparison.
+        :param nameres: the NameRes service to evaluate against.
+        :param pass_if_found_in_top: how far down the ranked results the expected
+            CURIE may appear and still count as a pass. Also caps the number of
+            results requested from NameRes.
+        :param label: human-readable identifier for the source being evaluated.
+        """
         return iter([])
 
 
@@ -124,7 +179,8 @@ class NodeNormTest(AssertionHandler):
     Subclasses implement test_params_list() instead of test_with_nodenorm().
     """
 
-    def test_with_nodenorm(self, params_lists: list[ParamsList], nodenorm,
+    def test_with_nodenorm(self, params_lists: list[ParamsList],
+                           nodenorm: NodeNormService,
                            label: str = "") -> Iterator[TestResult]:
         if not params_lists:
             yield self.failed(f"No parameters provided in {label}")
@@ -140,8 +196,23 @@ class NodeNormTest(AssertionHandler):
             return
         yield from results
 
-    def test_params_list(self, params: ParamsList, nodenorm, label: str = "") -> Iterator[TestResult]:
-        """Override this to implement the assertion. Called once per params_list."""
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
+                         label: str = "") -> Iterator[TestResult]:
+        """Override this to implement the assertion. Called once per params_list.
+
+        *params* is non-empty and already stripped, and (unless VALIDATE_CURIES is
+        off) every param that curie_params() selects is a well-formed CURIE, so
+        implementations need only check assertion-specific shape such as arity.
+        Every CURIE is also pre-warmed in *nodenorm*'s cache, so normalize_curie()
+        calls here are free.
+
+        Yield one TestResult per thing checked — usually one per CURIE — rather
+        than a single aggregate, so a failure report names the CURIE that failed.
+
+        :param params: this params_list's parameters; see the handler's PARAMETERS.
+        :param nodenorm: the NodeNorm service to evaluate against.
+        :param label: human-readable identifier for the source being evaluated.
+        """
         raise NotImplementedError
 
     @staticmethod
@@ -153,8 +224,13 @@ class NodeNormTest(AssertionHandler):
         types = result.get('type') or []
         return types[0] if types else 'unknown type'
 
-    def resolved_message(self, curie: str, result: dict, nodenorm) -> str:
-        """Standard pass-message when a CURIE resolves."""
+    def resolved_message(self, curie: str, result: dict,
+                         nodenorm: NodeNormService) -> str:
+        """Standard pass-message when a CURIE resolves.
+
+        *result* is one entry of a NodeNorm get_normalized_nodes response, i.e. a
+        non-None value from normalize_curie()/normalize_curies().
+        """
         return (f"Resolved {curie} to {result['id']['identifier']} "
                 f"({self.first_type(result)}, \"{result['id'].get('label', '')}\") "
                 f"with NodeNormalization service {nodenorm}")
@@ -166,7 +242,8 @@ class NameResTest(AssertionHandler):
     Subclasses implement test_params_list() instead of test_with_nameres().
     """
 
-    def test_with_nameres(self, params_lists: list[ParamsList], nodenorm, nameres,
+    def test_with_nameres(self, params_lists: list[ParamsList],
+                          nodenorm: NodeNormService, nameres: NameResService,
                           pass_if_found_in_top: int = 5,
                           label: str = "") -> Iterator[TestResult]:
         if not params_lists:
@@ -184,9 +261,16 @@ class NameResTest(AssertionHandler):
             return
         yield from results
 
-    def test_params_list(self, params: ParamsList, nodenorm, nameres,
-                         pass_if_found_in_top: int, label: str = "") -> Iterator[TestResult]:
-        """Override this to implement the assertion. Called once per params_list."""
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
+                         nameres: NameResService, pass_if_found_in_top: int,
+                         label: str = "") -> Iterator[TestResult]:
+        """Override this to implement the assertion. Called once per params_list.
+
+        *params* is non-empty and already stripped, with the params that
+        curie_params() selects validated as CURIEs and pre-warmed in *nodenorm*'s
+        cache. See NodeNormTest.test_params_list() for the shared contract; the
+        arguments are documented on test_with_nameres().
+        """
         raise NotImplementedError
 
 
@@ -198,6 +282,9 @@ from src.babel_validation.assertions.nodenorm import (  # noqa: E402
 from src.babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
 from src.babel_validation.assertions.common import NeededHandler  # noqa: E402
 
+# Every assertion type the parser will recognise, keyed by its lowercase NAME.
+# Registration order is irrelevant — README.md groups handlers by the service they
+# test, not by their position here.
 ASSERTION_HANDLERS: dict[str, AssertionHandler] = {
     h.NAME: h for h in [
         ResolvesHandler(),

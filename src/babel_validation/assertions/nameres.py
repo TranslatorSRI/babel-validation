@@ -4,8 +4,8 @@ from typing import Iterator
 
 from src.babel_validation.assertions import NameResTest, ParamsList
 from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nameres import CachedNameRes
-from src.babel_validation.services.nodenorm import CachedNodeNorm
+from src.babel_validation.services.nameres import NameResService
+from src.babel_validation.services.nodenorm import NodeNormService
 
 
 class SearchByNameHandler(NameResTest):
@@ -29,8 +29,8 @@ class SearchByNameHandler(NameResTest):
         # so test_params_list() can report the arity problem instead.
         return params[1:2]
 
-    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
-                         nameres: CachedNameRes, pass_if_found_in_top: int = 5,
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
+                         nameres: NameResService, pass_if_found_in_top: int = 5,
                          label: str = "") -> Iterator[TestResult]:
         if len(params) != 2:
             yield self.failed(
