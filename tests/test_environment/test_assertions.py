@@ -129,3 +129,15 @@ def test_docs_group_handlers_by_service_not_registration_order():
         del ASSERTION_HANDLERS[TempGroupingHandler.NAME]
     assert '### TempGrouping' in readme
     assert readme.index('### TempGrouping') < readme.index('## NameRes Assertions')
+
+
+@pytest.mark.unit
+def test_missing_biolink_type_placeholder_cannot_pass_for_a_real_type():
+    """Nodes do carry types normally, but the stand-in must not read as one of them."""
+    assert NodeNormTest.first_type({'type': ['biolink:Gene']}) == 'biolink:Gene'
+    for typeless in ({}, {'type': []}, {'type': None}):
+        placeholder = NodeNormTest.first_type(typeless)
+        assert placeholder == NodeNormTest.NO_TYPE
+        # Unlike a current type (biolink:Gene) or a legacy one (chemical entity).
+        assert not placeholder.startswith('biolink:')
+        assert placeholder.isupper()

@@ -215,14 +215,20 @@ class NodeNormTest(AssertionHandler):
         """
         raise NotImplementedError
 
+    # Stand-in for the Biolink type in a message when NodeNorm returned none.
+    # Deliberately unlike any real type: current ones are prefixed ("biolink:Gene")
+    # and older ones were lowercase prose ("chemical entity"), so shouting it in
+    # caps keeps a reader from mistaking the placeholder for a type Babel returned.
+    NO_TYPE = 'NO TYPE RETURNED'
+
     @staticmethod
     def first_type(result: dict) -> str:
-        """First Biolink type of a resolved node, or a placeholder if the node has none.
+        """First Biolink type of a resolved node, or NO_TYPE if the node has none.
 
         NodeNorm normally returns a non-empty `type` list, but guard against an empty
         (or missing) one so message formatting never raises IndexError/KeyError."""
         types = result.get('type') or []
-        return types[0] if types else 'unknown type'
+        return types[0] if types else NodeNormTest.NO_TYPE
 
     def resolved_message(self, curie: str, result: dict,
                          nodenorm: NodeNormService) -> str:
