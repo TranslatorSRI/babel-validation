@@ -71,7 +71,7 @@ export default {
       nodeNormEndpoints: {
         "NodeNorm-RENCI-exp": "https://nodenormalization-dev.apps.renci.org",
         "NodeNorm-RENCI-dev": "https://nodenormalization-sri.renci.org",
-        "NodeNorm-ITRB-ci": "https://nodenorm.ci.transltr.io",
+        "NodeNorm-ITRB-ci": "https://nodenorm-es.ci.transltr.io",
         "NodeNorm-ITRB-test": "https://nodenorm.test.transltr.io",
         "NodeNorm-ITRB-prod": "https://nodenorm.transltr.io"
       },
