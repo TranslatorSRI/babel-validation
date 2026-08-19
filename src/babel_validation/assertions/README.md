@@ -248,15 +248,21 @@ babel_tests:
    These are rendered into this file, so write them for someone reading this README
    rather than for someone reading the class.
 
-3. Implement `test_params_list()` (or both `test_with_*` methods for `AssertionHandler`
-   subclasses). It receives one params_list at a time, already stripped and — unless the
-   handler sets `VALIDATE_CURIES = False` — with its CURIEs validated and pre-warmed in
-   the NodeNorm cache. Yield one result per thing checked, usually one per CURIE, so a
-   failure names the CURIE that failed. Override `curie_params()` if some params are not
-   CURIEs; see `HasLabel` and `SearchByName`.
+3. Declare how many params a params_list may have with `MIN_PARAMS` and `MAX_PARAMS`
+   (default: one or more). Arity is checked during preparation, so a params_list of the
+   wrong length is rejected before any CURIE is looked up and `test_params_list()` never
+   sees it — do not re-check it by hand.
 
-4. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
+4. Implement `test_params_list()` (or both `test_with_*` methods for `AssertionHandler`
+   subclasses). It receives one params_list at a time, of a length you declared, already
+   stripped and — unless the handler sets `VALIDATE_CURIES = False` — with its CURIEs
+   validated and pre-warmed in the NodeNorm cache, so you can index into it directly.
+   Yield one result per thing checked, usually one per CURIE, so a failure names the CURIE
+   that failed. Override `curie_params()` if some params are not CURIEs; see `HasLabel`
+   and `SearchByName`.
+
+5. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
    matter — this file groups handlers by the service they test.
 
-5. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
+6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
    and `uv run pytest -m unit` to confirm the checked-in copy is in sync.

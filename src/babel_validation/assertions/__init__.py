@@ -37,6 +37,14 @@ from src.babel_validation.services.nodenorm import NodeNormService
 # Biolink type first, HasLabel is [curie, label]. See the handler's PARAMETERS.
 ParamsList = list[str]
 
+# Small counts read better as words in a message ("exactly two parameters").
+_COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def _count(n: int) -> str:
+    """"two" for small n, "17" for larger, plus the correctly pluralized noun."""
+    return f"{_COUNT_WORDS.get(n, n)} parameter" + ("" if n == 1 else "s")
+
 
 @dataclass(frozen=True)
 class PreparedParamsList:
@@ -68,6 +76,12 @@ class AssertionHandler:
     WIKI_EXAMPLES: list[str]   # complete {{BabelTest|...}} lines, shown verbatim
     YAML_PARAMS: str           # indented YAML list entries for the babel_tests example
 
+    # How many params a params_list must have. MAX_PARAMS None means no upper bound.
+    # Checked during preparation: an assertion invoked with the wrong number of
+    # params can never pass, so it is rejected before its CURIEs are looked up.
+    MIN_PARAMS = 1
+    MAX_PARAMS: int | None = None
+
     # Whether CURIE params should be rejected up front if they are not well-formed.
     # Assertions about deliberately-invalid identifiers turn this off.
     VALIDATE_CURIES = True
@@ -81,6 +95,25 @@ class AssertionHandler:
     def failed(self, message: str) -> TestResult:
         """Build a failing TestResult. Handlers use this rather than TestResult directly."""
         return TestResult(status=TestStatus.Failed, message=message)
+
+    @classmethod
+    def display_name(cls) -> str:
+        """The assertion name as written in issues (ResolvesHandler -> "Resolves").
+
+        Derived from the class name rather than NAME, which is lowercased for
+        case-insensitive matching and so reads poorly in a message or a heading.
+        """
+        return cls.__name__.removesuffix("Handler")
+
+    @classmethod
+    def _describe_arity(cls) -> str:
+        """How many params this assertion takes, phrased for a failure message."""
+        low, high = cls.MIN_PARAMS, cls.MAX_PARAMS
+        if high is None:
+            return f"at least {_count(low)}"
+        if low == high:
+            return f"exactly {_count(low)}"
+        return f"between {_COUNT_WORDS.get(low, low)} and {_count(high)}"
 
     def curie_params(self, params: ParamsList) -> ParamsList:
         """Return the subset of params that are CURIEs (for prewarming and validation).
@@ -122,9 +155,21 @@ class AssertionHandler:
         return prepared
 
     def _rejection(self, index: int, params: ParamsList, label: str) -> TestResult | None:
-        """Why *params* cannot be evaluated, or None if it can be."""
+        """Why *params* cannot be evaluated, or None if it can be.
+
+        Ordered cheapest-first, and arity before CURIE validation, because
+        curie_params() slices by position and only means anything once the
+        params_list is known to be the right length.
+        """
         if not params:
             return self.failed(f"No parameters in params_list {index} in {label}")
+        if len(params) < self.MIN_PARAMS or (
+                self.MAX_PARAMS is not None and len(params) > self.MAX_PARAMS):
+            return self.failed(
+                f"{self.display_name()} requires {self._describe_arity()} "
+                f"per params_list in {label}, but params_list {index} has "
+                f"{len(params)}: {params}"
+            )
         if not self.VALIDATE_CURIES:
             return None
         invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
@@ -204,11 +249,12 @@ class NodeNormTest(AssertionHandler):
                          label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per params_list.
 
-        *params* is non-empty and already stripped, and (unless VALIDATE_CURIES is
-        off) every param that curie_params() selects is a well-formed CURIE, so
-        implementations need only check assertion-specific shape such as arity.
-        Every CURIE is also pre-warmed in *nodenorm*'s cache, so normalize_curie()
-        calls here are free.
+        *params* already satisfies everything declared on the class: its length is
+        within MIN_PARAMS/MAX_PARAMS, it is stripped, and (unless VALIDATE_CURIES
+        is off) every param that curie_params() selects is a well-formed CURIE.
+        Implementations may index into it accordingly without re-checking. Every
+        CURIE is also pre-warmed in *nodenorm*'s cache, so normalize_curie() calls
+        here are free.
 
         Yield one TestResult per thing checked — usually one per CURIE — rather
         than a single aggregate, so a failure report names the CURIE that failed.
@@ -276,10 +322,10 @@ class NameResTest(AssertionHandler):
                          label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per params_list.
 
-        *params* is non-empty and already stripped, with the params that
-        curie_params() selects validated as CURIEs and pre-warmed in *nodenorm*'s
-        cache. See NodeNormTest.test_params_list() for the shared contract; the
-        arguments are documented on test_with_nameres().
+        *params* satisfies MIN_PARAMS/MAX_PARAMS and is stripped, with the params
+        that curie_params() selects validated as CURIEs and pre-warmed in
+        *nodenorm*'s cache. See NodeNormTest.test_params_list() for the shared
+        contract; the arguments are documented on test_with_nameres().
         """
         raise NotImplementedError
 

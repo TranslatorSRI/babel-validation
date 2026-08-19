@@ -164,3 +164,30 @@ def test_registration_rejects_a_duplicate_name():
 def test_registered_handlers_satisfy_those_rules():
     assert all(name == name.lower() for name in ASSERTION_HANDLERS)
     assert len(ASSERTION_HANDLERS) == 8
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize('handler_name,params', [
+    ('searchbyname', ['water', 'CHEBI:15377', 'unexpected']),  # exactly two
+    ('haslabel', ['CHEBI:15365']),                             # exactly two
+    ('resolveswith', ['A:1']),                                 # at least two
+    ('resolveswithtype', ['biolink:Gene']),                    # at least two
+])
+def test_wrong_arity_is_rejected_without_calling_nodenorm(nodenorm, handler_name, params):
+    """A params_list that can never pass must not cost a NodeNorm lookup first."""
+    handler = ASSERTION_HANDLERS[handler_name]
+    if handler_name == 'searchbyname':
+        results = list(handler.test_with_nameres([params], nodenorm, None, 5, 'test'))
+    else:
+        results = list(handler.test_with_nodenorm([params], nodenorm, 'test'))
+
+    assert [status for status, _ in _messages(results)] == [TestStatus.Failed], _messages(results)
+    assert handler.display_name() in results[0].message
+    assert nodenorm.post_calls == [], 'rejected params_list should not have been looked up'
+
+
+@pytest.mark.unit
+def test_a_good_params_list_still_gets_warmed(nodenorm):
+    """The arity guard must not stop legitimate params_lists from being pre-warmed."""
+    list(ASSERTION_HANDLERS['resolveswith'].test_with_nodenorm([['A:1', 'B:1']], nodenorm, 'test'))
+    assert nodenorm.post_calls == [['A:1', 'B:1']] or nodenorm.post_calls == [['B:1', 'A:1']]
