@@ -1,6 +1,6 @@
 from typing import Iterator
 
-from src.babel_validation.assertions import NodeNormTest
+from src.babel_validation.assertions import NodeNormTest, Params
 from src.babel_validation.core.testrow import TestResult
 from src.babel_validation.services.nodenorm import CachedNodeNorm
 
@@ -16,7 +16,7 @@ class ResolvesHandler(NodeNormTest):
     ]
     YAML_PARAMS = "    - CHEBI:15365\n    - [MONDO:0005015, DOID:9351]"
 
-    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+    def test_param_set(self, params: Params, nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
@@ -41,7 +41,7 @@ class DoesNotResolveHandler(NodeNormTest):
     # asserting that is the whole point of this assertion — so don't reject it.
     VALIDATE_CURIES = False
 
-    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+    def test_param_set(self, params: Params, nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
@@ -52,7 +52,7 @@ class DoesNotResolveHandler(NodeNormTest):
 
 
 def _compare_resolutions(
-    params: list[str], nodenorm: CachedNodeNorm
+    params: Params, nodenorm: CachedNodeNorm
 ) -> tuple[dict | None, dict[str, dict | None]]:
     """Resolve all params; return (first_good_result, per_curie_results).
 
@@ -77,7 +77,7 @@ class ResolvesWithHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWith|CHEBI:15365|PUBCHEM.COMPOUND:1}}"]
     YAML_PARAMS = "    - [CHEBI:15365, PUBCHEM.COMPOUND:1]\n    - [MONDO:0005015, DOID:9351]"
 
-    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+    def test_param_set(self, params: Params, nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(
@@ -123,7 +123,7 @@ class DoesNotResolveWithHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolveWith|CHEBI:15365|CHEBI:16856}}"]
     YAML_PARAMS = "    - [CHEBI:15365, CHEBI:16856]"
 
-    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+    def test_param_set(self, params: Params, nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(
@@ -176,10 +176,10 @@ class HasLabelHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|HasLabel|CHEBI:15365|aspirin}}"]
     YAML_PARAMS = "    - [CHEBI:15365, aspirin]"
 
-    def curie_params(self, params: list[str]) -> list[str]:
+    def curie_params(self, params: Params) -> Params:
         return params[:1]
 
-    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+    def test_param_set(self, params: Params, nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
         if len(params) != 2:
             yield self.failed(
@@ -230,10 +230,10 @@ class ResolvesWithTypeHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWithType|biolink:Gene|NCBIGene:1}}"]
     YAML_PARAMS = "    - [biolink:Gene, NCBIGene:1, HGNC:5]"
 
-    def curie_params(self, params: list[str]) -> list[str]:
+    def curie_params(self, params: Params) -> Params:
         return params[1:]
 
-    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
+    def test_param_set(self, params: Params, nodenorm: CachedNodeNorm,
                        label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(f"Too few parameters provided in param_set in {label}: {params}")
