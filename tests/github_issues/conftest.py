@@ -1,7 +1,6 @@
 import configparser
 import json
 import os
-import tempfile
 from pathlib import Path
 
 import dotenv
@@ -10,7 +9,11 @@ from filelock import FileLock
 from github import GithubException, Issue
 
 from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases, issue_id
-from tests._pytest_helpers import deselected_by_markexpr
+from tests._pytest_helpers import (
+    GITHUB_ISSUES_CACHE_FILE as _CACHE_FILE,
+    GITHUB_ISSUES_LOCK_FILE as _LOCK_FILE,
+    deselected_by_markexpr,
+)
 
 _github_token = None
 _github_auth_error: str | None = None
@@ -20,8 +23,7 @@ _AUTH_HELP = (
     "GitHub token is expired or invalid. Generate a new one at "
     "https://github.com/settings/tokens and set it as the GITHUB_TOKEN "
     "environment variable (or in a .env file), then delete the cache file "
-    f"at {Path(tempfile.gettempdir()) / 'babel_validation_issues_cache.json'} "
-    "if it exists."
+    f"at {_CACHE_FILE} if it exists."
 )
 
 _targets_config = configparser.ConfigParser()
@@ -32,9 +34,6 @@ _repos = [
     if r.strip()
 ]
 _github_issues_test_cases = None
-
-_CACHE_FILE = Path(tempfile.gettempdir()) / "babel_validation_issues_cache.json"
-_LOCK_FILE = _CACHE_FILE.with_suffix(".lock")
 
 # Module-level cache to avoid re-fetching issues already retrieved during collection.
 _fetched_issues_cache: dict[str, Issue.Issue] = {}

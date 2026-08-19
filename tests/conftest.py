@@ -9,6 +9,8 @@ import tempfile
 import pytest
 import configparser
 
+from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
+
 
 def get_targets_ini_path(config):
     """
@@ -49,9 +51,10 @@ def pytest_configure(config):
         for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
             unlink_if_exists(f)
             unlink_if_exists(f.removesuffix('.csv') + '.lock')
-        tmpdir = tempfile.gettempdir()
-        for name in ('babel_validation_issues_cache.json', 'babel_validation_issues_cache.lock'):
-            unlink_if_exists(os.path.join(tmpdir, name))
+        # Same for the GitHub issue ID cache. The matching .lock file is left
+        # alone: deleting it out from under a concurrently running pytest would
+        # let that run and this one hold two different inodes of "the" lock.
+        unlink_if_exists(GITHUB_ISSUES_CACHE_FILE)
 
 
 def pytest_addoption(parser):

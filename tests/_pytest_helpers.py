@@ -5,7 +5,17 @@ Google Sheet, GitHub issues) at collection time. pytest only applies ``-m``
 marker deselection *after* test generation, so a run like ``pytest -m unit``
 would still pay for those fetches before discarding the tests. Evaluating the
 marker expression ourselves lets us skip the fetch when the test won't run.
+
+Also holds the GitHub issue cache paths, so the root conftest can clear the
+cache without duplicating the filenames the github_issues conftest owns.
 """
+
+import tempfile
+from pathlib import Path
+
+# IDs of issues carrying BabelTest assertions, shared across xdist workers.
+GITHUB_ISSUES_CACHE_FILE = Path(tempfile.gettempdir()) / "babel_validation_issues_cache.json"
+GITHUB_ISSUES_LOCK_FILE = GITHUB_ISSUES_CACHE_FILE.with_suffix(".lock")
 
 
 def deselected_by_markexpr(metafunc) -> bool:
