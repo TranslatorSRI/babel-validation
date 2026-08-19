@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Iterator
 
-from src.babel_validation.assertions import NameResTest, ParamSet
+from src.babel_validation.assertions import NameResTest, ParamsList
 from src.babel_validation.core.testrow import TestResult
 from src.babel_validation.services.nameres import CachedNameRes
 from src.babel_validation.services.nodenorm import CachedNodeNorm
@@ -12,26 +12,26 @@ class SearchByNameHandler(NameResTest):
     """Test that a name search returns an expected CURIE in the top-N results in NameRes."""
     NAME = "searchbyname"
     DESCRIPTION = (
-        "Each param_set must have exactly two elements: a search query string and an expected CURIE. "
+        "Each params_list must have exactly two elements: a search query string and an expected CURIE. "
         "The test passes if the CURIE's normalized identifier appears within the top N results "
         "(default N=5) when NameRes looks up the search query."
     )
     PARAMETERS = (
-        "Each param_set: the **search query string** and the **expected CURIE**. "
+        "Each params_list: the **search query string** and the **expected CURIE**. "
         "The CURIE is normalized via NodeNorm before matching."
     )
     WIKI_EXAMPLES = ["{{BabelTest|SearchByName|water|CHEBI:15377}}"]
     YAML_PARAMS = "    - [water, CHEBI:15377]\n    - [diabetes, MONDO:0005015]"
 
-    def curie_params(self, params: ParamSet) -> ParamSet:
+    def curie_params(self, params: ParamsList) -> ParamsList:
         # params[0] is a free-text search query; only the expected CURIE is a CURIE.
-        # Slicing (rather than indexing) keeps malformed param_sets out of validation
-        # so test_param_set() can report the arity problem instead.
+        # Slicing (rather than indexing) keeps malformed params_lists out of validation
+        # so test_params_list() can report the arity problem instead.
         return params[1:2]
 
-    def test_param_set(self, params: ParamSet, nodenorm: CachedNodeNorm,
-                       nameres: CachedNameRes, pass_if_found_in_top: int = 5,
-                       label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+                         nameres: CachedNameRes, pass_if_found_in_top: int = 5,
+                         label: str = "") -> Iterator[TestResult]:
         if len(params) != 2:
             yield self.failed(
                 f"SearchByName requires exactly two parameters (search query, expected CURIE) in {label}, "

@@ -1,23 +1,23 @@
 from typing import Iterator
 
-from src.babel_validation.assertions import NodeNormTest, ParamSet
+from src.babel_validation.assertions import NodeNormTest, ParamsList
 from src.babel_validation.core.testrow import TestResult
 from src.babel_validation.services.nodenorm import CachedNodeNorm
 
 
 class ResolvesHandler(NodeNormTest):
-    """Test that every CURIE in every param_set resolves in NodeNorm."""
+    """Test that every CURIE in every params_list resolves in NodeNorm."""
     NAME = "resolves"
-    DESCRIPTION = "Each CURIE in each param_set must resolve to a non-null result in NodeNorm."
-    PARAMETERS = "One or more CURIEs per param_set."
+    DESCRIPTION = "Each CURIE in each params_list must resolve to a non-null result in NodeNorm."
+    PARAMETERS = "One or more CURIEs per params_list."
     WIKI_EXAMPLES = [
         "{{BabelTest|Resolves|CHEBI:15365}}",
         "{{BabelTest|Resolves|MONDO:0005015|DOID:9351}}",
     ]
     YAML_PARAMS = "    - CHEBI:15365\n    - [MONDO:0005015, DOID:9351]"
 
-    def test_param_set(self, params: ParamSet, nodenorm: CachedNodeNorm,
-                       label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+                         label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
             if not result:
@@ -27,13 +27,13 @@ class ResolvesHandler(NodeNormTest):
 
 
 class DoesNotResolveHandler(NodeNormTest):
-    """Test that every CURIE in every param_set does NOT resolve in NodeNorm."""
+    """Test that every CURIE in every params_list does NOT resolve in NodeNorm."""
     NAME = "doesnotresolve"
     DESCRIPTION = (
-        "Each CURIE in each param_set must fail to resolve (return null) in NodeNorm. "
+        "Each CURIE in each params_list must fail to resolve (return null) in NodeNorm. "
         "Use this to confirm that an identifier is intentionally not normalizable."
     )
-    PARAMETERS = "One or more CURIEs per param_set."
+    PARAMETERS = "One or more CURIEs per params_list."
     WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolve|FAKENS:99999}}"]
     YAML_PARAMS = "    - FAKENS:99999"
 
@@ -41,8 +41,8 @@ class DoesNotResolveHandler(NodeNormTest):
     # asserting that is the whole point of this assertion — so don't reject it.
     VALIDATE_CURIES = False
 
-    def test_param_set(self, params: ParamSet, nodenorm: CachedNodeNorm,
-                       label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+                         label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
             if not result:
@@ -52,7 +52,7 @@ class DoesNotResolveHandler(NodeNormTest):
 
 
 def _compare_resolutions(
-    params: ParamSet, nodenorm: CachedNodeNorm
+    params: ParamsList, nodenorm: CachedNodeNorm
 ) -> tuple[dict | None, dict[str, dict | None]]:
     """Resolve all params; return (first_good_result, per_curie_results).
 
@@ -67,21 +67,21 @@ def _compare_resolutions(
 
 
 class ResolvesWithHandler(NodeNormTest):
-    """Test that all CURIEs in a param_set resolve to the same normalized result in NodeNorm."""
+    """Test that all CURIEs in a params_list resolve to the same normalized result in NodeNorm."""
     NAME = "resolveswith"
     DESCRIPTION = (
-        "All CURIEs within each param_set must resolve to the identical normalized result. "
+        "All CURIEs within each params_list must resolve to the identical normalized result. "
         "Use this to assert that two identifiers are equivalent."
     )
-    PARAMETERS = "Two or more CURIEs per param_set. All must resolve to the same result."
+    PARAMETERS = "Two or more CURIEs per params_list. All must resolve to the same result."
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWith|CHEBI:15365|PUBCHEM.COMPOUND:1}}"]
     YAML_PARAMS = "    - [CHEBI:15365, PUBCHEM.COMPOUND:1]\n    - [MONDO:0005015, DOID:9351]"
 
-    def test_param_set(self, params: ParamSet, nodenorm: CachedNodeNorm,
-                       label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+                         label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(
-                f"ResolvesWith requires at least two CURIEs per param_set in {label}, "
+                f"ResolvesWith requires at least two CURIEs per params_list in {label}, "
                 f"but got {len(params)}: {params}"
             )
             return
@@ -113,21 +113,21 @@ class ResolvesWithHandler(NodeNormTest):
 
 
 class DoesNotResolveWithHandler(NodeNormTest):
-    """Test that not all CURIEs in a param_set resolve to the same result in NodeNorm."""
+    """Test that not all CURIEs in a params_list resolve to the same result in NodeNorm."""
     NAME = "doesnotresolvewith"
     DESCRIPTION = (
-        "The CURIEs within each param_set must NOT all resolve to the same normalized "
+        "The CURIEs within each params_list must NOT all resolve to the same normalized "
         "result. Use this to assert that two identifiers are intentionally distinct entities."
     )
-    PARAMETERS = "Two or more CURIEs per param_set. They must not all resolve to the same result."
+    PARAMETERS = "Two or more CURIEs per params_list. They must not all resolve to the same result."
     WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolveWith|CHEBI:15365|CHEBI:16856}}"]
     YAML_PARAMS = "    - [CHEBI:15365, CHEBI:16856]"
 
-    def test_param_set(self, params: ParamSet, nodenorm: CachedNodeNorm,
-                       label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+                         label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
             yield self.failed(
-                f"DoesNotResolveWith requires at least two CURIEs per param_set in {label}, "
+                f"DoesNotResolveWith requires at least two CURIEs per params_list in {label}, "
                 f"but got {len(params)}: {params}"
             )
             return
@@ -139,7 +139,7 @@ class DoesNotResolveWithHandler(NodeNormTest):
         if unresolved:
             yield self.failed(
                 f"CURIEs {unresolved} could not be resolved on {nodenorm}; "
-                f"all CURIEs in a DoesNotResolveWith param_set must resolve"
+                f"all CURIEs in a DoesNotResolveWith params_list must resolve"
             )
             return
 
@@ -172,15 +172,15 @@ class HasLabelHandler(NodeNormTest):
         "The CURIE must resolve in NodeNorm and its primary label (id.label) must "
         "match the expected label exactly (case-sensitive)."
     )
-    PARAMETERS = "Exactly two elements per param_set: a CURIE, then the expected label string."
+    PARAMETERS = "Exactly two elements per params_list: a CURIE, then the expected label string."
     WIKI_EXAMPLES = ["{{BabelTest|HasLabel|CHEBI:15365|aspirin}}"]
     YAML_PARAMS = "    - [CHEBI:15365, aspirin]"
 
-    def curie_params(self, params: ParamSet) -> ParamSet:
+    def curie_params(self, params: ParamsList) -> ParamsList:
         return params[:1]
 
-    def test_param_set(self, params: ParamSet, nodenorm: CachedNodeNorm,
-                       label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+                         label: str = "") -> Iterator[TestResult]:
         if len(params) != 2:
             yield self.failed(
                 f"HasLabel requires exactly two parameters (CURIE, expected label) in {label}, "
@@ -220,23 +220,23 @@ class ResolvesWithTypeHandler(NodeNormTest):
     """Test that CURIEs resolve with a specific Biolink type in NodeNorm."""
     NAME = "resolveswithtype"
     DESCRIPTION = (
-        "Each param_set must have at least two elements: the first is the expected Biolink type "
+        "Each params_list must have at least two elements: the first is the expected Biolink type "
         "(e.g. 'biolink:Gene'), and the remainder are CURIEs that must resolve with that type."
     )
     PARAMETERS = (
-        "Each param_set: first element is the expected Biolink type (e.g. `biolink:Gene`), "
+        "Each params_list: first element is the expected Biolink type (e.g. `biolink:Gene`), "
         "remaining elements are CURIEs."
     )
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWithType|biolink:Gene|NCBIGene:1}}"]
     YAML_PARAMS = "    - [biolink:Gene, NCBIGene:1, HGNC:5]"
 
-    def curie_params(self, params: ParamSet) -> ParamSet:
+    def curie_params(self, params: ParamsList) -> ParamsList:
         return params[1:]
 
-    def test_param_set(self, params: ParamSet, nodenorm: CachedNodeNorm,
-                       label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: CachedNodeNorm,
+                         label: str = "") -> Iterator[TestResult]:
         if len(params) < 2:
-            yield self.failed(f"Too few parameters provided in param_set in {label}: {params}")
+            yield self.failed(f"Too few parameters provided in params_list in {label}: {params}")
             return
 
         expected_biolink_type = params[0]

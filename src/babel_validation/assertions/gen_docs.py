@@ -29,7 +29,7 @@ Two syntaxes are supported:
 {{BabelTest|AssertionType|param1|param2|...}}
 ```
 
-**YAML syntax** (multiple assertions, multiple param sets):
+**YAML syntax** (multiple assertions, multiple params lists):
 ````
 ```yaml
 babel_tests:
@@ -41,16 +41,16 @@ babel_tests:
 
 Assertion names are case-insensitive, as is the `{{BabelTest|...}}` marker itself.
 
-## Param Sets
+## Params Lists
 
-Each assertion can be invoked with one or more **param sets** — independent groups of
+Each assertion can be invoked with one or more **params lists** — independent groups of
 parameters that are each evaluated separately.
 
-- **Wiki syntax** — each `{{BabelTest|...}}` line is one param set.
-- **YAML syntax** — each list entry under an assertion key is one param set; a bare string
-  is a single-element param set, a YAML list is a multi-element param set.
+- **Wiki syntax** — each `{{BabelTest|...}}` line is one params list.
+- **YAML syntax** — each list entry under an assertion key is one params list; a bare string
+  is a single-element params list, a YAML list is a multi-element params list.
 
-The meaning of each element in a param set depends on the assertion type (see below).
+The meaning of each element in a params list depends on the assertion type (see below).
 For most assertions the elements are CURIEs; for `HasLabel` the second element is a
 label string; for `ResolvesWithType` the first element is a Biolink type.
 
@@ -61,11 +61,11 @@ ADDING_NEW = """\
 ## Adding a New Assertion Type
 
 1. Choose the right module:
-   - `nodenorm.py` — for NodeNorm-only assertions (subclass `NodeNormTest`, override `test_param_set`)
-   - `nameres.py` — for NameRes-only assertions (subclass `NameResTest`, override `test_param_set`)
+   - `nodenorm.py` — for NodeNorm-only assertions (subclass `NodeNormTest`, override `test_params_list`)
+   - `nameres.py` — for NameRes-only assertions (subclass `NameResTest`, override `test_params_list`)
    - `common.py` — for assertions that apply to both services (subclass `AssertionHandler`, override `test_with_nodenorm` and/or `test_with_nameres`)
 
-2. Define the class with `NAME`, `DESCRIPTION`, `PARAMETERS`, `WIKI_EXAMPLES`, `YAML_PARAMS`, and `test_param_set()` (or both `test_with_*` methods for `AssertionHandler` subclasses).
+2. Define the class with `NAME`, `DESCRIPTION`, `PARAMETERS`, `WIKI_EXAMPLES`, `YAML_PARAMS`, and `test_params_list()` (or both `test_with_*` methods for `AssertionHandler` subclasses).
 
 3. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`.
 

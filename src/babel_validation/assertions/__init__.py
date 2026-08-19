@@ -14,7 +14,7 @@ Adding a new assertion type
    in the appropriate module (nodenorm.py, nameres.py, or common.py).
 2. Set NAME and DESCRIPTION class attributes.
 3. Set PARAMETERS, WIKI_EXAMPLES, and YAML_PARAMS class attributes for documentation.
-4. Override test_param_set().
+4. Override test_params_list().
 5. Import it here and add an instance to ASSERTION_HANDLERS.
 6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate README.md.
 """
@@ -27,27 +27,20 @@ from src.babel_validation.core.testrow import TestResult, TestStatus
 
 # The parameters of a single assertion invocation, e.g. ["CHEBI:15365", "aspirin"]
 # for {{BabelTest|HasLabel|CHEBI:15365|aspirin}}. What each element means depends
-# on the assertion; see the handler's PARAMETERS attribute.
-#
-# "Set" is the English sense — a group of parameters evaluated together — not
-# Python's set type. Order matters: ResolvesWithType takes its Biolink type
-# first, HasLabel is [curie, label]. Hence list, not set.
-ParamSet = list[str]
-
-# Every param_set of one assertion. Each is evaluated independently and produces
-# its own TestResults, so one bad param_set doesn't sink the others.
-ParamSets = list[ParamSet]
+# on the assertion, and position is significant: ResolvesWithType takes its
+# Biolink type first, HasLabel is [curie, label]. See the handler's PARAMETERS.
+ParamsList = list[str]
 
 
 @dataclass(frozen=True)
-class PreparedParamSet:
-    """One param_set after stripping and validation, ready to be evaluated.
+class PreparedParamsList:
+    """One params_list after stripping and validation, ready to be evaluated.
 
-    *failure* is None when the param_set is usable. When it is set, the
-    param_set was rejected before reaching the service and *failure* is the
+    *failure* is None when the params_list is usable. When it is set, the
+    params_list was rejected before reaching the service and *failure* is the
     TestResult to report in its place.
     """
-    params: ParamSet
+    params: ParamsList
     failure: TestResult | None = None
 
 
@@ -68,24 +61,24 @@ class AssertionHandler:
     def failed(self, message: str) -> TestResult:
         return TestResult(status=TestStatus.Failed, message=message)
 
-    def curie_params(self, params: ParamSet) -> ParamSet:
+    def curie_params(self, params: ParamsList) -> ParamsList:
         """Return the subset of params that are CURIEs (for prewarming and validation).
         Default: all params are CURIEs. Subclasses override when some params are non-CURIEs."""
         return params
 
-    def prepare_param_sets(self, param_sets: ParamSets, nodenorm,
-                           label: str = "") -> list[PreparedParamSet]:
-        """Strip params, reject unusable param_sets, and warm the NodeNorm cache.
+    def prepare_params_lists(self, params_lists: list[ParamsList], nodenorm,
+                             label: str = "") -> list[PreparedParamsList]:
+        """Strip params, reject unusable params_lists, and warm the NodeNorm cache.
 
-        Returns one PreparedParamSet per input param_set, in order, each either
+        Returns one PreparedParamsList per input params_list, in order, each either
         carrying stripped params or a failure explaining why it was rejected.
-        Rejected param_sets are excluded from cache warming, so (unless
+        Rejected params_lists are excluded from cache warming, so (unless
         VALIDATE_CURIES is off) malformed CURIEs are never sent to NodeNorm.
         """
         prepared = []
-        for index, params in enumerate(param_sets):
+        for index, params in enumerate(params_lists):
             stripped = [param.strip() for param in params]
-            prepared.append(PreparedParamSet(stripped, self._rejection(index, stripped, label)))
+            prepared.append(PreparedParamsList(stripped, self._rejection(index, stripped, label)))
 
         # Warm the cache in a single request, deduplicated; skip if empty
         # (normalize_curies raises ValueError on an empty list).
@@ -99,26 +92,26 @@ class AssertionHandler:
 
         return prepared
 
-    def _rejection(self, index: int, params: ParamSet, label: str) -> TestResult | None:
+    def _rejection(self, index: int, params: ParamsList, label: str) -> TestResult | None:
         """Why *params* cannot be evaluated, or None if it can be."""
         if not params:
-            return self.failed(f"No parameters in param_set {index} in {label}")
+            return self.failed(f"No parameters in params_list {index} in {label}")
         if not self.VALIDATE_CURIES:
             return None
         invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
         if invalid:
             return self.failed(
-                f"Malformed CURIE(s) {invalid} in param_set {index} in {label}: "
+                f"Malformed CURIE(s) {invalid} in params_list {index} in {label}: "
                 f"expected format PREFIX:LOCAL_ID (e.g. CHEBI:15365)"
             )
         return None
 
-    def test_with_nodenorm(self, param_sets: ParamSets, nodenorm,
+    def test_with_nodenorm(self, params_lists: list[ParamsList], nodenorm,
                            label: str = "") -> Iterator[TestResult]:
         """Evaluate this assertion against NodeNorm. Returns nothing if not applicable."""
         return iter([])
 
-    def test_with_nameres(self, param_sets: ParamSets, nodenorm, nameres,
+    def test_with_nameres(self, params_lists: list[ParamsList], nodenorm, nameres,
                           pass_if_found_in_top: int = 5,
                           label: str = "") -> Iterator[TestResult]:
         """Evaluate this assertion against NameRes. Returns nothing if not applicable."""
@@ -128,27 +121,27 @@ class AssertionHandler:
 class NodeNormTest(AssertionHandler):
     """Base class for assertions that test NodeNorm.
 
-    Subclasses implement test_param_set() instead of test_with_nodenorm().
+    Subclasses implement test_params_list() instead of test_with_nodenorm().
     """
 
-    def test_with_nodenorm(self, param_sets: ParamSets, nodenorm,
+    def test_with_nodenorm(self, params_lists: list[ParamsList], nodenorm,
                            label: str = "") -> Iterator[TestResult]:
-        if not param_sets:
+        if not params_lists:
             yield self.failed(f"No parameters provided in {label}")
             return
         results = []
-        for prepared in self.prepare_param_sets(param_sets, nodenorm, label):
+        for prepared in self.prepare_params_lists(params_lists, nodenorm, label):
             if prepared.failure:
                 results.append(prepared.failure)
                 continue
-            results.extend(self.test_param_set(prepared.params, nodenorm, label))
+            results.extend(self.test_params_list(prepared.params, nodenorm, label))
         if not results:
             yield self.failed(f"No test results returned in {label}")
             return
         yield from results
 
-    def test_param_set(self, params: ParamSet, nodenorm, label: str = "") -> Iterator[TestResult]:
-        """Override this to implement the assertion. Called once per param_set."""
+    def test_params_list(self, params: ParamsList, nodenorm, label: str = "") -> Iterator[TestResult]:
+        """Override this to implement the assertion. Called once per params_list."""
         raise NotImplementedError
 
     @staticmethod
@@ -170,30 +163,30 @@ class NodeNormTest(AssertionHandler):
 class NameResTest(AssertionHandler):
     """Base class for assertions that test NameRes.
 
-    Subclasses implement test_param_set() instead of test_with_nameres().
+    Subclasses implement test_params_list() instead of test_with_nameres().
     """
 
-    def test_with_nameres(self, param_sets: ParamSets, nodenorm, nameres,
+    def test_with_nameres(self, params_lists: list[ParamsList], nodenorm, nameres,
                           pass_if_found_in_top: int = 5,
                           label: str = "") -> Iterator[TestResult]:
-        if not param_sets:
+        if not params_lists:
             yield self.failed(f"No parameters provided in {label}")
             return
         results = []
-        for prepared in self.prepare_param_sets(param_sets, nodenorm, label):
+        for prepared in self.prepare_params_lists(params_lists, nodenorm, label):
             if prepared.failure:
                 results.append(prepared.failure)
                 continue
             results.extend(
-                self.test_param_set(prepared.params, nodenorm, nameres, pass_if_found_in_top, label))
+                self.test_params_list(prepared.params, nodenorm, nameres, pass_if_found_in_top, label))
         if not results:
             yield self.failed(f"No test results returned in {label}")
             return
         yield from results
 
-    def test_param_set(self, params: ParamSet, nodenorm, nameres,
-                       pass_if_found_in_top: int, label: str = "") -> Iterator[TestResult]:
-        """Override this to implement the assertion. Called once per param_set."""
+    def test_params_list(self, params: ParamsList, nodenorm, nameres,
+                         pass_if_found_in_top: int, label: str = "") -> Iterator[TestResult]:
+        """Override this to implement the assertion. Called once per params_list."""
         raise NotImplementedError
 
 

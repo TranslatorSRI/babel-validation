@@ -9,8 +9,8 @@ class NeededHandler(AssertionHandler):
     WIKI_EXAMPLES = ["{{BabelTest|Needed}}"]
     YAML_PARAMS = "    - placeholder"
 
-    def test_with_nodenorm(self, param_sets, nodenorm, label=""):
+    def test_with_nodenorm(self, params_lists, nodenorm, label=""):
         yield self.failed("Test needed for issue")
 
-    def test_with_nameres(self, param_sets, nodenorm, nameres, pass_if_found_in_top=5, label=""):
+    def test_with_nameres(self, params_lists, nodenorm, nameres, pass_if_found_in_top=5, label=""):
         yield self.failed("Test needed for issue")
