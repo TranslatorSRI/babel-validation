@@ -31,7 +31,6 @@ from typing import Iterator
 import yaml
 
 from github import Github, Auth, Issue
-from tqdm import tqdm
 
 from src.babel_validation.assertions import ASSERTION_HANDLERS
 from src.babel_validation.core.testrow import TestResult
@@ -300,7 +299,8 @@ class GitHubIssuesTestCases:
     def get_issues_with_tests(self, github_repositories=None) -> Iterator[Issue.Issue]:
         """Use GitHub search API to find only issues containing BabelTest syntax.
 
-        This is much faster than get_all_issues() + issue_has_tests() filtering because
+        This is much faster than paginating every issue and filtering with
+        issue_has_tests(), because
         it only fetches issues that match the search query rather than paginating through
         every issue in each repository.
 
@@ -320,25 +320,3 @@ class GitHubIssuesTestCases:
                         seen_numbers.add(issue.number)
                         if self.issue_has_tests(issue):
                             yield issue
-
-    def get_all_issues(self, github_repositories=None) -> Iterator[Issue.Issue]:
-        """
-        Get a list of test rows from one or more repositories.
-
-        :param github_repositories: A list of GitHub repositories to search for test cases. If none is provided,
-            we default to the list specified when creating this GitHubIssuesTestCases class.
-        :return: A list of TestRows to process.
-        """
-        if github_repositories is None:
-            github_repositories = self.github_repositories
-
-        for repo_id in github_repositories:
-            self.logger.info("Looking up issues in GitHub repository %s", repo_id)
-            repo = self.github.get_repo(repo_id, lazy=True)
-
-            issue_count = 0
-            for issue in tqdm(repo.get_issues(state='all', sort='updated'), desc=f"Processing issues in {repo_id}"):
-                issue_count += 1
-                yield issue
-
-            self.logger.info("Found %d issues in GitHub repository %s", issue_count, repo_id)
