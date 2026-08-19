@@ -9,7 +9,7 @@ import pytest
 from filelock import FileLock
 from github import GithubException, Issue
 
-from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
+from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases, issue_id
 from tests._pytest_helpers import deselected_by_markexpr
 
 _github_token = None
@@ -57,11 +57,6 @@ def _get_github_issues_test_cases() -> GitHubIssuesTestCases:
     return _github_issues_test_cases
 
 
-def _issue_id(issue: Issue.Issue) -> str:
-    """Derive a test ID from an issue without making extra API calls."""
-    return f"{issue.repository.full_name}#{issue.number}"
-
-
 def _record_auth_error(e: GithubException) -> None:
     global _github_auth_error
     _github_auth_error = f"{_AUTH_HELP}\n\nOriginal error: {e}"
@@ -90,7 +85,7 @@ def _get_all_test_issue_ids() -> list[str]:
                 _cached_ids = [_AUTH_ERROR_ID]
                 return _cached_ids
             raise
-        ids = [_issue_id(i) for i in issues]
+        ids = [issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
             _fetched_issues_cache[id_] = issue
         _CACHE_FILE.write_text(json.dumps(ids))
@@ -117,7 +112,7 @@ def pytest_generate_tests(metafunc):
                 metafunc.parametrize("github_issue_id", [_AUTH_ERROR_ID], ids=[_AUTH_ERROR_ID])
                 return
             raise
-        ids = [_issue_id(i) for i in issues]
+        ids = [issue_id(i) for i in issues]
         for issue, id_ in zip(issues, ids):
             _fetched_issues_cache[id_] = issue
     else:

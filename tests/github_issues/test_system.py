@@ -24,7 +24,7 @@ def _mock_issue(body: str, number: int = 999) -> MagicMock:
     issue = MagicMock()
     issue.body = body
     issue.number = number
-    issue.repository.full_name = "test-org/test-repo"
+    issue.html_url = f"https://github.com/test-org/test-repo/issues/{number}"
     return issue
 
 

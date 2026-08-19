@@ -41,6 +41,17 @@ from src.babel_validation.services.nodenorm import CachedNodeNorm
 _logger = logging.getLogger(__name__)
 
 
+def issue_id(issue: Issue.Issue) -> str:
+    """The human-readable "org/repo#N" identifier for an issue.
+
+    Parsed out of html_url rather than read from issue.repository.full_name:
+    search results carry no repository, so that attribute costs two extra REST
+    calls (a full issue GET, then a repo GET) for every issue we look at.
+    """
+    org, repo = issue.html_url.split("/")[3:5]
+    return f"{org}/{repo}#{issue.number}"
+
+
 def _to_list(value, context: str) -> list:
     """Normalize a YAML value that may be a bare string or a list; raise on anything else."""
     if isinstance(value, str):
@@ -162,7 +173,7 @@ class GitHubIssuesTestCases:
         :return: A list of GitHubIssueTest objects found in the issue body.
         """
 
-        github_issue_id = f"{github_issue.repository.full_name}#{github_issue.number}"
+        github_issue_id = issue_id(github_issue)
         self.logger.debug("Looking for tests in issue %s: %s (%s, %s)",
                           github_issue_id, github_issue.title, github_issue.state, github_issue.html_url)
 
