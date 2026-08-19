@@ -28,11 +28,15 @@ from src.babel_validation.core.testrow import TestResult, TestStatus
 # The parameters of a single assertion invocation, e.g. ["CHEBI:15365", "aspirin"]
 # for {{BabelTest|HasLabel|CHEBI:15365|aspirin}}. What each element means depends
 # on the assertion; see the handler's PARAMETERS attribute.
-Params = list[str]
+#
+# "Set" is the English sense — a group of parameters evaluated together — not
+# Python's set type. Order matters: ResolvesWithType takes its Biolink type
+# first, HasLabel is [curie, label]. Hence list, not set.
+ParamSet = list[str]
 
-# The param_sets of one assertion: each is evaluated independently, and each
-# produces its own TestResults.
-ParamSets = list[Params]
+# Every param_set of one assertion. Each is evaluated independently and produces
+# its own TestResults, so one bad param_set doesn't sink the others.
+ParamSets = list[ParamSet]
 
 
 @dataclass(frozen=True)
@@ -43,7 +47,7 @@ class PreparedParamSet:
     param_set was rejected before reaching the service and *failure* is the
     TestResult to report in its place.
     """
-    params: Params
+    params: ParamSet
     failure: TestResult | None = None
 
 
@@ -64,7 +68,7 @@ class AssertionHandler:
     def failed(self, message: str) -> TestResult:
         return TestResult(status=TestStatus.Failed, message=message)
 
-    def curie_params(self, params: Params) -> Params:
+    def curie_params(self, params: ParamSet) -> ParamSet:
         """Return the subset of params that are CURIEs (for prewarming and validation).
         Default: all params are CURIEs. Subclasses override when some params are non-CURIEs."""
         return params
@@ -95,7 +99,7 @@ class AssertionHandler:
 
         return prepared
 
-    def _rejection(self, index: int, params: Params, label: str) -> TestResult | None:
+    def _rejection(self, index: int, params: ParamSet, label: str) -> TestResult | None:
         """Why *params* cannot be evaluated, or None if it can be."""
         if not params:
             return self.failed(f"No parameters in param_set {index} in {label}")
@@ -143,7 +147,7 @@ class NodeNormTest(AssertionHandler):
             return
         yield from results
 
-    def test_param_set(self, params: Params, nodenorm, label: str = "") -> Iterator[TestResult]:
+    def test_param_set(self, params: ParamSet, nodenorm, label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per param_set."""
         raise NotImplementedError
 
@@ -187,7 +191,7 @@ class NameResTest(AssertionHandler):
             return
         yield from results
 
-    def test_param_set(self, params: Params, nodenorm, nameres,
+    def test_param_set(self, params: ParamSet, nodenorm, nameres,
                        pass_if_found_in_top: int, label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per param_set."""
         raise NotImplementedError
