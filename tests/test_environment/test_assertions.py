@@ -6,7 +6,7 @@ These run against the real CachedNodeNorm so that the bulk-normalization contrac
 
 import pytest
 
-from src.babel_validation.assertions import ASSERTION_HANDLERS, NodeNormTest
+from src.babel_validation.assertions import ASSERTION_HANDLERS, NodeNormTest, _register
 from src.babel_validation.assertions.gen_docs import generate_readme
 from src.babel_validation.assertions.nodenorm import (
     DoesNotResolveHandler, DoesNotResolveWithHandler, ResolvesHandler, ResolvesWithHandler,
@@ -141,3 +141,26 @@ def test_missing_biolink_type_placeholder_cannot_pass_for_a_real_type():
         # Unlike a current type (biolink:Gene) or a legacy one (chemical entity).
         assert not placeholder.startswith('biolink:')
         assert placeholder.isupper()
+
+
+@pytest.mark.unit
+def test_registration_rejects_names_that_could_never_be_matched():
+    """Assertion lookup lowercases the issue's name, so an uppercase NAME is unreachable."""
+    class UppercaseHandler(TempGroupingHandler):
+        NAME = 'Resolves'
+
+    with pytest.raises(ValueError, match='lowercase'):
+        _register([UppercaseHandler()])
+
+
+@pytest.mark.unit
+def test_registration_rejects_a_duplicate_name():
+    """A dict comprehension would silently drop one of the two handlers."""
+    with pytest.raises(ValueError, match='already registered'):
+        _register([TempGroupingHandler(), TempGroupingHandler()])
+
+
+@pytest.mark.unit
+def test_registered_handlers_satisfy_those_rules():
+    assert all(name == name.lower() for name in ASSERTION_HANDLERS)
+    assert len(ASSERTION_HANDLERS) == 8

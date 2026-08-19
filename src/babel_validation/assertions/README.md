@@ -236,8 +236,27 @@ babel_tests:
    - `nameres.py` — for NameRes-only assertions (subclass `NameResTest`, override `test_params_list`)
    - `common.py` — for assertions that apply to both services (subclass `AssertionHandler`, override `test_with_nodenorm` and/or `test_with_nameres`)
 
-2. Define the class with `NAME`, `DESCRIPTION`, `PARAMETERS`, `WIKI_EXAMPLES`, `YAML_PARAMS`, and `test_params_list()` (or both `test_with_*` methods for `AssertionHandler` subclasses).
+2. Give the class its five documentation attributes:
+   - `NAME` — **must be all lowercase.** Assertions are matched case-insensitively by
+     lowercasing whatever the issue wrote, so a `NAME` containing any uppercase could
+     never be matched. Registration rejects it rather than letting it fail silently.
+   - `DESCRIPTION` — one line, shown under the heading here.
+   - `PARAMETERS` — what each element of a params_list means, and how many are expected.
+   - `WIKI_EXAMPLES` — complete `{{BabelTest|...}}` lines, reproduced verbatim.
+   - `YAML_PARAMS` — indented list entries for the YAML example.
 
-3. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`.
+   These are rendered into this file, so write them for someone reading this README
+   rather than for someone reading the class.
 
-4. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`.
+3. Implement `test_params_list()` (or both `test_with_*` methods for `AssertionHandler`
+   subclasses). It receives one params_list at a time, already stripped and — unless the
+   handler sets `VALIDATE_CURIES = False` — with its CURIEs validated and pre-warmed in
+   the NodeNorm cache. Yield one result per thing checked, usually one per CURIE, so a
+   failure names the CURIE that failed. Override `curie_params()` if some params are not
+   CURIEs; see `HasLabel` and `SearchByName`.
+
+4. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
+   matter — this file groups handlers by the service they test.
+
+5. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
+   and `uv run pytest -m unit` to confirm the checked-in copy is in sync.

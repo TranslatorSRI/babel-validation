@@ -6,17 +6,21 @@ This package defines the assertion types that can be embedded in GitHub issue bo
 and evaluated against the NodeNorm and NameRes services.
 
 Supported assertion types are registered in ASSERTION_HANDLERS. To see everything
-that is currently supported, scan that dict or read assertions/README.md (auto-generated).
+that is currently supported, scan that dict or read assertions/README.md.
 
-Adding a new assertion type
----------------------------
-1. Create a subclass of NodeNormTest or NameResTest (or AssertionHandler for both)
-   in the appropriate module (nodenorm.py, nameres.py, or common.py).
-2. Set NAME and DESCRIPTION class attributes.
-3. Set PARAMETERS, WIKI_EXAMPLES, and YAML_PARAMS class attributes for documentation.
-4. Override test_params_list().
-5. Import it here and add an instance to ASSERTION_HANDLERS.
-6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate README.md.
+**Adding a new assertion type: see the "Adding a New Assertion Type" section of
+assertions/README.md.**  That section is generated from gen_docs.ADDING_NEW, and is
+the one place those instructions live — a second copy here would drift out of step
+with it, which is exactly what happened to the copy this note replaced.
+
+The layout, for orientation while reading the code:
+
+- AssertionHandler — the base class, and the strip/validate/warm machinery every
+  assertion shares (prepare_params_lists).
+- NodeNormTest / NameResTest — specialize it per service; subclasses override
+  test_params_list() and are handed one params_list at a time.
+- nodenorm.py, nameres.py, common.py — the concrete handlers.
+- gen_docs.py — renders README.md from the handler classes.
 """
 
 import re
@@ -288,18 +292,40 @@ from src.babel_validation.assertions.nodenorm import (  # noqa: E402
 from src.babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
 from src.babel_validation.assertions.common import NeededHandler  # noqa: E402
 
+def _register(handlers: list[AssertionHandler]) -> dict[str, AssertionHandler]:
+    """Index *handlers* by NAME, rejecting what a dict comprehension would hide.
+
+    Assertion names are matched case-insensitively by lowercasing the name used
+    in the issue, so a NAME that is not already lowercase can never be looked up.
+    A duplicate NAME would silently drop one of the two handlers.  Both are
+    mistakes only made while adding an assertion, so fail loudly at import.
+    """
+    registry: dict[str, AssertionHandler] = {}
+    for handler in handlers:
+        name = handler.NAME
+        if not name or name != name.lower():
+            raise ValueError(
+                f"{type(handler).__name__}.NAME must be a non-empty lowercase string, got {name!r}"
+            )
+        if name in registry:
+            raise ValueError(
+                f"{type(handler).__name__}.NAME {name!r} is already registered "
+                f"by {type(registry[name]).__name__}"
+            )
+        registry[name] = handler
+    return registry
+
+
 # Every assertion type the parser will recognise, keyed by its lowercase NAME.
 # Registration order is irrelevant — README.md groups handlers by the service they
 # test, not by their position here.
-ASSERTION_HANDLERS: dict[str, AssertionHandler] = {
-    h.NAME: h for h in [
-        ResolvesHandler(),
-        DoesNotResolveHandler(),
-        ResolvesWithHandler(),
-        DoesNotResolveWithHandler(),
-        HasLabelHandler(),
-        ResolvesWithTypeHandler(),
-        SearchByNameHandler(),
-        NeededHandler(),
-    ]
-}
+ASSERTION_HANDLERS: dict[str, AssertionHandler] = _register([
+    ResolvesHandler(),
+    DoesNotResolveHandler(),
+    ResolvesWithHandler(),
+    DoesNotResolveWithHandler(),
+    HasLabelHandler(),
+    ResolvesWithTypeHandler(),
+    SearchByNameHandler(),
+    NeededHandler(),
+])
