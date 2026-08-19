@@ -85,7 +85,7 @@ class TestTooManyParams:
         if service == "nodenorm":
             return list(tests[0].test_with_nodenorm(MagicMock()))
         else:
-            return list(tests[0].test_with_nameres(None, None))
+            return list(tests[0].test_with_nameres(MagicMock(), MagicMock()))
 
     def test_haslabel_too_many_params(self, github_issues_test_cases):
         results = self._results(

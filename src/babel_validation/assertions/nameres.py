@@ -2,30 +2,36 @@ import json
 import logging
 from typing import Iterator
 
-from src.babel_validation.assertions import NameResTest
+from src.babel_validation.assertions import NameResTest, ParamsList
 from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nameres import CachedNameRes
-from src.babel_validation.services.nodenorm import CachedNodeNorm
+from src.babel_validation.services.nameres import NameResService
+from src.babel_validation.services.nodenorm import NodeNormService
 
 
 class SearchByNameHandler(NameResTest):
     """Test that a name search returns an expected CURIE in the top-N results in NameRes."""
     NAME = "searchbyname"
     DESCRIPTION = (
-        "Each param_set must have at least two elements: a search query string and an expected CURIE. "
+        "Each params_list must have exactly two elements: a search query string and an expected CURIE. "
         "The test passes if the CURIE's normalized identifier appears within the top N results "
         "(default N=5) when NameRes looks up the search query."
     )
     PARAMETERS = (
-        "Each param_set: the **search query string** and the **expected CURIE**. "
-        "The CURIE is normalized via NodeNorm (drug/chemical conflation enabled) before matching."
+        "Each params_list: the **search query string** and the **expected CURIE**. "
+        "The CURIE is normalized via NodeNorm before matching."
     )
     WIKI_EXAMPLES = ["{{BabelTest|SearchByName|water|CHEBI:15377}}"]
     YAML_PARAMS = "    - [water, CHEBI:15377]\n    - [diabetes, MONDO:0005015]"
 
-    def test_param_set(self, params: list[str], nodenorm: CachedNodeNorm,
-                       nameres: CachedNameRes, pass_if_found_in_top: int = 5,
-                       label: str = "") -> Iterator[TestResult]:
+    def curie_params(self, params: ParamsList) -> ParamsList:
+        # params[0] is a free-text search query; only the expected CURIE is a CURIE.
+        # Slicing (rather than indexing) keeps malformed params_lists out of validation
+        # so test_params_list() can report the arity problem instead.
+        return params[1:2]
+
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
+                         nameres: NameResService, pass_if_found_in_top: int = 5,
+                         label: str = "") -> Iterator[TestResult]:
         if len(params) != 2:
             yield self.failed(
                 f"SearchByName requires exactly two parameters (search query, expected CURIE) in {label}, "
@@ -34,13 +40,13 @@ class SearchByNameHandler(NameResTest):
             return
 
         [search_query, expected_curie_from_test] = params
-        expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test, drug_chemical_conflate='true')
+        expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test)
         if not expected_curie_result:
             yield self.failed(f"Unable to normalize CURIE {expected_curie_from_test} in {label}")
             return
 
         expected_curie = expected_curie_result['id']['identifier']
-        expected_curie_label = expected_curie_result['id']['label']
+        expected_curie_label = expected_curie_result['id'].get('label', '')
         expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
 
         results = nameres.lookup(search_query, autocomplete='false', limit=pass_if_found_in_top)
