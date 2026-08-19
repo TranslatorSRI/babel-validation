@@ -249,23 +249,28 @@ class GitHubIssuesTestCases:
         """
         from github import UnknownObjectException
         issues = []
-        for issue_id in issue_ids:
+        for raw_id in issue_ids:
             found = False
-            if m := re.match(r'^([^/]+)/([^#]+)#(\d+)$', issue_id):
+            if m := re.match(r'^([^/]+)/([^#]+)#(\d+)$', raw_id):
                 # org/repo#N
-                issue = self.github.get_repo(f"{m.group(1)}/{m.group(2)}").get_issue(int(m.group(3)))
-                issues.append(issue)
-                found = True
-            elif m := re.match(r'^([^/#]+)#(\d+)$', issue_id):
+                try:
+                    issues.append(self.github.get_repo(f"{m.group(1)}/{m.group(2)}").get_issue(int(m.group(3))))
+                    found = True
+                except UnknownObjectException:
+                    pass
+            elif m := re.match(r'^([^/#]+)#(\d+)$', raw_id):
                 # repo#N — find repo in configured list
                 repo_name, num = m.group(1), int(m.group(2))
                 for full_repo in self.github_repositories:
                     parts = full_repo.split('/')
                     if len(parts) >= 2 and parts[1] == repo_name:
-                        issues.append(self.github.get_repo(full_repo).get_issue(num))
-                        found = True
+                        try:
+                            issues.append(self.github.get_repo(full_repo).get_issue(num))
+                            found = True
+                        except UnknownObjectException:
+                            pass
                         break
-            elif m := re.match(r'^(\d+)$', issue_id):
+            elif m := re.match(r'^(\d+)$', raw_id):
                 # N — try all configured repos; skip repos that don't have this issue number.
                 num = int(m.group(1))
                 for full_repo in self.github_repositories:
@@ -276,7 +281,7 @@ class GitHubIssuesTestCases:
                         pass
             if not found:
                 raise ValueError(
-                    f"Could not resolve issue ID {issue_id!r} in configured repositories "
+                    f"Could not resolve issue ID {raw_id!r} in configured repositories "
                     f"{self.github_repositories}. Use 'org/repo#N', 'repo#N', or 'N'."
                 )
         return issues
