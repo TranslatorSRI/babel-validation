@@ -128,11 +128,16 @@ def github_issue(github_issue_id):
     if github_issue_id in _fetched_issues_cache:
         return _fetched_issues_cache[github_issue_id]
     try:
-        return _get_github_issues_test_cases().get_issues_by_ids([github_issue_id])[0]
+        issue = _get_github_issues_test_cases().get_issues_by_ids([github_issue_id])[0]
     except GithubException as e:
         if e.status == 401:
             pytest.fail(f"{_AUTH_HELP}\n\nOriginal error: {e}")
         raise
+    # Cache it: on a cache-file hit (every xdist worker after the first) nothing
+    # else populates this, so without it each issue is refetched per test and
+    # again for every --target.
+    _fetched_issues_cache[github_issue_id] = issue
+    return issue
 
 
 @pytest.fixture(scope="session")
