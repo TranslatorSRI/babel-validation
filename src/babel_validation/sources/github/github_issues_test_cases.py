@@ -50,6 +50,23 @@ def _to_list(value, context: str) -> list:
     raise ValueError(f"{context}: expected str or list, got {type(value).__name__}")
 
 
+def _to_str_list(value, context: str) -> list[str]:
+    """_to_list, but every element must be a string.
+
+    YAML 1.1 resolves an unquoted `no`, `on` or `1.5` to a bool or a float, so an
+    innocent-looking label can arrive as a non-string and blow up much later in
+    prepare_params_lists' param.strip(). Reject it here, where we can say why.
+    """
+    values = _to_list(value, context)
+    for element in values:
+        if not isinstance(element, str):
+            raise ValueError(
+                f"{context}: expected a string, got {type(element).__name__}: {element!r} "
+                f"— quote it to keep YAML from reinterpreting it"
+            )
+    return values
+
+
 class GitHubIssueTest:
     """Represents one assertion extracted from a GitHub issue body — an assertion name paired with a list of param_sets to evaluate."""
 
@@ -163,12 +180,13 @@ class GitHubIssuesTestCases:
             # Figure out parameters.
             test_string = babeltest_match.group(1)
             params = test_string.split("|")
-            if not params or not params[0]:
+            assertion = params[0].strip() if params else ""
+            if not assertion:
                 raise ValueError(f"Missing assertion name in BabelTest in issue {github_issue_id}: {match}")
             # Wiki syntax: params[0] is the assertion name; params[1:] form a single
             # param_set (may be empty for assertions like Needed), so param_sets is a
             # one-element list: [params[1:]].
-            testrows.append(GitHubIssueTest(github_issue_id, github_issue, params[0], [params[1:]]))
+            testrows.append(GitHubIssueTest(github_issue_id, github_issue, assertion, [params[1:]]))
 
         babeltest_yaml_matches = re.findall(self._BABELTEST_YAML_RE, github_issue.body)
         if babeltest_yaml_matches:
@@ -208,7 +226,7 @@ class GitHubIssuesTestCases:
                         f"YAML block in issue {github_issue_id}: assertion '{assertion}'"
                     )
                     param_sets = [
-                        _to_list(ps, f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set")
+                        _to_str_list(ps, f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set")
                         for ps in normalized
                     ]
                     testrows.append(GitHubIssueTest(github_issue_id, github_issue, assertion, param_sets))

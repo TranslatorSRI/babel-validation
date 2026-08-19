@@ -136,6 +136,43 @@ class TestTooFewParams:
 
 
 @pytest.mark.unit
+class TestPaddedWikiSyntax:
+    """Whitespace around a wiki assertion name is cosmetic, not an unknown assertion."""
+
+    def test_padded_assertion_name_is_stripped(self, github_issues_test_cases):
+        mock = _mock_issue("{{BabelTest| Resolves |CHEBI:15365}}")
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert len(tests) == 1
+        assert tests[0].assertion == "Resolves"
+
+    def test_blank_assertion_name_raises(self, github_issues_test_cases):
+        mock = _mock_issue("{{BabelTest|   |CHEBI:15365}}")
+        with pytest.raises(ValueError, match="Missing assertion name"):
+            github_issues_test_cases.get_test_issues_from_issue(mock)
+
+
+@pytest.mark.unit
+class TestNonStringYamlParams:
+    """YAML 1.1 resolves bare `no`/`123`/`1.5` to non-strings; reject them at parse
+    time rather than letting them reach param.strip()."""
+
+    @pytest.mark.parametrize("literal, type_name", [
+        ("123", "int"),
+        ("no", "bool"),
+        ("1.5", "float"),
+    ])
+    def test_non_string_param_raises(self, github_issues_test_cases, literal, type_name):
+        mock = _mock_issue(f"```yaml\nbabel_tests:\n  HasLabel:\n  - [CHEBI:15365, {literal}]\n```")
+        with pytest.raises(ValueError, match=f"expected a string, got {type_name}"):
+            github_issues_test_cases.get_test_issues_from_issue(mock)
+
+    def test_quoted_param_is_accepted(self, github_issues_test_cases):
+        mock = _mock_issue("```yaml\nbabel_tests:\n  HasLabel:\n  - [CHEBI:15365, 'no']\n```")
+        tests = github_issues_test_cases.get_test_issues_from_issue(mock)
+        assert tests[0].param_sets == [["CHEBI:15365", "no"]]
+
+
+@pytest.mark.unit
 class TestMalformedYaml:
     """A YAML block that matches the detection regex but is not valid YAML raises yaml.YAMLError."""
 
