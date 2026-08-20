@@ -3,9 +3,10 @@
 from unittest.mock import MagicMock, patch
 import pytest
 import yaml
+from github import UnknownObjectException
 
 from src.babel_validation.core.testrow import TestStatus
-from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
+from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases, issue_id
 
 pytestmark = pytest.mark.unit
 
@@ -349,3 +350,63 @@ class TestGetIssuesWithTests:
                 github_issues_test_cases.get_issues_with_tests(self._REPOS)
             )
         assert results == []
+
+
+@pytest.mark.unit
+class TestIssueId:
+    """issue_id() reads html_url, because issue.repository costs two extra REST
+    calls for an issue that came out of the search API."""
+
+    def test_id_built_from_html_url(self):
+        issue = MagicMock()
+        issue.number = 42
+        issue.html_url = "https://github.com/test-org/test-repo/issues/42"
+        assert issue_id(issue) == "test-org/test-repo#42"
+
+    def test_repository_attribute_is_never_touched(self):
+        # Accessing .repository on a search result triggers the extra fetches we
+        # are avoiding, so the helper must not read it even when it is available.
+        issue = MagicMock()
+        issue.number = 7
+        issue.html_url = "https://github.com/other-org/other-repo/issues/7"
+        type(issue).repository = property(
+            lambda self: pytest.fail("issue_id() must not read .repository")
+        )
+        assert issue_id(issue) == "other-org/other-repo#7"
+
+
+@pytest.mark.unit
+class TestGetIssuesByIdsNotFound:
+    """A missing issue reaches the friendly ValueError in every supported ID
+    format, rather than escaping as a raw PyGitHub 404 out of collection."""
+
+    _REPOS = ["test-org/test-repo"]
+
+    def _missing(self, fixture):
+        repo = MagicMock()
+        repo.get_issue.side_effect = UnknownObjectException(404, {"message": "Not Found"}, {})
+        return patch.object(fixture.github, "get_repo", return_value=repo)
+
+    @pytest.fixture
+    def fixture(self):
+        return GitHubIssuesTestCases("unit-test-dummy-token", self._REPOS)
+
+    @pytest.mark.parametrize("issue_ref", [
+        "test-org/test-repo#99999",   # org/repo#N
+        "test-repo#99999",            # repo#N
+        "99999",                      # N
+    ])
+    def test_missing_issue_raises_value_error(self, fixture, issue_ref):
+        with self._missing(fixture):
+            with pytest.raises(ValueError, match="Could not resolve issue ID"):
+                fixture.get_issues_by_ids([issue_ref])
+
+    def test_found_issue_is_returned(self, fixture):
+        repo, issue = MagicMock(), MagicMock()
+        repo.get_issue.return_value = issue
+        with patch.object(fixture.github, "get_repo", return_value=repo):
+            assert fixture.get_issues_by_ids(["test-org/test-repo#1"]) == [issue]
+
+    def test_unparseable_id_raises_value_error(self, fixture):
+        with pytest.raises(ValueError, match="Could not resolve issue ID"):
+            fixture.get_issues_by_ids(["not-an-issue-reference"])

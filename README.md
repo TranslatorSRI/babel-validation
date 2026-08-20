@@ -69,6 +69,11 @@ for the syntax and the available assertion types. The repositories scanned for t
 listed under `Repositories` in the `[DEFAULT]` section of
 [`tests/targets.ini`](./tests/targets.ini).
 
+Beware when *discussing* the syntax in an issue: a complete `{{BabelTest|...}}` marker is
+picked up wherever it appears, backticks included, and an unrecognised assertion name fails
+the run rather than being ignored. Quote a partial marker instead — the pattern needs the
+closing `}}` to match.
+
 ```shell
 $ pytest tests/github_issues --target dev                       # every issue carrying assertions
 $ pytest tests/github_issues --target dev --issue 'org/repo#42' # just one (also 'repo#42' or '42')

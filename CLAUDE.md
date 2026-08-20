@@ -29,6 +29,10 @@ pytest tests/nodenorm/test_nodenorm_from_gsheet.py -k "row=42"  # Run a specific
 black tests/    # Format Python test code
 ```
 
+Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
+~30 files it would reformat. Running `black` across the tree would bury a real change in
+unrelated churn, so format only the files you touch, or match the surrounding style.
+
 ### Vue Website (website-vue3-vite/)
 
 ```bash
@@ -88,4 +92,7 @@ When writing new tests:
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- To check behaviour when no GitHub token is available, run with `GITHUB_TOKEN=` (set but
+  empty) rather than unsetting it: `dotenv.load_dotenv()` will not override a key already
+  present in `os.environ`, so this defeats the token in the developer's `.env` file
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
