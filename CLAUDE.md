@@ -44,6 +44,12 @@ npm run test:unit # Vitest unit tests
 cd website && npm install && npm run dev   # Dev server at localhost:4321
 ```
 
+The `gh-pages` branch is shared by more than one publisher. `deploy-website-to-gh-pages.yaml`
+deploys `website/dist` to the *root* of that branch, and `github-pages-deploy-action` cleans the
+target by default — so anything else published there is deleted on the next release unless it is
+added to that job's `clean-exclude`. See [docs/milestones-page.md](docs/milestones-page.md) for
+the milestones page, the one current example.
+
 ## Architecture
 
 ### Library (`src/babel_validation/`)

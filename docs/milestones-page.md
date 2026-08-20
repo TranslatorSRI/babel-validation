@@ -36,6 +36,12 @@ them across both organizations — no secrets to configure or rotate. Reading an
 GitHub Project would break this, because `project` scope requires a PAT. Keep priority and
 component in labels.
 
+## Publishing alongside the website
+
+`gh-pages` is shared. `deploy-website-to-gh-pages.yaml` deploys `website/dist` to the root of the
+branch and cleans by default, so this page is only safe because `milestones/` is listed in that
+job's `clean-exclude`. Anything else published to `gh-pages` needs the same treatment.
+
 ## Not done yet
 
 - Priority/component labels aren't surfaced or sorted on — all labels render undifferentiated.
