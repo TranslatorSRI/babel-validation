@@ -2,11 +2,17 @@ name: Publish Astro site in `website` to GitHub Pages
 on:
   release:
     types: [released]
+  # Releases are infrequent, so release-only publishing let the site lag main indefinitely.
+  push:
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
   build-and-deploy:
-    concurrency: ci-${{ github.ref }} # Recommended if you intend to make multiple deployments in quick succession.
+    # Shared with milestones-page.yaml: both jobs push to gh-pages, so they must not
+    # run at once. Deploying on every push to main makes an overlap much more likely.
+    concurrency: gh-pages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 🛎️

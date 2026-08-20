@@ -15,7 +15,7 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    concurrency: milestones-page
+    concurrency: gh-pages # Shared with deploy-website-to-gh-pages.yaml; both push to gh-pages.
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v4
