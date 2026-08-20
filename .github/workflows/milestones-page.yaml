@@ -1,0 +1,41 @@
+name: Publish the Babel Milestones page to GitHub Pages
+
+# The milestone page is derived entirely from the milestones themselves, so it only
+# needs rebuilding as those change — daily is plenty. Deliberately separate from
+# deploy-website-to-gh-pages.yaml, which publishes the Astro site on release: this
+# page has a completely different cadence and no build dependencies.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    concurrency: milestones-page
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Generate the milestones page 🔧
+        # Every repository listed in milestones_page.py is public, so the workflow's
+        # own GITHUB_TOKEN can read them all — including the ones in NCATSTranslator.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p out
+          uv run python -m src.babel_validation.tools.milestones_page --output out/index.html
+
+      - name: Deploy 🚀
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: out
+          # Without target-folder this would replace the entire gh-pages branch,
+          # wiping the Astro site that deploy-website-to-gh-pages.yaml publishes.
+          target-folder: milestones
