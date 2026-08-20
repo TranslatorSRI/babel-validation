@@ -27,3 +27,7 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: website/dist # The folder the action should deploy.
+          # This deploys to the root of gh-pages and cleans by default, which would
+          # delete the milestones page that milestones-page.yaml publishes alongside
+          # it. That page would then stay missing until the next daily run.
+          clean-exclude: milestones/
