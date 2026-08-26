@@ -54,6 +54,29 @@ The meaning of each element in a params list depends on the assertion type (see 
 For most assertions the elements are CURIEs; for `HasLabel` the second element is a
 label string; for `ResolvesWithType` the first element is a Biolink type.
 
+## Limits
+
+Issue bodies are untrusted input — anyone can write one, and nothing reviews it before the
+harness parses it and turns it into live NodeNorm and NameRes calls. These caps bound what
+one issue can cost. They sit far above anything a real issue contains:
+
+| Limit | Value |
+| --- | --- |
+| Assertions per issue | 100 |
+| Params lists per issue | 1,000 |
+| Parameters per issue | 1,000 |
+| Characters per parameter | 1,000 |
+
+Exceeding one of the first three fails the whole issue rather than running part of it — split
+the assertions across several issues. An individual parameter that is too long, empty, or
+contains non-printable characters fails only its own params list; the rest of the issue still
+runs.
+
+YAML anchors and aliases (`&name` / `*name`, including merge keys) are rejected: they let a few
+hundred bytes expand into megabytes. Duplicate keys in a `babel_tests` block are rejected too,
+since YAML would silently keep only the last one — and then the block a reviewer reads would
+not be the one that runs.
+
 ---
 """
 

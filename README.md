@@ -69,6 +69,14 @@ for the syntax and the available assertion types. The repositories scanned for t
 listed under `Repositories` in the `[DEFAULT]` section of
 [`tests/targets.ini`](./tests/targets.ini).
 
+Issue bodies are untrusted input, so the harness caps what one issue may contain — 100
+assertions, 1,000 params lists, 1,000 parameters, 1,000 characters per parameter — and
+rejects YAML anchors, aliases and duplicate keys. An issue over a cap fails loudly rather
+than running part of itself; split it into several issues. The caps are listed in
+[`src/babel_validation/assertions/README.md`](./src/babel_validation/assertions/README.md).
+`--issue` resolves only within the configured `Repositories`, so a run can never be pointed
+at assertions from somewhere else.
+
 Beware when *discussing* the syntax in an issue: a complete `{{BabelTest|...}}` marker is
 picked up wherever it appears, backticks included, and an unrecognised assertion name fails
 the run rather than being ignored. Quote a partial marker instead — the pattern needs the
