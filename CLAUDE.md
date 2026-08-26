@@ -80,6 +80,56 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 - **`website/`** — Newer Astro-based site deployed to GitHub Pages with prefix comparator and autocomplete tools
 - **`scala-validation/`** — Legacy, unmaintained
 
+## Untrusted Input
+
+Most of what this project reads was written by someone else and reviewed by nobody. Treat it as
+hostile, not merely as data that might be malformed:
+
+- **GitHub issue bodies** (`src/babel_validation/sources/github/`) — anyone with a GitHub account
+  can write one, and we parse it into live NodeNorm/NameRes calls.
+- **The Google Sheet** (`src/babel_validation/sources/google_sheets/`) — anyone with edit access.
+- **Anything off the network**, including a service's response.
+
+`tests/targets.ini` is the exception: its URLs and its `Repositories` list are checked-in config,
+so they are trusted, and guards belong on what the issue supplies rather than on them.
+
+Every failure mode below was real, and found in this code. These are the shapes to look for.
+
+**A regex over untrusted text can hang the process.** `\s+ .*? \s+` before a literal is three
+nested backtracking quantifiers, and matched in cubic time: 53s on an 8KB body, hours at GitHub's
+65536-character limit. Avoid adjacent quantifiers that can match the same characters — anchor on
+something disjoint, such as a newline or a literal. Note that `pytest --timeout` only wraps test
+execution, so anything running at **collection** time has no timeout at all.
+
+**`yaml.safe_load` is not a safe parser, only a non-executing one.** It still resolves anchors,
+aliases and merge keys, and PyYAML shares the aliased nodes rather than copying them — so the load
+looks cheap and the blow-up lands on whatever formats the result afterwards. 337 bytes became a
+25MB error message. Use `_NoAliasSafeLoader` in `sources/github/github_issues_test_cases.py`.
+
+**Format untrusted text with `%r` / `!r`, never `%s` / `{}`.** `repr()` escapes exactly the
+characters `str.isprintable()` rejects — ANSI escapes, C0/C1 controls, bidi overrides, zero-width
+characters — so it is the whole defence for anything reaching a terminal, a log line or a pytest
+ID. Truncate before `repr()`ing anything that might be large: the message is kept in pytest's
+report.
+
+**A guard that runs after the value was logged is too late.** Validate at the one choke point that
+sees every value before anything formats it. For assertion params that is
+`AssertionHandler._rejection()`, because the per-handler CURIE check skips whatever
+`curie_params()` excludes and is turned off entirely by `VALIDATE_CURIES = False`.
+
+**Never let outside text choose what we fetch.** `get_issues_by_ids()` takes an ID that decides
+which repository we read assertions from, and its `[^#]+` group admits slashes — so check the
+allowlist *before* the call, or the value reaches the GitHub API as a URL path.
+
+**Fail loudly; skipping looks like passing.** Reject a bad issue rather than silently running a
+truncated part of it. The same goes for missing credentials: the GitHub issue tests *skip* without
+a token, so a green run may have tested nothing.
+
+**Caches belong in `cache_dir()`** (`src/babel_validation/core/__init__.py`), a 0700 directory
+under the user's home — never a fixed name in the shared temp directory. On a CI runner or a
+shared machine anyone can pre-create such a file, and the issue cache decides what a later run
+fetches and executes.
+
 ## Key Dependencies
 
 - Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, black
