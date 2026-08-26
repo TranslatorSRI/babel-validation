@@ -153,6 +153,15 @@ When writing new tests:
   that never saw it. Also avoid asserting on `caplog.text` for anything about control characters:
   it does not carry them through, so such a test passes whatever the code does. Read
   `caplog.records` and `getMessage()` instead.
+- **Never put a complete `{{BabelTest|...}}` marker or a fenced `babel_tests:` block into a GitHub
+  issue you file** — not even in prose explaining the syntax. `TranslatorSRI/babel-validation` is
+  itself in the scanned `Repositories` list, so the harness collects the marker and runs it: an
+  issue that merely *describes* an assertion becomes a test of that assertion. Because a new issue
+  is open, an assertion that passes then reports as a strict XPASS failure. This is not
+  hypothetical — issue #115 was filed with a marker in it and immediately failed the live suite.
+  Quote a partial marker instead, dropping the closing `}}`, which the pattern needs to match. A
+  one-line ```` ```yaml babel_tests: ``` ```` in prose is already safe: the block pattern requires a
+  newline after the key.
 - To check behaviour when no GitHub token is available, run with `GITHUB_TOKEN=` (set but
   empty) rather than unsetting it: `dotenv.load_dotenv()` will not override a key already
   present in `os.environ`, so this defeats the token in the developer's `.env` file
