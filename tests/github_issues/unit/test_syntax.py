@@ -59,7 +59,6 @@ class TestInvalidAssertionNameDetection:
             list(tests[0].test_with_nameres(None, None))
 
 
-@pytest.mark.unit
 class TestTooManyParams:
     """Extra params for fixed-arity assertions should yield a failed result, not silently pass."""
 
@@ -92,7 +91,6 @@ class TestTooManyParams:
         assert "exactly two" in results[0].message
 
 
-@pytest.mark.unit
 class TestTooFewParams:
     """Comparison assertions require 2+ CURIEs; a single CURIE must fail loudly,
     not pass (ResolvesWith) or fail (DoesNotResolveWith) vacuously."""
@@ -120,7 +118,6 @@ class TestTooFewParams:
         assert "at least two" in results[0].message
 
 
-@pytest.mark.unit
 class TestPaddedWikiSyntax:
     """Whitespace around a wiki assertion name is cosmetic, not an unknown assertion."""
 
@@ -136,7 +133,6 @@ class TestPaddedWikiSyntax:
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
 
-@pytest.mark.unit
 class TestNonStringYamlParams:
     """YAML 1.1 resolves bare `no`/`123`/`1.5` to non-strings; reject them at parse
     time rather than letting them reach param.strip()."""
@@ -157,7 +153,6 @@ class TestNonStringYamlParams:
         assert tests[0].param_sets == [["CHEBI:15365", "no"]]
 
 
-@pytest.mark.unit
 class TestMalformedYaml:
     """A YAML block that matches the detection regex but is not valid YAML raises yaml.YAMLError."""
 
@@ -169,7 +164,6 @@ class TestMalformedYaml:
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
 
-@pytest.mark.unit
 class TestEmptyOrNullBabelTests:
     """Documents behaviour when issue bodies contain empty or null babel test content."""
 
@@ -243,7 +237,6 @@ class TestEmptyOrNullBabelTests:
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
 
-@pytest.mark.unit
 class TestWikiMarkerCaseInsensitivity:
     """The {{BabelTest|...}} marker is case-insensitive, like assertion names."""
 

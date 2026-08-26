@@ -13,7 +13,6 @@ from tests.github_issues.unit._helpers import _mock_issue
 pytestmark = pytest.mark.unit
 
 
-@pytest.mark.unit
 class TestUntrustedInput:
     """Guards on issue bodies, which are untrusted input: anyone can write one, and nothing
     reviews it before we parse it and turn it into live API calls."""
