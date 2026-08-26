@@ -1,0 +1,37 @@
+name: Tests
+
+on:
+  pull_request:
+
+# Only checkout needs the token. Declaring this at all matters: every scope not
+# listed here is set to none, so the job no longer inherits whatever the org's
+# default-permissions setting happens to be. The unit tests themselves need no
+# GitHub API access — `-m unit` deselects the issue tests before they look for a
+# token — so anything beyond contents:read would be unused.
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      # To run the GitHub issue tests here too — drop the `-m unit` filter, or
+      # add a second job running `uv run pytest tests/github_issues` — put back:
+      #
+      #     env:
+      #       GITHUB_TOKEN: ${{ github.token }}
+      #
+      # and add `issues: read` to the permissions block above. Do not skip the
+      # env: block — without a token the issue tests skip at the module level
+      # rather than failing, so CI would go green having tested nothing.
+      #
+      # The token covers this repository only: the other repos in targets.ini's
+      # Repositories list are readable because they are public, not because the
+      # token is scoped to them, so adding a private one would mean a PAT in a
+      # secret instead.
+      - name: Run unit tests
+        run: uv run pytest -m unit -v

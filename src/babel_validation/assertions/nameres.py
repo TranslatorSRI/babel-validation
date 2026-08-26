@@ -23,22 +23,15 @@ class SearchByNameHandler(NameResTest):
     WIKI_EXAMPLES = ["{{BabelTest|SearchByName|water|CHEBI:15377}}"]
     YAML_PARAMS = "    - [water, CHEBI:15377]\n    - [diabetes, MONDO:0005015]"
 
+    MIN_PARAMS = MAX_PARAMS = 2  # [search query, expected CURIE]
+
     def curie_params(self, params: ParamsList) -> ParamsList:
         # params[0] is a free-text search query; only the expected CURIE is a CURIE.
-        # Slicing (rather than indexing) keeps malformed params_lists out of validation
-        # so test_params_list() can report the arity problem instead.
         return params[1:2]
 
     def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          nameres: NameResService, pass_if_found_in_top: int = 5,
                          label: str = "") -> Iterator[TestResult]:
-        if len(params) != 2:
-            yield self.failed(
-                f"SearchByName requires exactly two parameters (search query, expected CURIE) in {label}, "
-                f"but got {len(params)}: {params}"
-            )
-            return
-
         [search_query, expected_curie_from_test] = params
         expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test)
         if not expected_curie_result:

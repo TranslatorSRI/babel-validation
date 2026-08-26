@@ -2,12 +2,16 @@
 # conftest.py - pytest configuration settings
 #
 import glob
+import logging
 import os
 import os.path
-import tempfile
+from pathlib import Path
 
 import pytest
 import configparser
+
+from src.babel_validation.core import cache_dir
+from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
 
 
 def get_targets_ini_path(config):
@@ -28,17 +32,34 @@ def get_targets_ini_path(config):
     return config_path
 
 
-def unlink_if_exists(path: str) -> None:
+def unlink_if_exists(path) -> None:
     """
-    Unlink the file at `path` if it exists.
+    Delete `path` if it exists. `path` must be inside cache_dir().
 
-    :param path: The path to the file to unlink.
+    This function deletes whatever it is handed, and it runs from pytest_configure before
+    anything else in the session. The containment check is not about today's two callers,
+    which both build their paths from cache_dir(); it is so that a later one cannot quietly
+    turn a cache sweep into a delete of something that matters.
+
+    Note that os.unlink does not follow symlinks — it removes the link, not its target — so
+    a planted symlink here would be deleted rather than followed. It was the *write* side
+    that could be redirected, and moving the caches out of the shared temp directory is what
+    closed that.
+
+    :param path: The path to the file to delete. Must be within cache_dir().
     :return: None
     """
+    path = Path(path)
+    if cache_dir() not in path.parents:
+        raise ValueError(f"Refusing to delete {path}, which is outside the cache directory {cache_dir()}")
     try:
-        os.unlink(path)
+        path.unlink()
     except FileNotFoundError:
         pass
+    except OSError as e:
+        # Something is in the way — a directory left where a cache file belongs, or a
+        # permissions problem. A stale cache is not worth failing the whole run over.
+        logging.getLogger(__name__).warning("Could not delete cached file %s: %s", path, e)
 
 
 def pytest_configure(config):
@@ -46,9 +67,15 @@ def pytest_configure(config):
     # use a fresh download. Only the controller does this — xdist workers skip it
     # so they can share the cache file written by the controller.
     if not os.environ.get('PYTEST_XDIST_WORKER'):
-        for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
+        # Only the .csv files. Their .lock files are left alone for the same reason as the
+        # issue cache's below — this used to unlink `<name>.lock` alongside each `<name>.csv`,
+        # which is the hazard 48b1c44 removed for the issue lock and missed here.
+        for f in glob.glob(os.path.join(cache_dir(), 'gsheet_*.csv')):
             unlink_if_exists(f)
-            unlink_if_exists(f.removesuffix('.csv') + '.lock')
+        # Same for the GitHub issue ID cache. The matching .lock file is left
+        # alone: deleting it out from under a concurrently running pytest would
+        # let that run and this one hold two different inodes of "the" lock.
+        unlink_if_exists(GITHUB_ISSUES_CACHE_FILE)
 
 
 def pytest_addoption(parser):
@@ -71,6 +98,14 @@ def pytest_addoption(parser):
         default=[],
         action='append',
         help="The categories of tests to exclude."
+    )
+
+    # Only test particular GitHub issues.
+    parser.addoption(
+        '--issue',
+        default=[],
+        action='append',
+        help="One or more GitHub issues to test. Should be specified as either 'organization/repo#110', 'repo#110' or '110'"
     )
 
 
@@ -146,3 +181,9 @@ def test_category(request):
             return True
 
     return category_test
+
+
+# --issue is consumed by tests/github_issues/conftest.py; this fixture exposes it to any test that wants it.
+@pytest.fixture
+def selected_github_issues(pytestconfig):
+    return pytestconfig.getoption('issue')

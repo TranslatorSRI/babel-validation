@@ -82,15 +82,10 @@ class ResolvesWithHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWith|CHEBI:15365|PUBCHEM.COMPOUND:1}}"]
     YAML_PARAMS = "    - [CHEBI:15365, PUBCHEM.COMPOUND:1]\n    - [MONDO:0005015, DOID:9351]"
 
+    MIN_PARAMS = 2  # comparing one CURIE against nothing would pass vacuously
+
     def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
-        if len(params) < 2:
-            yield self.failed(
-                f"ResolvesWith requires at least two CURIEs per params_list in {label}, "
-                f"but got {len(params)}: {params}"
-            )
-            return
-
         first_good, results = _compare_resolutions(params, nodenorm)
 
         if first_good is None:
@@ -128,15 +123,10 @@ class DoesNotResolveWithHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|DoesNotResolveWith|CHEBI:15365|CHEBI:16856}}"]
     YAML_PARAMS = "    - [CHEBI:15365, CHEBI:16856]"
 
+    MIN_PARAMS = 2  # comparing one CURIE against nothing would fail vacuously
+
     def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
-        if len(params) < 2:
-            yield self.failed(
-                f"DoesNotResolveWith requires at least two CURIEs per params_list in {label}, "
-                f"but got {len(params)}: {params}"
-            )
-            return
-
         first_good, results = _compare_resolutions(params, nodenorm)
 
         # Every CURIE must resolve — an unresolved CURIE is a configuration error.
@@ -181,18 +171,13 @@ class HasLabelHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|HasLabel|CHEBI:15365|aspirin}}"]
     YAML_PARAMS = "    - [CHEBI:15365, aspirin]"
 
+    MIN_PARAMS = MAX_PARAMS = 2  # [curie, expected label]
+
     def curie_params(self, params: ParamsList) -> ParamsList:
         return params[:1]
 
     def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
-        if len(params) != 2:
-            yield self.failed(
-                f"HasLabel requires exactly two parameters (CURIE, expected label) in {label}, "
-                f"but got {len(params)}: {params}"
-            )
-            return
-
         curie = params[0]
         expected_label = params[1].strip()
 
@@ -235,15 +220,13 @@ class ResolvesWithTypeHandler(NodeNormTest):
     WIKI_EXAMPLES = ["{{BabelTest|ResolvesWithType|biolink:Gene|NCBIGene:1}}"]
     YAML_PARAMS = "    - [biolink:Gene, NCBIGene:1, HGNC:5]"
 
+    MIN_PARAMS = 2  # a Biolink type, then at least one CURIE to check against it
+
     def curie_params(self, params: ParamsList) -> ParamsList:
         return params[1:]
 
     def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
                          label: str = "") -> Iterator[TestResult]:
-        if len(params) < 2:
-            yield self.failed(f"Too few parameters provided in params_list in {label}: {params}")
-            return
-
         expected_biolink_type = params[0]
         curies = params[1:]
 

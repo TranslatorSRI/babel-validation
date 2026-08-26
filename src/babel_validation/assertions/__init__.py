@@ -37,6 +37,14 @@ from src.babel_validation.services.nodenorm import NodeNormService
 # Biolink type first, HasLabel is [curie, label]. See the handler's PARAMETERS.
 ParamsList = list[str]
 
+# Small counts read better as words in a message ("exactly two parameters").
+_COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def _count(n: int) -> str:
+    """"two" for small n, "17" for larger, plus the correctly pluralized noun."""
+    return f"{_COUNT_WORDS.get(n, n)} parameter" + ("" if n == 1 else "s")
+
 
 @dataclass(frozen=True)
 class PreparedParamsList:
@@ -68,11 +76,23 @@ class AssertionHandler:
     WIKI_EXAMPLES: list[str]   # complete {{BabelTest|...}} lines, shown verbatim
     YAML_PARAMS: str           # indented YAML list entries for the babel_tests example
 
+    # How many params a params_list must have. MAX_PARAMS None means no upper bound.
+    # Checked during preparation: an assertion invoked with the wrong number of
+    # params can never pass, so it is rejected before its CURIEs are looked up.
+    MIN_PARAMS = 1
+    MAX_PARAMS: int | None = None
+
     # Whether CURIE params should be rejected up front if they are not well-formed.
     # Assertions about deliberately-invalid identifiers turn this off.
     VALIDATE_CURIES = True
 
     _CURIE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$')
+
+    # Params can come from an unreviewed GitHub issue body, so they are checked before reaching
+    # a service. 1000 characters is far past any real CURIE (under 100) or Biolink type (under
+    # 60) while still leaving room for a long chemical label — IUPAC names run well past 255 —
+    # and keeps a NameRes query string well inside what proxies accept.
+    MAX_PARAM_LENGTH = 1000
 
     def passed(self, message: str) -> TestResult:
         """Build a passing TestResult. Handlers use this rather than TestResult directly."""
@@ -81,6 +101,25 @@ class AssertionHandler:
     def failed(self, message: str) -> TestResult:
         """Build a failing TestResult. Handlers use this rather than TestResult directly."""
         return TestResult(status=TestStatus.Failed, message=message)
+
+    @classmethod
+    def display_name(cls) -> str:
+        """The assertion name as written in issues (ResolvesHandler -> "Resolves").
+
+        Derived from the class name rather than NAME, which is lowercased for
+        case-insensitive matching and so reads poorly in a message or a heading.
+        """
+        return cls.__name__.removesuffix("Handler")
+
+    @classmethod
+    def _describe_arity(cls) -> str:
+        """How many params this assertion takes, phrased for a failure message."""
+        low, high = cls.MIN_PARAMS, cls.MAX_PARAMS
+        if high is None:
+            return f"at least {_count(low)}"
+        if low == high:
+            return f"exactly {_count(low)}"
+        return f"between {_COUNT_WORDS.get(low, low)} and {_count(high)}"
 
     def curie_params(self, params: ParamsList) -> ParamsList:
         """Return the subset of params that are CURIEs (for prewarming and validation).
@@ -122,9 +161,42 @@ class AssertionHandler:
         return prepared
 
     def _rejection(self, index: int, params: ParamsList, label: str) -> TestResult | None:
-        """Why *params* cannot be evaluated, or None if it can be."""
+        """Why *params* cannot be evaluated, or None if it can be.
+
+        Ordered cheapest-first, and arity before CURIE validation, because
+        curie_params() slices by position and only means anything once the
+        params_list is known to be the right length.
+        """
         if not params:
             return self.failed(f"No parameters in params_list {index} in {label}")
+        # Before the arity and CURIE checks, because both interpolate params into their message.
+        # This is also the only check that sees *every* param: _CURIE_RE skips the non-CURIE
+        # params that curie_params() excludes — notably SearchByName's free-text query, the one
+        # value that reaches a URL query string — and handlers with VALIDATE_CURIES = False skip
+        # it entirely.
+        for param in params:
+            if not param:
+                problem = "is empty"
+            elif len(param) > self.MAX_PARAM_LENGTH:
+                problem = f"is {len(param):,} characters, over the limit of {self.MAX_PARAM_LENGTH:,}"
+            elif not param.isprintable():
+                # isprintable() rejects ANSI escapes, C0/C1 controls, bidi overrides and
+                # zero-width characters, all of which would otherwise be echoed to an operator's
+                # terminal, into pytest IDs and into the logs.
+                problem = "contains non-printable characters"
+            else:
+                continue
+            # Truncate before repr()ing: the point of the length check is that this param may be
+            # enormous, and this message is kept in pytest's report.
+            shown = param[:100] + "..." if len(param) > 100 else param
+            return self.failed(f"Parameter {shown!r} in params_list {index} in {label} {problem}")
+        if len(params) < self.MIN_PARAMS or (
+                self.MAX_PARAMS is not None and len(params) > self.MAX_PARAMS):
+            return self.failed(
+                f"{self.display_name()} requires {self._describe_arity()} "
+                f"per params_list in {label}, but params_list {index} has "
+                f"{len(params)}: {params}"
+            )
         if not self.VALIDATE_CURIES:
             return None
         invalid = [c for c in self.curie_params(params) if not self._CURIE_RE.match(c)]
@@ -204,11 +276,12 @@ class NodeNormTest(AssertionHandler):
                          label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per params_list.
 
-        *params* is non-empty and already stripped, and (unless VALIDATE_CURIES is
-        off) every param that curie_params() selects is a well-formed CURIE, so
-        implementations need only check assertion-specific shape such as arity.
-        Every CURIE is also pre-warmed in *nodenorm*'s cache, so normalize_curie()
-        calls here are free.
+        *params* already satisfies everything declared on the class: its length is
+        within MIN_PARAMS/MAX_PARAMS, it is stripped, and (unless VALIDATE_CURIES
+        is off) every param that curie_params() selects is a well-formed CURIE.
+        Implementations may index into it accordingly without re-checking. Every
+        CURIE is also pre-warmed in *nodenorm*'s cache, so normalize_curie() calls
+        here are free.
 
         Yield one TestResult per thing checked — usually one per CURIE — rather
         than a single aggregate, so a failure report names the CURIE that failed.
@@ -276,10 +349,10 @@ class NameResTest(AssertionHandler):
                          label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per params_list.
 
-        *params* is non-empty and already stripped, with the params that
-        curie_params() selects validated as CURIEs and pre-warmed in *nodenorm*'s
-        cache. See NodeNormTest.test_params_list() for the shared contract; the
-        arguments are documented on test_with_nameres().
+        *params* satisfies MIN_PARAMS/MAX_PARAMS and is stripped, with the params
+        that curie_params() selects validated as CURIEs and pre-warmed in
+        *nodenorm*'s cache. See NodeNormTest.test_params_list() for the shared
+        contract; the arguments are documented on test_with_nameres().
         """
         raise NotImplementedError
 
