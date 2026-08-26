@@ -13,16 +13,29 @@ from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
 pytestmark = pytest.mark.unit
 
 
-def test_cache_dir_is_not_world_writable_temp(monkeypatch, tmp_path):
-    """A fixed name in the shared temp directory lets any local user pre-create the file as
-    a symlink, or rewrite its contents. The GitHub issue cache holds IDs a later run fetches
-    and executes assertions from, so writing it is close to choosing what the run tests."""
+def test_default_cache_dir_is_not_in_the_shared_temp_dir(monkeypatch):
+    """A fixed name in the shared temp directory lets any local user pre-create the file as a
+    symlink, or rewrite its contents. The GitHub issue cache holds IDs a later run fetches and
+    executes assertions from, so writing it is close to choosing what the run tests.
+
+    Asserted against the *default* location, with the override cleared: pointing the override at
+    a tmp_path and then asserting the result is not under the temp directory contradicts itself,
+    and only looked like it passed because pytest resolves tmp_path to /private/var on macOS
+    while gettempdir() reports /var.
+    """
+    monkeypatch.delenv("BABEL_VALIDATION_CACHE_DIR", raising=False)
+    path = cache_dir()
+
+    assert Path(tempfile.gettempdir()) not in path.parents
+    assert Path.home() in path.parents
+
+
+def test_cache_dir_is_created_private(monkeypatch, tmp_path):
+    """Owner-only: no group or other permissions at all."""
     monkeypatch.setenv("BABEL_VALIDATION_CACHE_DIR", str(tmp_path / "cache"))
     path = cache_dir()
 
     assert path.is_dir()
-    assert Path(tempfile.gettempdir()) not in path.parents
-    # Owner-only: no group or other permissions at all.
     assert not stat.S_IMODE(path.stat().st_mode) & (stat.S_IRWXG | stat.S_IRWXO)
 
 
