@@ -1,5 +1,6 @@
 """System tests for BabelTest trigger detection in GitHub issue bodies."""
 
+import logging
 import time
 from unittest.mock import MagicMock, patch
 import pytest
@@ -541,6 +542,30 @@ class TestUntrustedInput:
         nodenorm.normalize_curies.assert_not_called()
         # ...and repr() escapes it, so it cannot reach an operator's terminal raw.
         assert not any(c in results[0].message for c in ("\x1b", "‮", "​"))
+
+    def test_issue_text_is_escaped_in_the_logs(self, github_issues_test_cases, caplog):
+        """The parser logs the matched text and the params before anything has validated them,
+        so %r rather than %s is what keeps an escape sequence out of an operator's terminal.
+        _rejection() runs much later and cannot help here."""
+        mock = _mock_issue("{{BabelTest|Resolves|\x1b[31mCHEBI:15365}}")
+        with caplog.at_level(logging.INFO):
+            github_issues_test_cases.get_test_issues_from_issue(mock)
+
+        # Assert on the records, not caplog.text: pytest does not carry a raw control
+        # character through caplog.text, so asserting on it passes whatever the code does.
+        messages = [r.getMessage() for r in caplog.records]
+        assert messages, "nothing was logged, so the assertions below would be vacuous"
+        assert not any("\x1b" in m for m in messages), messages
+        # Present, just escaped — otherwise this would pass by not logging the text at all.
+        assert any("\\x1b" in m for m in messages), messages
+
+    def test_str_does_not_dump_param_sets(self, github_issues_test_cases):
+        """str() of a test is the `label` on every TestResult it produces, so dumping the params
+        into it repeated them once per message."""
+        mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n  - [CHEBI:15365]\n  - [CHEBI:16480]\n```")
+        label = str(github_issues_test_cases.get_test_issues_from_issue(mock)[0])
+        assert "2 param sets" in label
+        assert "CHEBI:15365" not in label
 
     def test_yaml_rejects_raw_control_characters(self, github_issues_test_cases):
         """PyYAML's reader refuses control characters in the stream, so the YAML syntax never
