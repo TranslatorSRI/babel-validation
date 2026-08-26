@@ -67,9 +67,11 @@ def pytest_configure(config):
     # use a fresh download. Only the controller does this — xdist workers skip it
     # so they can share the cache file written by the controller.
     if not os.environ.get('PYTEST_XDIST_WORKER'):
+        # Only the .csv files. Their .lock files are left alone for the same reason as the
+        # issue cache's below — this used to unlink `<name>.lock` alongside each `<name>.csv`,
+        # which is the hazard 48b1c44 removed for the issue lock and missed here.
         for f in glob.glob(os.path.join(cache_dir(), 'gsheet_*.csv')):
             unlink_if_exists(f)
-            unlink_if_exists(f.removesuffix('.csv') + '.lock')
         # Same for the GitHub issue ID cache. The matching .lock file is left
         # alone: deleting it out from under a concurrently running pytest would
         # let that run and this one hold two different inodes of "the" lock.
