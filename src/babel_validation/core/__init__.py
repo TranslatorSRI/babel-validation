@@ -19,7 +19,16 @@ def cache_dir() -> Path:
     without a writable home, say).
     """
     override = os.environ.get("BABEL_VALIDATION_CACHE_DIR")
-    path = Path(override) if override else Path.home() / ".cache" / "babel-validation"
-    # mode applies to this directory only; any parents get the default permissions.
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        path = Path(override) if override else Path.home() / ".cache" / "babel-validation"
+        # mode applies to this directory only; any parents get the default permissions.
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as e:
+        # A read-only or absent home is the realistic case, on a locked-down runner or in a
+        # container. The bare PermissionError names a path but gives no hint that there is an
+        # override, which is the whole reason it exists.
+        raise RuntimeError(
+            f"Could not create the cache directory: {e}. Set BABEL_VALIDATION_CACHE_DIR to a "
+            f"writable location."
+        ) from e
     return path

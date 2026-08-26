@@ -1,5 +1,6 @@
 """The cache directory must be private to the user, not the shared temp directory."""
 
+import os
 import stat
 import tempfile
 from pathlib import Path
@@ -71,3 +72,23 @@ def test_unlink_if_exists_survives_a_directory_in_the_way():
         assert blocker.is_dir()
     finally:
         blocker.rmdir()
+
+
+def test_unset_home_still_resolves(monkeypatch):
+    """Path.home() falls back to the pwd database, so an unset HOME is not by itself a problem —
+    pinned because it is the reason cache_dir() does not need to special-case it."""
+    monkeypatch.delenv("BABEL_VALIDATION_CACHE_DIR", raising=False)
+    monkeypatch.delenv("HOME", raising=False)
+    assert cache_dir().is_dir()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the permission bits this relies on")
+def test_unwritable_location_names_the_override(monkeypatch, tmp_path):
+    """A locked-down runner or container is the realistic case. The bare PermissionError names a
+    path but not the escape hatch, so the error has to mention the environment variable."""
+    readonly = tmp_path / "readonly"
+    readonly.mkdir(mode=0o500)
+    monkeypatch.setenv("BABEL_VALIDATION_CACHE_DIR", str(readonly / "cache"))
+
+    with pytest.raises(RuntimeError, match="BABEL_VALIDATION_CACHE_DIR"):
+        cache_dir()
