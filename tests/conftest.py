@@ -2,8 +2,10 @@
 # conftest.py - pytest configuration settings
 #
 import glob
+import logging
 import os
 import os.path
+from pathlib import Path
 
 import pytest
 import configparser
@@ -30,17 +32,34 @@ def get_targets_ini_path(config):
     return config_path
 
 
-def unlink_if_exists(path: str) -> None:
+def unlink_if_exists(path) -> None:
     """
-    Unlink the file at `path` if it exists.
+    Delete `path` if it exists. `path` must be inside cache_dir().
 
-    :param path: The path to the file to unlink.
+    This function deletes whatever it is handed, and it runs from pytest_configure before
+    anything else in the session. The containment check is not about today's two callers,
+    which both build their paths from cache_dir(); it is so that a later one cannot quietly
+    turn a cache sweep into a delete of something that matters.
+
+    Note that os.unlink does not follow symlinks — it removes the link, not its target — so
+    a planted symlink here would be deleted rather than followed. It was the *write* side
+    that could be redirected, and moving the caches out of the shared temp directory is what
+    closed that.
+
+    :param path: The path to the file to delete. Must be within cache_dir().
     :return: None
     """
+    path = Path(path)
+    if cache_dir() not in path.parents:
+        raise ValueError(f"Refusing to delete {path}, which is outside the cache directory {cache_dir()}")
     try:
-        os.unlink(path)
+        path.unlink()
     except FileNotFoundError:
         pass
+    except OSError as e:
+        # Something is in the way — a directory left where a cache file belongs, or a
+        # permissions problem. A stale cache is not worth failing the whole run over.
+        logging.getLogger(__name__).warning("Could not delete cached file %s: %s", path, e)
 
 
 def pytest_configure(config):

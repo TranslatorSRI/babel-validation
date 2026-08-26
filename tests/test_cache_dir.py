@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from src.babel_validation.core import cache_dir
+from tests.conftest import unlink_if_exists
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
 
 pytestmark = pytest.mark.unit
@@ -27,3 +28,33 @@ def test_cache_dir_is_not_world_writable_temp(monkeypatch, tmp_path):
 
 def test_cache_files_live_in_the_cache_dir():
     assert GITHUB_ISSUES_CACHE_FILE.parent == cache_dir()
+
+
+def test_unlink_if_exists_refuses_paths_outside_the_cache(tmp_path):
+    """It runs from pytest_configure and deletes whatever it is handed, so the containment
+    check is what stops a later caller turning a cache sweep into a real delete."""
+    precious = tmp_path / "precious.txt"
+    precious.write_text("do not delete me")
+
+    with pytest.raises(ValueError, match="Refusing to delete"):
+        unlink_if_exists(precious)
+    assert precious.read_text() == "do not delete me"
+
+
+def test_unlink_if_exists_deletes_inside_the_cache():
+    doomed = cache_dir() / "unit-test-scratch.json"
+    doomed.write_text("{}")
+    unlink_if_exists(doomed)
+    assert not doomed.exists()
+    unlink_if_exists(doomed)  # missing file is fine
+
+
+def test_unlink_if_exists_survives_a_directory_in_the_way():
+    """A directory where a cache file belongs must not fail the run before it starts."""
+    blocker = cache_dir() / "unit-test-scratch-dir.csv"
+    blocker.mkdir(exist_ok=True)
+    try:
+        unlink_if_exists(blocker)          # warns, does not raise
+        assert blocker.is_dir()
+    finally:
+        blocker.rmdir()
