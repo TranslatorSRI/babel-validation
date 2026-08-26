@@ -4,11 +4,11 @@
 import glob
 import os
 import os.path
-import tempfile
 
 import pytest
 import configparser
 
+from src.babel_validation.core import cache_dir
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
 
 
@@ -48,7 +48,7 @@ def pytest_configure(config):
     # use a fresh download. Only the controller does this — xdist workers skip it
     # so they can share the cache file written by the controller.
     if not os.environ.get('PYTEST_XDIST_WORKER'):
-        for f in glob.glob(os.path.join(tempfile.gettempdir(), 'babel_validation_gsheet_*.csv')):
+        for f in glob.glob(os.path.join(cache_dir(), 'gsheet_*.csv')):
             unlink_if_exists(f)
             unlink_if_exists(f.removesuffix('.csv') + '.lock')
         # Same for the GitHub issue ID cache. The matching .lock file is left

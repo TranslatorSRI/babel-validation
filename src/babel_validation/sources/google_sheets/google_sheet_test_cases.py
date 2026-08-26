@@ -5,7 +5,6 @@
 import csv
 import hashlib
 import io
-import tempfile
 import time
 from collections import Counter
 from pathlib import Path
@@ -15,6 +14,7 @@ import requests
 from _pytest.mark import ParameterSet
 from filelock import FileLock
 
+from ...core import cache_dir
 from ...core.testrow import TestRow
 
 
@@ -38,7 +38,7 @@ class GoogleSheetTestCases:
         self.google_sheet_id = google_sheet_id
 
         sheet_hash = hashlib.md5(google_sheet_id.encode()).hexdigest()
-        cache_file = Path(tempfile.gettempdir()) / f"babel_validation_gsheet_{sheet_hash}.csv"
+        cache_file = cache_dir() / f"gsheet_{sheet_hash}.csv"
         lock_file = cache_file.with_suffix(".lock")
 
         with FileLock(lock_file):
