@@ -18,7 +18,16 @@ def test_openapi_json(target_info):
     assert response.ok, f"Could not GET {url}: {response}"
 
     openapi_json = response.json()
-    assert openapi_json['info']['x-translator']['infores'] == 'infores:sri-node-normalizer'
+    info = openapi_json.get('info', {})
+    assert isinstance(info.get('x-translator'), dict), (
+        f"{url} has no info.x-translator block (info keys: {sorted(info)!r}). Every Translator "
+        f"service needs one to be registered in SmartAPI; a service that is missing it altogether "
+        f"is usually serving FastAPI's default OpenAPI document instead of its own openapi.yml."
+    )
+    assert info['x-translator'].get('infores') == 'infores:sri-node-normalizer', (
+        f"{url} declares info.x-translator.infores as {info['x-translator'].get('infores')!r}, "
+        f"expected 'infores:sri-node-normalizer'."
+    )
 
     try:
         validate_url(url)
