@@ -1,0 +1,344 @@
+"""Unit tests for the dashboard report generator. No network: everything is fed
+literal JSONL records and hostile inline payloads."""
+
+import configparser
+import inspect
+import json
+
+import pytest
+
+from src.babel_validation.tools import generate_report
+from src.babel_validation.tools.generate_report import (
+    append_history,
+    build_results,
+    classify_record,
+    parse_nodeid,
+    sanitize,
+    split_target,
+    trim_status,
+    validate_issue_id,
+    validate_source_url,
+)
+
+pytestmark = pytest.mark.unit
+
+TARGETS = ["prod", "test", "ci", "ci-es", "dev", "exp"]
+ALLOWLIST = ["ncatstranslator/babel", "translatorsri/babel-validation"]
+
+
+def _record(
+    nodeid, outcome="passed", when="call", wasxfail=False, msg=None, props=None
+):
+    return {
+        "id": nodeid,
+        "when": when,
+        "outcome": outcome,
+        "wasxfail": wasxfail,
+        "duration": 0.1,
+        "props": props or {},
+        "msg": msg,
+    }
+
+
+class TestTargetExtraction:
+    def test_hyphenated_target_matches_longest_first(self):
+        assert split_target("ci-es-foo:row=1", TARGETS) == ("ci-es", "foo:row=1")
+        assert split_target("ci-foo", TARGETS) == ("ci", "foo")
+
+    def test_target_as_suffix(self):
+        # Current pytest puts the module-level parametrize first, target last.
+        assert split_target("test_label:row=251-prod", TARGETS) == (
+            "prod",
+            "test_label:row=251",
+        )
+        assert split_target("test_label:row=251-ci-es", TARGETS) == (
+            "ci-es",
+            "test_label:row=251",
+        )
+
+    def test_unknown_target(self):
+        assert split_target("staging-foo", TARGETS) == (None, "staging-foo")
+
+    def test_parse_nodeid_strips_target_from_key(self):
+        key, target, rest = parse_nodeid(
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
+            "[dev-test_nodenorm_from_gsheet.test_row:row=131]",
+            TARGETS,
+        )
+        assert target == "dev"
+        assert rest == "test_nodenorm_from_gsheet.test_row:row=131"
+        assert key == (
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
+            "[test_nodenorm_from_gsheet.test_row:row=131]"
+        )
+
+    def test_parse_nodeid_without_params_goes_to_unknown_bucket(self):
+        key, target, rest = parse_nodeid("tests/test_cache_dir.py::test_mode", TARGETS)
+        assert (key, target) == ("tests/test_cache_dir.py::test_mode", "?")
+
+    def test_parse_nodeid_unknown_target_does_not_crash(self):
+        key, target, rest = parse_nodeid("x.py::t[staging-row=1]", TARGETS)
+        assert target == "?"
+        assert key == "x.py::t[staging-row=1]"
+
+
+class TestClassification:
+    @pytest.mark.parametrize(
+        "outcome,when,wasxfail,msg,expected",
+        [
+            ("passed", "call", False, None, "passed"),
+            ("failed", "call", False, "AssertionError: nope", "failed"),
+            ("skipped", "call", True, "reason", "xfailed"),
+            ("passed", "call", True, None, "xpassed"),  # imperative pytest.xfail
+            ("failed", "call", False, "[XPASS(strict)] issue is open", "xpassed"),
+            ("skipped", "setup", False, "category filter", "skipped"),
+            ("failed", "setup", False, "fixture blew up", "error"),
+            ("failed", "teardown", False, "cleanup blew up", "error"),
+        ],
+    )
+    def test_single_record(self, outcome, when, wasxfail, msg, expected):
+        record = _record("x.py::t[dev-p]", outcome, when, wasxfail, msg)
+        assert classify_record(record) == expected
+
+    def test_subtest_aggregation_worst_wins_and_messages_join(self):
+        nodeid = "github_issues/test_github_issues.py::test_github_issue[dev-NCATSTranslator/Babel#12]"
+        records = [
+            _record(nodeid, "passed"),
+            _record(nodeid, "failed", msg="subtest one failed"),
+            _record(nodeid, "passed"),
+        ]
+        results, counts, ran = build_results(records, TARGETS, ALLOWLIST)
+        key = "github_issues/test_github_issues.py::test_github_issue[NCATSTranslator/Babel#12]"
+        assert results[key]["outcomes"]["dev"]["o"] == "failed"
+        assert "subtest one failed" in results[key]["outcomes"]["dev"]["msg"]
+        assert counts["dev"]["failed"] == 1
+        assert sum(counts["dev"].values()) == 1  # aggregated, not three tests
+        assert ran is True
+
+
+class TestLinkValidation:
+    def test_issue_id_allowlisted(self):
+        assert (
+            validate_issue_id("NCATSTranslator/Babel#12", ALLOWLIST)
+            == "NCATSTranslator/Babel#12"
+        )
+
+    @pytest.mark.parametrize(
+        "issue_id",
+        [
+            "evil/repo#1",
+            "NCATSTranslator/Babel#notanumber",
+            "NCATSTranslator/Babel/extra#1",
+            "../etc#1",
+            "",
+            None,
+        ],
+    )
+    def test_issue_id_rejected(self, issue_id):
+        assert validate_issue_id(issue_id, ALLOWLIST) is None
+
+    def test_source_url_allowlisted(self):
+        url = "https://github.com/NCATSTranslator/Babel/issues/12"
+        assert validate_source_url(url, ALLOWLIST) == url
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://github.com.evil.example/NCATSTranslator/Babel/issues/12",
+            "https://github.com/evil/repo/issues/1",
+            "https://github.com/NCATSTranslator",
+            "http://github.com/NCATSTranslator/Babel/issues/12",
+            "javascript:alert(1)",
+            "",
+            None,
+        ],
+    )
+    def test_source_url_rejected(self, url):
+        assert validate_source_url(url, ALLOWLIST) is None
+
+
+class TestResultAnnotation:
+    def test_gsheet_row_and_props(self):
+        nodeid = (
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
+            "[dev-test_nodenorm_from_gsheet.test_row:row=131]"
+        )
+        records = [
+            _record(
+                nodeid,
+                "failed",
+                msg="AssertionError: wrong id",
+                props={
+                    "category": "Diseases",
+                    "source": "hetio",
+                    "source_url": "https://github.com/NCATSTranslator/Babel/issues/12",
+                    "query_id": "MONDO:0005148",
+                    "query_label": "type 2 diabetes",
+                },
+            )
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["kind"] == "gsheet"
+        assert result["row"] == 131
+        assert result["category"] == "Diseases"
+        assert result["query_id"] == "MONDO:0005148"
+        assert (
+            result["source_url"] == "https://github.com/NCATSTranslator/Babel/issues/12"
+        )
+
+    def test_gsheet_bad_source_url_omitted(self):
+        nodeid = "nameres/test_nameres_from_gsheet.py::test_label[prod-x:row=5]"
+        records = [
+            _record(
+                nodeid, "failed", msg="m", props={"source_url": "https://evil.example/"}
+            )
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert "source_url" not in result
+
+    def test_issue_not_in_allowlist_becomes_other_without_link(self):
+        nodeid = (
+            "github_issues/test_github_issues.py::test_github_issue[dev-evil/repo#1]"
+        )
+        results, _, ran = build_results([_record(nodeid, "passed")], TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["kind"] == "other"
+        assert "issue" not in result
+        assert ran is True  # the suite ran even if the id was rejected
+
+    def test_no_issue_records_means_not_ran(self):
+        records = [_record("nodenorm/test_x.py::t[dev-p]", "passed")]
+        _, _, ran = build_results(records, TARGETS, ALLOWLIST)
+        assert ran is False
+
+    def test_blocklist_redacted_for_every_target(self):
+        base = "nameres/test_blocklist.py::test_blocklist_entry"
+        records = [
+            _record(f"{base}[dev-blocklist_entry0]", "failed", msg="secret entry text"),
+            _record(
+                f"{base}[prod-blocklist_entry0]", "failed", msg="secret entry text"
+            ),
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["kind"] == "blocklist"
+        assert "secret" not in json.dumps(results)
+        for cell in result["outcomes"].values():
+            assert "msg" not in cell
+
+
+class TestNoSheetLeak:
+    def test_report_never_contains_the_sheet_id_or_a_sheet_link(self, monkeypatch):
+        # The public report must not let casual observers find the Google Sheet.
+        from src.babel_validation.sources.google_sheets.google_sheet_test_cases import (
+            GoogleSheetTestCases,
+        )
+
+        sheet_id = (
+            inspect.signature(GoogleSheetTestCases.__init__)
+            .parameters["google_sheet_id"]
+            .default
+        )
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url: {"status": "ok"}
+        )
+        records = [
+            _record(
+                "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-x:row=42]",
+                "failed",
+                msg="boom",
+                props={"category": "Diseases", "query_id": "MONDO:1"},
+            )
+        ]
+        results, counts, ran = build_results(records, TARGETS, ALLOWLIST)
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n"
+        )
+        report = generate_report.build_report(
+            results, counts, ran, ["dev"], ALLOWLIST, config
+        )
+        dumped = json.dumps(report)
+        assert sheet_id not in dumped
+        assert "docs.google.com" not in dumped
+
+
+class TestSanitize:
+    def test_truncates(self):
+        assert sanitize("a" * 1000).startswith("a" * 500)
+        assert sanitize("a" * 1000).endswith("[truncated]")
+
+    def test_escapes_ansi_and_controls(self):
+        hostile = "red \x1b[31malert\x07 ‮done"
+        cleaned = sanitize(hostile)
+        assert "\x1b" not in cleaned and "\x07" not in cleaned and "‮" not in cleaned
+        assert "\\x1b" in cleaned  # escaped, visibly, not silently stripped
+
+    def test_keeps_newlines_and_tabs(self):
+        assert sanitize("a\nb\tc") == "a\nb\tc"
+
+    def test_none(self):
+        assert sanitize(None) is None
+
+
+class TestTrimStatus:
+    def test_hostile_payload(self):
+        hostile = {
+            "status": "ok\x1b[2Jcleared",
+            "babel_version": "x" * 5000,
+            "babel_version_url": "https://evil.example/NCATSTranslator/",
+            "biolink_model": {"tag": "v4", "download_url": "https://evil.example/"},
+            "databases": {
+                "eq_id_to_id_db": {
+                    "count": "12345",
+                    "used_memory_rss_human": "9G" * 50,
+                },
+                "weird": "not a dict",
+            },
+            "recent_queries": {"mean_time_ms": "NaNish", "p95_ms": "12.5"},
+            "solr": {"numDocs": 7, "size": "1 GB", "jvm": {"secrets": True}},
+            "extra_key": {"anything": "dropped"},
+        }
+        trimmed = trim_status(hostile)
+        assert "extra_key" not in trimmed
+        assert "babel_version_url" not in trimmed  # not the NCATSTranslator org
+        assert "\x1b" not in trimmed["status"]
+        assert len(trimmed["babel_version"]) < 100
+        assert trimmed["databases"]["eq_id_to_id_db"]["count"] == 12345
+        assert (
+            len(trimmed["databases"]["eq_id_to_id_db"]["used_memory_rss_human"]) <= 32
+        )
+        assert "weird" not in trimmed["databases"]
+        assert trimmed["recent_queries"] == {"p95_ms": 12.5}
+        assert trimmed["solr"] == {"numDocs": 7, "size": "1 GB"}
+        assert trimmed["biolink_version"] == "v4"
+
+    def test_valid_babel_version_url_kept(self):
+        trimmed = trim_status(
+            {"babel_version_url": "https://github.com/ncatstranslator/Babel/blob/x.md"}
+        )
+        assert trimmed["babel_version_url"].startswith("https://github.com/")
+
+    def test_not_a_dict(self):
+        assert trim_status(["nope"]) == {"error": "InvalidStatus"}
+
+
+class TestHistory:
+    def test_append_keeps_old_lines_verbatim(self, tmp_path):
+        old = tmp_path / "history.jsonl"
+        line1 = json.dumps({"date": "2026-08-24", "targets": {}})
+        line2 = json.dumps({"date": "2026-08-25", "targets": {}})
+        old.write_text(f"{line1}\n{line2}\nnot json\n", encoding="utf-8")
+        new_line = {"date": "2026-08-26", "targets": {}}
+        content = append_history(str(old), new_line)
+        lines = content.strip().split("\n")
+        assert lines[0] == line1
+        assert lines[1] == line2
+        assert json.loads(lines[2]) == new_line
+        assert len(lines) == 3  # the bad line is dropped
+
+    def test_missing_history_file(self):
+        content = append_history("/nonexistent/history.jsonl", {"date": "2026-08-26"})
+        assert content == json.dumps({"date": "2026-08-26"}) + "\n"
