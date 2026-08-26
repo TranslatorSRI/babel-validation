@@ -147,6 +147,12 @@ When writing new tests:
   with failing assertions means it looks like it should be reopened. Those results are findings
   about Babel, not defects in this repo — do not "fix" them by editing the assertions. Only a
   hard ERROR (an unknown assertion name, a rejected issue body) is a problem here.
+- When checking that a new test really fails without its fix, **clear `__pycache__` between runs**.
+  A same-length edit (`%r` for `%s`, say) leaves the source's size unchanged, and if the mtime lands
+  in the same granularity the `.pyc` is not invalidated — so the mutation appears to pass a test
+  that never saw it. Also avoid asserting on `caplog.text` for anything about control characters:
+  it does not carry them through, so such a test passes whatever the code does. Read
+  `caplog.records` and `getMessage()` instead.
 - To check behaviour when no GitHub token is available, run with `GITHUB_TOKEN=` (set but
   empty) rather than unsetting it: `dotenv.load_dotenv()` will not override a key already
   present in `os.environ`, so this defeats the token in the developer's `.env` file
