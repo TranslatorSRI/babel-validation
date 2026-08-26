@@ -88,6 +88,12 @@ class AssertionHandler:
 
     _CURIE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$')
 
+    # Params can come from an unreviewed GitHub issue body, so they are checked before reaching
+    # a service. 1000 characters is far past any real CURIE (under 100) or Biolink type (under
+    # 60) while still leaving room for a long chemical label — IUPAC names run well past 255 —
+    # and keeps a NameRes query string well inside what proxies accept.
+    MAX_PARAM_LENGTH = 1000
+
     def passed(self, message: str) -> TestResult:
         """Build a passing TestResult. Handlers use this rather than TestResult directly."""
         return TestResult(status=TestStatus.Passed, message=message)
@@ -163,6 +169,27 @@ class AssertionHandler:
         """
         if not params:
             return self.failed(f"No parameters in params_list {index} in {label}")
+        # Before the arity and CURIE checks, because both interpolate params into their message.
+        # This is also the only check that sees *every* param: _CURIE_RE skips the non-CURIE
+        # params that curie_params() excludes — notably SearchByName's free-text query, the one
+        # value that reaches a URL query string — and handlers with VALIDATE_CURIES = False skip
+        # it entirely.
+        for param in params:
+            if not param:
+                problem = "is empty"
+            elif len(param) > self.MAX_PARAM_LENGTH:
+                problem = f"is {len(param):,} characters, over the limit of {self.MAX_PARAM_LENGTH:,}"
+            elif not param.isprintable():
+                # isprintable() rejects ANSI escapes, C0/C1 controls, bidi overrides and
+                # zero-width characters, all of which would otherwise be echoed to an operator's
+                # terminal, into pytest IDs and into the logs.
+                problem = "contains non-printable characters"
+            else:
+                continue
+            # Truncate before repr()ing: the point of the length check is that this param may be
+            # enormous, and this message is kept in pytest's report.
+            shown = param[:100] + "..." if len(param) > 100 else param
+            return self.failed(f"Parameter {shown!r} in params_list {index} in {label} {problem}")
         if len(params) < self.MIN_PARAMS or (
                 self.MAX_PARAMS is not None and len(params) > self.MAX_PARAMS):
             return self.failed(
