@@ -30,8 +30,16 @@ def pytest_generate_tests(metafunc):
     )
 
 
-def test_normalization(target_info, test_row, test_category):
+def test_normalization(target_info, test_row, test_category, record_property):
     nodenorm_url = target_info['NodeNormURL']
+
+    # Structured metadata for the dashboard report (--report-jsonl); forwarded
+    # to the controller by xdist as user_properties.
+    record_property("category", test_row.Category)
+    record_property("source", test_row.Source)
+    record_property("source_url", test_row.SourceURL)
+    record_property("query_id", test_row.QueryID)
+    record_property("query_label", test_row.QueryLabel)
 
     category = test_row.Category
     if not test_category(category):
