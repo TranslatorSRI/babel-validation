@@ -74,7 +74,10 @@ def pytest_configure(config):
     global _report_file
     report_path = config.getoption('--report-jsonl')
     if report_path and not os.environ.get('PYTEST_XDIST_WORKER'):
-        _report_file = open(report_path, 'a', encoding='utf-8')
+        # Truncate, not append: build_results takes the worst outcome per test,
+        # so leftover records from an earlier run would keep a fixed test red.
+        os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
+        _report_file = open(report_path, 'w', encoding='utf-8')
 
     # Delete the Google Sheet CSV cache at the start of each run so tests always
     # use a fresh download. Only the controller does this — xdist workers skip it
