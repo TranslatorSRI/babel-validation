@@ -100,6 +100,10 @@ export default {
       pageSize: DEFAULT_PAGE_SIZE,
       pageSizes: PAGE_SIZES,
       copyState: null, // null | 'copied' | 'failed'
+      // Watchers are registered before created(), so they see readUrl()'s
+      // assignments as edits and reset the page. Ignore them until the
+      // initial read has flushed.
+      urlReady: false,
       statusRows: STATUS_ROWS,
       allKinds: ALL_KINDS,
       allOutcomes: ALL_OUTCOMES,
@@ -124,6 +128,9 @@ export default {
   },
   created() {
     this.readUrl();
+    this.$nextTick(() => {
+      this.urlReady = true;
+    });
   },
   async mounted() {
     try {
@@ -138,18 +145,22 @@ export default {
     filters: {
       deep: true,
       handler() {
+        if (!this.urlReady) return;
         this.page = 1;
         this.writeUrl();
       },
     },
     page() {
+      if (!this.urlReady) return;
       this.writeUrl();
     },
     pageSize() {
+      if (!this.urlReady) return;
       this.page = 1;
       this.writeUrl();
     },
     expandedKey() {
+      if (!this.urlReady) return;
       this.writeUrl();
     },
   },
@@ -217,10 +228,11 @@ export default {
       const start = (this.currentPage - 1) * this.pageSize;
       const rows = this.filteredRows.slice(start, start + this.pageSize);
       // A shared link may point at a test the current filters or page hide:
-      // pin it on top rather than showing nothing.
+      // pin it on top rather than showing nothing. hasOwn, not a raw index:
+      // ?test=constructor would otherwise pin an Object.prototype member.
       if (
         this.expandedKey &&
-        this.report?.results[this.expandedKey] &&
+        Object.hasOwn(this.report?.results ?? {}, this.expandedKey) &&
         !rows.some((row) => row.key === this.expandedKey)
       ) {
         const result = this.report.results[this.expandedKey];

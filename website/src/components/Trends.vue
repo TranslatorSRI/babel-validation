@@ -25,6 +25,7 @@ export default {
         .split('\n')
         .filter((line) => line.trim())
         .map((line) => JSON.parse(line))
+        .filter((run) => run && typeof run === 'object')
         .reverse();
     } catch (e) {
       this.loadError = String(e);
