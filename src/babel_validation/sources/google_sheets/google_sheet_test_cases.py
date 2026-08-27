@@ -9,18 +9,16 @@
 import csv
 import hashlib
 import io
-import os
-import re
 import time
 from collections import Counter
 from pathlib import Path
 
-import dotenv
 import pytest
 import requests
 from _pytest.mark import ParameterSet
 from filelock import FileLock
 
+from . import resolve_sheet_id
 from ...core import cache_dir
 from ...core.testrow import TestRow
 
@@ -45,20 +43,7 @@ class GoogleSheetTestCases:
             (e.g. csv-to-babeltests) from reading stale data forever.
         """
 
-        if google_sheet_id is None:
-            dotenv.load_dotenv()
-            google_sheet_id = os.environ.get("BABEL_VALIDATION_SHEET_ID")
-            if not google_sheet_id:
-                raise RuntimeError(
-                    "No Google Sheet ID: set BABEL_VALIDATION_SHEET_ID (e.g. in .env) to the "
-                    "ID of the Babel Validation Google Sheet."
-                )
-        # The ID goes into a URL path, so refuse anything that does not look like
-        # one (this also catches quoting mistakes in .env).
-        if not re.fullmatch(r"[A-Za-z0-9_-]{20,}", google_sheet_id):
-            raise RuntimeError(
-                "BABEL_VALIDATION_SHEET_ID does not look like a Google Sheet ID."
-            )
+        google_sheet_id = resolve_sheet_id("BABEL_VALIDATION_SHEET_ID", google_sheet_id)
 
         self.google_sheet_id = google_sheet_id
 

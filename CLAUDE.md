@@ -143,9 +143,11 @@ The Vue components must render report values with `{{ }}` interpolation only —
 **Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
 Git commit must not contain the test-case sheet's ID or a link to either sheet — casual
 observers of the public site must not be able to find them, and the ID is the capability
-that grants access (the sheet is shared as "anyone with the link", because the CSV fetch is
-unauthenticated). It lives only in the `BABEL_VALIDATION_SHEET_ID` environment variable
-(`.env` locally — gitignored — and a repository secret in Actions). Refer to it as the
+that grants access (the sheets are shared as "anyone with the link", because the CSV fetch
+is unauthenticated). The IDs live only in the `BABEL_VALIDATION_SHEET_ID` and
+`BABEL_VALIDATION_BLOCKLIST_SHEET_ID` environment variables (`.env` locally — gitignored —
+and repository secrets in Actions), resolved through
+`src/babel_validation/sources/google_sheets/resolve_sheet_id()`. Refer to it as the
 "Babel Validation Google Sheet"; sheet *content* (row numbers, queried/expected CURIEs and
 labels, category, source — often a GitHub issue link) is fine to publish once it passes the
 generator's validation. The sheet is expected to be fully replaced by the GitHub issue
