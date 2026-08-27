@@ -20,7 +20,9 @@ pytest --target all                    # Run against all targets in targets.ini
 pytest --category "Unit Tests"         # Filter by Google Sheet category
 pytest --category-exclude "Slow"       # Exclude a category
 pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
-pytest tests/nodenorm/test_nodenorm_from_gsheet.py -k "row=42"  # Run a specific test row
+# Run a specific test row: -k rejects '=' in its expression, so use the full node ID
+# (the target name's position in the parametrize id varies; ask pytest with --collect-only -q)
+pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nodenorm_from_gsheet.test_row:row=42-dev]"
 ```
 
 ### Code Formatting
