@@ -53,6 +53,14 @@ quickest way to get real data for frontend work. To make them from scratch inste
 `pytest --report-jsonl` plus `uv run python -m src.babel_validation.tools.generate_report`
 (see README).
 
+CI installs with `npm ci`, which is far stricter than the `npm install` you run locally: it
+refuses a lockfile that does not match `package.json`, and it fails on platform-specific
+packages that npm 11 writes into the lock without `optional: true` when the runner's npm is
+10 (`EBADPLATFORM` on an Android build of lightningcss). Both workflows therefore pin
+`node-version: 24`. After changing any dependency, run `npm ci` locally — not just
+`npm test` — or the failure surfaces only on the runner, and in `dashboard.yaml` it surfaces
+four hours in, at the build step, after every test has been paid for.
+
 Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
 `lib`, including under `website/src/` — a file there builds locally but never reaches CI.
 Check `git status` shows new frontend files as tracked.
@@ -155,7 +163,10 @@ responses through a key whitelist, only emits issue ids and source URLs that mat
 sheet may not be public — do not add `ids=` to the blocklist parametrize or link to it).
 The Vue components must render report values with `{{ }}` interpolation only — never
 `v-html` — and construct links from validated parts (allowlisted `org/repo#N`,
-`targets.ini` URLs), never verbatim from report text.
+`targets.ini` URLs), never verbatim from report text. A facet is as public as a cell: the
+filter bar's category and source dropdowns are built from report values, so they exclude
+blocklist rows exactly as the table does. Anything that aggregates over `results` needs the
+same check.
 
 **Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
 Git commit must not contain the test-case sheet's ID or a link to either sheet — casual

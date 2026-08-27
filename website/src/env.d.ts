@@ -1,3 +1,4 @@
+/// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
 
 // Let `astro check` (TypeScript) see Vue single-file components as default

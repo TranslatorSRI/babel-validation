@@ -153,3 +153,41 @@ describe('Results pattern filter', () => {
     expect(wrapper.vm.filteredRows.length).toBeGreaterThan(1);
   });
 });
+
+describe('FilterBar', () => {
+  it('toggles an outcome chip on and off, and shows it in the URL', async () => {
+    const wrapper = await mountAt('/');
+    const chip = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'failed');
+    await chip.trigger('click');
+    await flushPromises();
+    expect(wrapper.vm.filters.has).toEqual(['failed']);
+    expect(chip.classes()).toContain('btn-secondary');
+    expect(chip.attributes('aria-pressed')).toBe('true');
+    expect(window.location.search).toContain('has=failed');
+
+    await chip.trigger('click');
+    await flushPromises();
+    expect(wrapper.vm.filters.has).toEqual([]);
+    expect(window.location.search).not.toContain('has=');
+  });
+
+  it('clears every filter at once, and empties the query string with them', async () => {
+    const wrapper = await mountAt('/?all=1&q=row&kinds=gsheet&cat=Genes&env=dev&page=2');
+    const reset = wrapper.findAll('button').find((button) => button.text() === 'Reset');
+    await reset.trigger('click');
+    await flushPromises();
+    expect(wrapper.vm.filters).toEqual({
+      interestingOnly: true,
+      q: '',
+      kinds: [],
+      has: [],
+      cat: '',
+      src: '',
+      env: '',
+      sig: '',
+    });
+    expect(window.location.search).toBe('');
+  });
+});
