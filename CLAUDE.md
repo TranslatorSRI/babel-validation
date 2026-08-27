@@ -65,7 +65,11 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 
 **Target system:** `tests/targets.ini` defines endpoints for each environment (dev, prod, test, ci, exp, localhost). Tests use `target_info` fixture to get URLs. The `conftest.py` parametrizes tests across targets via `--target` CLI option; default is `dev`.
 
-**Google Sheet integration:** ~2000+ test cases are pulled from a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/). `src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses these into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
+**Google Sheet integration:** ~2000+ test cases are pulled from the shared Babel Validation
+Google Sheet. Its ID comes from the `BABEL_VALIDATION_SHEET_ID` environment variable (`.env`
+locally, a repository secret in Actions) and is deliberately not checked in.
+`src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses
+the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
 
 **Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
 
@@ -124,6 +128,19 @@ allowlist *before* the call, or the value reaches the GitHub API as a URL path.
 **Fail loudly; skipping looks like passing.** Reject a bad issue rather than silently running a
 truncated part of it. The same goes for missing credentials: the GitHub issue tests *skip* without
 a token, so a green run may have tested nothing.
+
+**Never leak the Google Sheet IDs or the GitHub token.** No Git commit or published output
+may contain either sheet's ID or a link to either sheet — the ID is the capability that
+grants access (the sheets are shared as "anyone with the link", because the CSV fetch is
+unauthenticated). The IDs live only in the `BABEL_VALIDATION_SHEET_ID` and
+`BABEL_VALIDATION_BLOCKLIST_SHEET_ID` environment variables (`.env` locally — gitignored —
+and repository secrets in Actions), resolved through
+`src/babel_validation/sources/google_sheets/resolve_sheet_id()`. Refer to it as the "Babel
+Validation Google Sheet"; sheet *content* (row numbers, queried/expected CURIEs and labels,
+category, source — often a GitHub issue link) is fine to use in test output. The sheet is
+expected to be fully replaced by the GitHub issue system over the next few months, at which
+point it can be removed from this repo entirely.
+
 
 **Caches belong in `cache_dir()`** (`src/babel_validation/core/__init__.py`), a 0700 directory
 under the user's home — never a fixed name in the shared temp directory. On a CI runner or a

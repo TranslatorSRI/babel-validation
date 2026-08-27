@@ -9,8 +9,11 @@ underlying data used for the Translator
 ## PyTest
 
 The best tests in this repository are Python tests stored in the [`./tests`](./tests/) folder.
-This includes both unit tests as well as "Google Sheet"-based tests, which uses
-a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?gid=0#gid=0) containing facts that we can use to test a NodeNorm instance.
+This includes both unit tests as well as "Google Sheet"-based tests, which use the shared
+Babel Validation Google Sheet containing facts that we can use to test a NodeNorm instance.
+The sheet's ID is deliberately not checked in: set `BABEL_VALIDATION_SHEET_ID` in `.env`
+(ask a maintainer for the ID; in GitHub Actions it comes from a repository secret of the
+same name).
 
 To run these tests, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 You can then use `uv` to run the tests. The file [`tests/targets.ini`](./tests/targets.ini) allows you to
@@ -138,7 +141,7 @@ $ npm run dev
 ```
 
 This will start a local web application and report the URL for accessing it. This website
-retrieves tests from [a Google Sheet document](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?usp=sharing)
+retrieves tests from the Babel Validation Google Sheet
 and displays their results across multiple NodeNorm (and, someday, NameRes) endpoints.
 
 A new website is in development at `website/` and is currently deployed to https://translatorsri.github.io/babel-validation/.
