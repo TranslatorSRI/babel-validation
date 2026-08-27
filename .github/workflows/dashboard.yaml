@@ -45,7 +45,7 @@ jobs:
         run: |
           mkdir -p raw
           for t in prod test ci ci-es dev exp; do
-            timeout 45m uv run pytest tests --target "$t" -n 8 \
+            timeout 45m uv run pytest tests --target "$t" -n 8 -m "not unit" \
               --report-jsonl "raw/$t.jsonl" || echo "target $t exited $?"
           done
 

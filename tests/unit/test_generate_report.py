@@ -71,9 +71,23 @@ class TestTargetExtraction:
             "[test_nodenorm_from_gsheet.test_row:row=131]"
         )
 
+    def test_parse_nodeid_strips_the_rootdir_relative_tests_prefix(self):
+        # `pytest tests --target dev` produces tests/-prefixed node IDs;
+        # `pytest tests/nodenorm/...` does not. Keys must be identical.
+        prefixed, _, _ = parse_nodeid(
+            "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[x:row=1-dev]",
+            TARGETS,
+        )
+        bare, _, _ = parse_nodeid(
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[x:row=1-dev]",
+            TARGETS,
+        )
+        assert prefixed == bare
+        assert prefixed.startswith("nodenorm/")
+
     def test_parse_nodeid_without_params_goes_to_unknown_bucket(self):
         key, target, rest = parse_nodeid("tests/test_cache_dir.py::test_mode", TARGETS)
-        assert (key, target) == ("tests/test_cache_dir.py::test_mode", "?")
+        assert (key, target) == ("test_cache_dir.py::test_mode", "?")
 
     def test_parse_nodeid_unknown_target_does_not_crash(self):
         key, target, rest = parse_nodeid("x.py::t[staging-row=1]", TARGETS)
@@ -210,6 +224,22 @@ class TestResultAnnotation:
     def test_no_issue_records_means_not_ran(self):
         records = [_record("nodenorm/test_x.py::t[dev-p]", "passed")]
         _, _, ran = build_results(records, TARGETS, ALLOWLIST)
+        assert ran is False
+
+    def test_issue_records_with_tests_prefix_count_as_ran(self):
+        # The exact shape the daily workflow produces (`pytest tests ...`).
+        nodeid = "tests/github_issues/test_github_issues.py::test_github_issue[NCATSTranslator/Babel#71-ci]"
+        results, _, ran = build_results([_record(nodeid, "passed")], TARGETS, ALLOWLIST)
+        assert ran is True
+        (result,) = results.values()
+        assert result["kind"] == "issue"
+        assert result["issue"] == "NCATSTranslator/Babel#71"
+
+    def test_issue_unit_tests_do_not_count_as_ran(self):
+        # github_issues/unit/ are unit tests of the parser: they run without a
+        # token, so they must not make the report claim the issue tests ran.
+        nodeid = "tests/github_issues/unit/test_syntax.py::TestX::test_y[some-param]"
+        _, _, ran = build_results([_record(nodeid, "passed")], TARGETS, ALLOWLIST)
         assert ran is False
 
     def test_blocklist_redacted_for_every_target(self):

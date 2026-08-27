@@ -134,6 +134,11 @@ def parse_nodeid(nodeid, targets):
     tests, environment tests) or with an unrecognized target land in the '?'
     bucket rather than crashing the report.
     """
+    # Node IDs are rootdir-relative, so `pytest tests --target dev` produces
+    # 'tests/nodenorm/...' where `pytest tests/nodenorm/...` produces
+    # 'nodenorm/...'. Normalize so result keys (and the kind checks below, and
+    # the Dashboard's nodenorm//nameres/ prefix checks) are stable either way.
+    nodeid = nodeid.removeprefix("tests/")
     match = re.match(r"^(.*?)\[(.*)\]$", nodeid)
     if not match:
         return nodeid, "?", ""
@@ -331,7 +336,9 @@ def build_results(records, targets, allowlist):
 
         if "kind" not in result:
             _annotate_result(result, key, rest, test_records, allowlist)
-        if key.startswith("github_issues/"):
+        # Only the real issue-driven tests count — github_issues/unit/ are
+        # unit tests of the parser and run without a token.
+        if key.startswith("github_issues/test_github_issues.py"):
             github_issues_ran = True
 
     return results, counts, github_issues_ran
