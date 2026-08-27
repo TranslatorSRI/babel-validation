@@ -58,6 +58,8 @@ export default {
     statusCellClass(statusRow, target) {
       const info = this.report.targets[target];
       if (statusRow.danger?.(info)) return 'table-danger';
+      // Only rows the environments should agree on: see `compare` in STATUS_ROWS.
+      if (!statusRow.compare) return '';
       // Highlight the odd ones out when environments disagree, e.g. every
       // environment on Babel 2025sep1 except exp.
       const values = this.targetNames.map((t) => this.statusValue(statusRow, t));

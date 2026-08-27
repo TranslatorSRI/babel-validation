@@ -107,11 +107,15 @@ export default {
       unreachable during the run.
     </div>
 
-    <!-- Environments in promotion order: a change reaches exp first and prod last. -->
-    <div class="d-flex flex-wrap gap-3 mb-4">
-      <template v-for="(target, index) in targetNames" :key="target">
-        <div class="d-none d-xl-flex align-items-center text-body-secondary" v-if="index > 0">→</div>
-        <div class="card flex-fill" style="min-width: 11rem">
+    <p class="small text-body-secondary mb-2">
+      Environments in promotion order — a new Babel version reaches
+      {{ targetNames[0] }} first and {{ targetNames[targetNames.length - 1] }} last.
+    </p>
+    <!-- A grid, not a flex row: the cards must stay one per environment across,
+         so the pipeline reads left to right rather than wrapping mid-sequence. -->
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-3 mb-4">
+      <div v-for="target in targetNames" :key="target" class="col">
+        <div class="card h-100">
           <div class="card-body py-2 px-3">
             <div class="d-flex justify-content-between align-items-baseline">
               <span class="fw-semibold">{{ target }}</span>
@@ -146,7 +150,7 @@ export default {
             </template>
           </div>
         </div>
-      </template>
+      </div>
     </div>
 
     <DriftPanel

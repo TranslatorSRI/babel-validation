@@ -76,17 +76,28 @@ export function formatCount(value) {
 // One row per /status value; adding a row here is all it takes to show a new
 // one. `value` receives one entry of report.targets; null renders as an em
 // dash. `href` may return a generator-validated URL to link the value to.
+//
+// `compare` marks the rows where environments are *supposed* to agree, and so
+// where a minority value is a finding. Record counts, index sizes and latencies
+// differ between environments by nature; shading them made every row amber and
+// taught the reader to ignore the colour.
 export const STATUS_ROWS = [
   {
     label: 'Babel version',
     value: (t) => t.nodenorm_status.babel_version,
     href: (t) => t.nodenorm_status.babel_version_url,
+    compare: true,
   },
-  { label: 'Biolink model', value: (t) => t.nodenorm_status.biolink_version },
+  {
+    label: 'Biolink model',
+    value: (t) => t.nodenorm_status.biolink_version,
+    compare: true,
+  },
   {
     label: 'NodeNorm status',
     value: (t) => t.nodenorm_status.error ?? t.nodenorm_status.status,
     danger: (t) => Boolean(t.nodenorm_status.error),
+    compare: true,
   },
   {
     label: 'NodeNorm records',
@@ -100,8 +111,13 @@ export const STATUS_ROWS = [
     label: 'NameRes status',
     value: (t) => t.nameres_status.error ?? t.nameres_status.status,
     danger: (t) => Boolean(t.nameres_status.error),
+    compare: true,
   },
-  { label: 'NameRes version', value: (t) => t.nameres_status.nameres_version },
+  {
+    label: 'NameRes version',
+    value: (t) => t.nameres_status.nameres_version,
+    compare: true,
+  },
   {
     label: 'Solr documents',
     value: (t) => formatCount(t.nameres_status.solr?.numDocs),

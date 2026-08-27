@@ -90,9 +90,13 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 ### Dashboard Website
 
 - **`website/`** — Astro + Vue site deployed to GitHub Pages
-  (https://translatorsri.github.io/babel-validation/). Renders `report.json` (per-target
-  `/status` cards plus a tests-by-environment matrix) and `history.jsonl` (one summary line
-  per run). Regenerated daily by `.github/workflows/dashboard.yaml`: pytest per target with
+  (https://translatorsri.github.io/babel-validation/). Three pages under one `Layout.astro`
+  shell (nav bar, cards on a tinted page, `data-bs-theme` dark mode, all custom CSS in
+  `src/styles/theme.css`): `/` renders the environment cards, the promotion-drift panel and
+  the `/status` matrix from `report.json`; `/results/` renders the tests-by-environment
+  matrix behind a sticky filter bar; `/history/` renders `history.jsonl` plus a diff against
+  the previous run. Everything about the report that is not markup — link builders, labels,
+  the interestingness predicate — lives in `src/reportData.js`. Regenerated daily by `.github/workflows/dashboard.yaml`: pytest per target with
   `--report-jsonl` (a `pytest_runtest_logreport` hook in `tests/conftest.py`), then
   `src/babel_validation/tools/generate_report.py` aggregates the raw outcomes, fetches each
   target's `/status`, and writes both data files into `website/public/data/`.

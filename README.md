@@ -144,7 +144,8 @@ and `/status` responses into `report.json` and `history.jsonl` with
 `src.babel_validation.tools.generate_report`, and publishes the built site to the
 `gh-pages` branch.
 
-The Vue components' client-side logic (URL round-tripping, filtering, pagination) has vitest
+The Vue components' client-side logic (URL round-tripping, filtering, pagination, the
+odd-one-out shading, the drift grouping, and the withholding of blocklist detail) has vitest
 tests in `website/test/`, run by `npm test` and by the Tests workflow.
 
 To work on the site against the data the live dashboard is showing, download the published
