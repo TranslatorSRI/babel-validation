@@ -1,14 +1,21 @@
-# We store Babel test cases in Google Sheets at
-# https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?usp=sharing
+# We store Babel test cases in the Babel Validation Google Sheet.
+#
+# The sheet ID is deliberately not checked in: it is the capability that grants
+# access to the sheet, so it lives in the BABEL_VALIDATION_SHEET_ID environment
+# variable (via .env locally, a repository secret in GitHub Actions) and must
+# never appear in the code, the Git history, or anything we publish.
 #
 # This library contains classes and methods for accessing those test cases.
 import csv
 import hashlib
 import io
+import os
+import re
 import time
 from collections import Counter
 from pathlib import Path
 
+import dotenv
 import pytest
 import requests
 from _pytest.mark import ParameterSet
@@ -24,16 +31,34 @@ class GoogleSheetTestCases:
     """
 
     def __str__(self):
-        return f"Google Sheet Test Cases ({len(self.rows)} test cases from {self.google_sheet_id})"
+        # No sheet ID here: this string ends up in assertion messages and pytest
+        # output, which the dashboard publishes.
+        return f"Google Sheet Test Cases ({len(self.rows)} test cases)"
 
-    def __init__(self, google_sheet_id="11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no", cache_ttl_seconds: int = 3600):
-        """ Create a Google Sheet test case.
+    def __init__(self, google_sheet_id=None, cache_ttl_seconds: int = 3600):
+        """Create a Google Sheet test case.
 
-        :param google_sheet_id: The Google Sheet identifier to download test cases from.
+        :param google_sheet_id: The Google Sheet identifier to download test cases from. Defaults to
+            the BABEL_VALIDATION_SHEET_ID environment variable (loaded from .env if present).
         :param cache_ttl_seconds: How long a cached download stays valid. pytest deletes the cache at the
             start of every run (see tests/conftest.py), so this TTL mainly protects other consumers
             (e.g. csv-to-babeltests) from reading stale data forever.
         """
+
+        if google_sheet_id is None:
+            dotenv.load_dotenv()
+            google_sheet_id = os.environ.get("BABEL_VALIDATION_SHEET_ID")
+            if not google_sheet_id:
+                raise RuntimeError(
+                    "No Google Sheet ID: set BABEL_VALIDATION_SHEET_ID (e.g. in .env) to the "
+                    "ID of the Babel Validation Google Sheet."
+                )
+        # The ID goes into a URL path, so refuse anything that does not look like
+        # one (this also catches quoting mistakes in .env).
+        if not re.fullmatch(r"[A-Za-z0-9_-]{20,}", google_sheet_id):
+            raise RuntimeError(
+                "BABEL_VALIDATION_SHEET_ID does not look like a Google Sheet ID."
+            )
 
         self.google_sheet_id = google_sheet_id
 
@@ -42,7 +67,10 @@ class GoogleSheetTestCases:
         lock_file = cache_file.with_suffix(".lock")
 
         with FileLock(lock_file):
-            if cache_file.exists() and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds:
+            if (
+                cache_file.exists()
+                and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds
+            ):
                 self.csv_content = cache_file.read_text(encoding="utf-8")
             else:
                 csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
@@ -57,7 +85,12 @@ class GoogleSheetTestCases:
             for row in reader:
                 self.rows.append(row)
 
-    def test_rows(self, test_id_prefix: str, test_nodenorm: bool = False, test_nameres: bool = False) -> list[ParameterSet]:
+    def test_rows(
+        self,
+        test_id_prefix: str,
+        test_nodenorm: bool = False,
+        test_nameres: bool = False,
+    ) -> list[ParameterSet]:
         """
         self.rows is the raw list of rows we got back from the Google Sheets. This method transforms that into
         a list of TestRows.
@@ -66,6 +99,7 @@ class GoogleSheetTestCases:
 
         :return: A list of TestRows for the rows in this file.
         """
+
         def has_nonempty_value(d: dict):
             return not all(not s for s in d.values())
 
@@ -83,30 +117,36 @@ class GoogleSheetTestCases:
                     if tr.ExpectPassInNodeNorm:
                         trows.append(pytest.param(tr, id=row_id))
                     else:
-                        trows.append(pytest.param(
-                            tr,
-                            marks=pytest.mark.xfail(
-                                reason=f"Test row {row_count} is marked as not expected to pass NodeNorm in the "
-                                       f"Google Sheet: {tr}",
-                                strict=True),
-                            id=row_id
-                        ))
+                        trows.append(
+                            pytest.param(
+                                tr,
+                                marks=pytest.mark.xfail(
+                                    reason=f"Test row {row_count} is marked as not expected to pass NodeNorm in the "
+                                    f"Google Sheet: {tr}",
+                                    strict=True,
+                                ),
+                                id=row_id,
+                            )
+                        )
 
                 if test_nameres:
                     if tr.ExpectPassInNameRes:
                         trows.append(pytest.param(tr, id=row_id))
                     else:
-                        trows.append(pytest.param(
-                            tr,
-                            marks=pytest.mark.xfail(
-                                reason=f"Test row {row_count} is marked as not expected to pass NameRes in the "
-                                       f"Google Sheet: {tr}",
-                                strict=True),
-                            id=row_id
-                        ))
+                        trows.append(
+                            pytest.param(
+                                tr,
+                                marks=pytest.mark.xfail(
+                                    reason=f"Test row {row_count} is marked as not expected to pass NameRes in the "
+                                    f"Google Sheet: {tr}",
+                                    strict=True,
+                                ),
+                                id=row_id,
+                            )
+                        )
 
         return trows
 
     def categories(self):
-        """ Return a dict of all the categories of tests available with their counts. """
-        return Counter(map(lambda t: t.get('Category', ''), self.rows))
+        """Return a dict of all the categories of tests available with their counts."""
+        return Counter(map(lambda t: t.get("Category", ""), self.rows))

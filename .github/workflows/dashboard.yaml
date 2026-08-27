@@ -26,6 +26,9 @@ jobs:
       - name: Run the test suite against every target
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # The Babel Validation Google Sheet ID is a secret: it must never be
+          # checked in or appear in anything this workflow publishes.
+          BABEL_VALIDATION_SHEET_ID: ${{ secrets.BABEL_VALIDATION_SHEET_ID }}
         # A nonzero pytest exit (failing tests) is normal here: the report is
         # the artifact. `timeout 45m` caps the damage from a hung or down
         # environment, whose per-test timeouts would otherwise add up.

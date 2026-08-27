@@ -2,7 +2,6 @@
 literal JSONL records and hostile inline payloads."""
 
 import configparser
-import inspect
 import json
 
 import pytest
@@ -232,15 +231,10 @@ class TestResultAnnotation:
 class TestNoSheetLeak:
     def test_report_never_contains_the_sheet_id_or_a_sheet_link(self, monkeypatch):
         # The public report must not let casual observers find the Google Sheet.
-        from src.babel_validation.sources.google_sheets.google_sheet_test_cases import (
-            GoogleSheetTestCases,
-        )
-
-        sheet_id = (
-            inspect.signature(GoogleSheetTestCases.__init__)
-            .parameters["google_sheet_id"]
-            .default
-        )
+        # The generator must not read the sheet ID at all, so plant a fake one in
+        # the environment and check it cannot surface in the output.
+        sheet_id = "FAKE-SHEET-ID-FOR-LEAK-TEST-0123456789"
+        monkeypatch.setenv("BABEL_VALIDATION_SHEET_ID", sheet_id)
         monkeypatch.setattr(
             generate_report, "fetch_status", lambda url: {"status": "ok"}
         )

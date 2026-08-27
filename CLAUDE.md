@@ -61,9 +61,11 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 
 **Target system:** `tests/targets.ini` defines endpoints for each environment (dev, prod, test, ci, exp, localhost). Tests use `target_info` fixture to get URLs. The `conftest.py` parametrizes tests across targets via `--target` CLI option; default is `dev`.
 
-**Google Sheet integration:** ~2000+ test cases are pulled from a shared Google Sheet (its ID is
-the `google_sheet_id` default in `src/babel_validation/sources/google_sheets/google_sheet_test_cases.py`),
-which fetches and parses these into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
+**Google Sheet integration:** ~2000+ test cases are pulled from the shared Babel Validation
+Google Sheet. Its ID comes from the `BABEL_VALIDATION_SHEET_ID` environment variable (`.env`
+locally, a repository secret in Actions) and is deliberately not checked in.
+`src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses
+the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
 
 **Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
 
@@ -139,14 +141,15 @@ The Vue components must render report values with `{{ }}` interpolation only —
 `targets.ini` URLs), never verbatim from report text.
 
 **Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
-new Git commit must not contain the test-case sheet's ID or a link to either sheet — casual
-observers of the public site must not be able to find them. Refer to it as the "Babel
-Validation Google Sheet"; sheet *content* (row numbers, queried/expected CURIEs and labels,
-category, source — often a GitHub issue link) is fine to publish once it passes the
-generator's validation. The sheet ID necessarily lives in
-`google_sheet_test_cases.py`, but must not be copied anywhere else. The sheet is expected
-to be fully replaced by the GitHub issue system over the next few months, at which point it
-can be removed from this repo entirely.
+Git commit must not contain the test-case sheet's ID or a link to either sheet — casual
+observers of the public site must not be able to find them, and the ID is the capability
+that grants access (the sheet is shared as "anyone with the link", because the CSV fetch is
+unauthenticated). It lives only in the `BABEL_VALIDATION_SHEET_ID` environment variable
+(`.env` locally — gitignored — and a repository secret in Actions). Refer to it as the
+"Babel Validation Google Sheet"; sheet *content* (row numbers, queried/expected CURIEs and
+labels, category, source — often a GitHub issue link) is fine to publish once it passes the
+generator's validation. The sheet is expected to be fully replaced by the GitHub issue
+system over the next few months, at which point it can be removed from this repo entirely.
 
 **Caches belong in `cache_dir()`** (`src/babel_validation/core/__init__.py`), a 0700 directory
 under the user's home — never a fixed name in the shared temp directory. On a CI runner or a
