@@ -319,6 +319,20 @@ class TestTrimStatus:
         assert trim_status(["nope"]) == {"error": "InvalidStatus"}
 
 
+class TestAllTargetsUnreachable:
+    def test_all_unreachable_means_the_run_broke(self):
+        report = {
+            "targets": {"dev": {"unreachable": True}, "prod": {"unreachable": True}}
+        }
+        assert generate_report.all_targets_unreachable(report) is True
+
+    def test_one_reachable_target_is_enough(self):
+        report = {
+            "targets": {"dev": {"unreachable": True}, "prod": {"unreachable": False}}
+        }
+        assert generate_report.all_targets_unreachable(report) is False
+
+
 class TestHistory:
     def test_append_keeps_old_lines_verbatim(self, tmp_path):
         old = tmp_path / "history.jsonl"

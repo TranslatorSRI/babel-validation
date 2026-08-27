@@ -431,6 +431,10 @@ def build_history_line(report):
     return line
 
 
+def all_targets_unreachable(report):
+    return all(section["unreachable"] for section in report["targets"].values())
+
+
 def append_history(history_in_path, history_line):
     """Return the new history.jsonl content: prior lines verbatim (bad lines
     dropped so the file can never poison future runs), new line appended."""
@@ -494,6 +498,13 @@ def main(argv=None):
         len(results),
         out_dir / "history.jsonl",
     )
+    # Zero results everywhere means the test runs themselves broke (e.g. every
+    # xdist worker crashed at startup), not that six environments all went
+    # down at once. Fail loudly so the workflow stops before deploying an
+    # empty dashboard; the files are still written for debugging.
+    if all_targets_unreachable(report):
+        logger.error("Every target is unreachable — refusing to succeed.")
+        return 1
     return 0
 
 
