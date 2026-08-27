@@ -377,13 +377,17 @@ class TestAllTargetsUnreachable:
         assert generate_report.all_targets_unreachable(report) is False
 
 
+def _run(date, passed=1):
+    return {"date": date, "targets": {"dev": {"counts": {"passed": passed}}}}
+
+
 class TestHistory:
     def test_append_keeps_old_lines_verbatim(self, tmp_path):
         old = tmp_path / "history.jsonl"
-        line1 = json.dumps({"date": "2026-08-24", "targets": {}})
-        line2 = json.dumps({"date": "2026-08-25", "targets": {}})
+        line1 = json.dumps(_run("2026-08-24"))
+        line2 = json.dumps(_run("2026-08-25"))
         old.write_text(f"{line1}\n{line2}\nnot json\n", encoding="utf-8")
-        new_line = {"date": "2026-08-26", "targets": {}}
+        new_line = _run("2026-08-26")
         content = append_history(str(old), new_line)
         lines = content.strip().split("\n")
         assert lines[0] == line1
@@ -392,8 +396,24 @@ class TestHistory:
         assert len(lines) == 3  # the bad line is dropped
 
     def test_missing_history_file(self):
-        content = append_history("/nonexistent/history.jsonl", {"date": "2026-08-26"})
-        assert content == json.dumps({"date": "2026-08-26"}) + "\n"
+        run = _run("2026-08-26")
+        assert append_history("/nonexistent/history.jsonl", run) == (
+            json.dumps(run) + "\n"
+        )
+
+    def test_run_without_any_test_results_is_dropped(self, tmp_path):
+        # The shakedown run that died before pytest reported anything: real
+        # /status values, every count zero. History carries lines forward
+        # forever, so it has to be dropped rather than merely not written.
+        empty = {
+            "date": "2026-08-27",
+            "targets": {"dev": {"babel_version": "2025sep1", "counts": {"passed": 0}}},
+        }
+        old = tmp_path / "history.jsonl"
+        old.write_text(json.dumps(empty) + "\n", encoding="utf-8")
+        real = _run("2026-08-28")
+        assert append_history(str(old), real) == json.dumps(real) + "\n"
+        assert append_history(str(old), empty) == ""
 
 
 class TestBadInputIsSkippedNotFatal:
@@ -410,11 +430,11 @@ class TestBadInputIsSkippedNotFatal:
 
     def test_history_line_without_targets_is_dropped(self, tmp_path):
         old = tmp_path / "history.jsonl"
-        good = json.dumps({"date": "2026-08-24", "targets": {}})
+        good = json.dumps(_run("2026-08-24"))
         old.write_text(f"{good}\nnull\n123\n{{}}\n", encoding="utf-8")
-        lines = append_history(str(old), {"date": "2026-08-26", "targets": {}}).strip()
-        assert lines.split("\n")[0] == good
-        assert len(lines.split("\n")) == 2
+        lines = append_history(str(old), _run("2026-08-26")).strip().split("\n")
+        assert lines[0] == good
+        assert len(lines) == 2
 
     def test_missing_url_does_not_reach_the_network(self):
         assert fetch_status(None) == {"error": "NoURL"}

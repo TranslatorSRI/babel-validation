@@ -450,9 +450,24 @@ def all_targets_unreachable(report):
     return all(section["unreachable"] for section in report["targets"].values())
 
 
+def run_has_tests(run):
+    """True if any target in a history run recorded at least one test. A run
+    where none did is a broken run, not a data point — the workflow died before
+    pytest reported anything — and history carries every line forward forever,
+    so such a row would sit in the trends table indefinitely."""
+    for target in run.get("targets", {}).values():
+        counts = target.get("counts") if isinstance(target, dict) else None
+        if isinstance(counts, dict) and any(
+            isinstance(n, int) and n > 0 for n in counts.values()
+        ):
+            return True
+    return False
+
+
 def append_history(history_in_path, history_line):
-    """Return the new history.jsonl content: prior lines verbatim (bad lines
-    dropped so the file can never poison future runs), new line appended."""
+    """Return the new history.jsonl content: prior lines verbatim (bad and
+    empty ones dropped so the file can never poison future runs), new line
+    appended unless this run recorded nothing either."""
     lines = []
     if history_in_path and os.path.isfile(history_in_path):
         with open(history_in_path, encoding="utf-8") as f:
@@ -469,9 +484,17 @@ def append_history(history_in_path, history_line):
                 except (json.JSONDecodeError, ValueError):
                     logger.warning("Dropping bad history line: %.80r", line)
                     continue
+                if not run_has_tests(prior):
+                    logger.warning(
+                        "Dropping history run with no test results: %.80r", line
+                    )
+                    continue
                 lines.append(line)
-    lines.append(json.dumps(history_line))
-    return "\n".join(lines) + "\n"
+    if run_has_tests(history_line):
+        lines.append(json.dumps(history_line))
+    else:
+        logger.warning("This run recorded no test results: not adding it to history")
+    return "\n".join(lines) + "\n" if lines else ""
 
 
 def main(argv=None):
