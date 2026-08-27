@@ -43,11 +43,14 @@ unrelated churn, so format only the files you touch, or match the surrounding st
 ```bash
 cd website && npm install && npm run dev   # Dev server at localhost:4321/babel-validation/
 npm run build                              # astro check + production build
+npm run fetch-data                         # download the published report.json/history.jsonl
 ```
 
-The dashboard fetches `data/report.json` and `data/history.jsonl`, which are gitignored;
-generate them first with `pytest --report-jsonl` plus
-`uv run python -m src.babel_validation.tools.generate_report` (see README).
+The dashboard fetches `data/report.json` and `data/history.jsonl`, which are gitignored.
+`npm run fetch-data` downloads the live site's copies into `website/public/data/` — the
+quickest way to get real data for frontend work. To make them from scratch instead, run
+`pytest --report-jsonl` plus `uv run python -m src.babel_validation.tools.generate_report`
+(see README).
 
 Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
 `lib`, including under `website/src/` — a file there builds locally but never reaches CI.

@@ -7,7 +7,8 @@
     "start": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "fetch-data": "mkdir -p public/data && curl -fsSL -o public/data/report.json https://translatorsri.github.io/babel-validation/data/report.json -o public/data/history.jsonl https://translatorsri.github.io/babel-validation/data/history.jsonl"
   },
   "dependencies": {
     "@astrojs/check": "^0.4.1",

@@ -144,6 +144,14 @@ and `/status` responses into `report.json` and `history.jsonl` with
 `src.babel_validation.tools.generate_report`, and publishes the built site to the
 `gh-pages` branch.
 
+To work on the site against the data the live dashboard is showing, download the published
+`report.json` and `history.jsonl` instead of generating them (both land in
+`website/public/data/`, which is gitignored):
+
+```shell
+$ cd website && npm install && npm run fetch-data && npm run dev
+```
+
 To regenerate it locally against a couple of environments:
 
 ```shell
