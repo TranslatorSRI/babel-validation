@@ -1,0 +1,1 @@
+const n=["exp","dev","ci","ci-es","test","prod"];function c(o){const r=t=>{const e=n.indexOf(t);return e===-1?n.length:e};return[...o].sort((t,e)=>r(t)-r(e)||t.localeCompare(e))}const p=(o,r)=>{const t=o.__vccOpts||o;for(const[e,s]of r)t[e]=s;return t};export{p as _,c as s};
