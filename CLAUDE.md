@@ -43,6 +43,7 @@ unrelated churn, so format only the files you touch, or match the surrounding st
 ```bash
 cd website && npm install && npm run dev   # Dev server at localhost:4321/babel-validation/
 npm run build                              # astro check + production build
+npm test                                   # vitest: the Vue components' URL/filter/pagination logic
 npm run fetch-data                         # download the published report.json/history.jsonl
 ```
 

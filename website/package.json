@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro check && astro build",
+    "test": "vitest run",
     "preview": "astro preview",
     "astro": "astro",
     "fetch-data": "mkdir -p public/data && curl -fsSL -o public/data/report.json https://translatorsri.github.io/babel-validation/data/report.json -o public/data/history.jsonl https://translatorsri.github.io/babel-validation/data/history.jsonl"
@@ -17,5 +18,11 @@
     "bootstrap": "^5.3.2",
     "typescript": "^5.3.3",
     "vue": "^3.4.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.5.0",
+    "happy-dom": "^20.11.12",
+    "vitest": "^4.1.11"
   }
 }
