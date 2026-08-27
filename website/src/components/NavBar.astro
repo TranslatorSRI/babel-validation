@@ -12,11 +12,10 @@ interface Props {
 const { active } = Astro.props;
 const base = import.meta.env.BASE_URL;
 
-// History is still served from /trends/ until that page is rewritten.
 const pages = [
   { id: 'dashboard', label: 'Dashboard', href: base },
   { id: 'results', label: 'Results', href: `${base}results/` },
-  { id: 'history', label: 'History', href: `${base}trends/` },
+  { id: 'history', label: 'History', href: `${base}history/` },
 ];
 
 const external = [
