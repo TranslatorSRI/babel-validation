@@ -4,6 +4,8 @@
   history file is derived from untrusted service responses.
 -->
 <script>
+import { sortByDeploymentOrder } from '../lib/deploymentOrder.js';
+
 export default {
   props: {
     dataUrl: { type: String, required: true },
@@ -36,7 +38,7 @@ export default {
           if (!names.includes(name)) names.push(name);
         }
       }
-      return names;
+      return sortByDeploymentOrder(names);
     },
   },
   methods: {
