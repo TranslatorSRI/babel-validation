@@ -154,6 +154,16 @@ export default {
       </label>
     </div>
 
+    <button
+      v-if="filters.sig"
+      type="button"
+      class="btn btn-sm btn-secondary font-monospace"
+      title="Showing one outcome pattern across the environments — click to clear"
+      @click="filters.sig = ''"
+    >
+      pattern {{ filters.sig }} ✕
+    </button>
+
     <div class="ms-auto d-flex align-items-center gap-2">
       <span class="text-body-secondary small text-nowrap">
         {{ shown.toLocaleString('en-US') }} of {{ total.toLocaleString('en-US') }}

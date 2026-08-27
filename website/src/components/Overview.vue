@@ -10,11 +10,12 @@
 -->
 <script>
 import { sortByDeploymentOrder } from '../deploymentOrder.js';
+import DriftPanel from './DriftPanel.vue';
 import StatusMatrix from './StatusMatrix.vue';
 import { fetchReport, formatCount, isInteresting, runLink } from '../reportData.js';
 
 export default {
-  components: { StatusMatrix },
+  components: { DriftPanel, StatusMatrix },
   props: {
     dataUrl: { type: String, required: true },
     resultsUrl: { type: String, required: true },
@@ -147,6 +148,12 @@ export default {
         </div>
       </template>
     </div>
+
+    <DriftPanel
+      :results="report.results"
+      :target-names="targetNames"
+      :results-url="resultsUrl"
+    />
 
     <div class="card mb-4">
       <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">

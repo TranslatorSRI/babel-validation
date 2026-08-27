@@ -24,6 +24,7 @@ import {
   KIND_ORDER,
   OUTCOME_LABELS,
   PAGE_SIZES,
+  SIGNATURE_PATTERN,
   explorerLink,
   fetchReport,
   formatCount,
@@ -31,6 +32,7 @@ import {
   issueLink,
   rowLabel,
   serviceLinks,
+  signature,
 } from '../reportData.js';
 
 const NO_CATEGORY = '(none)';
@@ -44,6 +46,7 @@ function emptyFilters() {
     cat: '',
     src: '',
     env: '', // restricts the outcome filter to one environment
+    sig: '', // one outcome pattern across all environments, from the drift panel
   };
 }
 
@@ -140,6 +143,10 @@ export default {
         .filter((row) => !this.filters.src || row.result.source === this.filters.src)
         .filter(
           (row) =>
+            !this.filters.sig || signature(row.result, this.targetNames) === this.filters.sig
+        )
+        .filter(
+          (row) =>
             !needle ||
             row.label.toLowerCase().includes(needle) ||
             row.key.toLowerCase().includes(needle) ||
@@ -225,6 +232,8 @@ export default {
       this.filters.cat = (params.get('cat') ?? '').slice(0, 200);
       this.filters.src = (params.get('src') ?? '').slice(0, 200);
       this.filters.env = (params.get('env') ?? '').slice(0, 40);
+      const sig = params.get('sig') ?? '';
+      this.filters.sig = SIGNATURE_PATTERN.test(sig) ? sig : '';
       this.expandedKey = params.get('test');
       const page = parseInt(params.get('page') ?? '1', 10);
       if (Number.isInteger(page) && page > 1 && page <= 10000) this.page = page;
@@ -240,6 +249,7 @@ export default {
       if (this.filters.cat) params.set('cat', this.filters.cat);
       if (this.filters.src) params.set('src', this.filters.src);
       if (this.filters.env) params.set('env', this.filters.env);
+      if (this.filters.sig) params.set('sig', this.filters.sig);
       if (this.page > 1) params.set('page', String(this.page));
       if (this.pageSize !== DEFAULT_PAGE_SIZE) params.set('ps', String(this.pageSize));
       if (this.expandedKey) params.set('test', this.expandedKey);

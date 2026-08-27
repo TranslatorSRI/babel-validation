@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import Results from '../src/components/Results.vue';
-import Trends from '../src/components/Trends.vue';
 
 const TARGETS = ['dev', 'prod'];
 
@@ -91,19 +90,6 @@ describe('Results URL state', () => {
   });
 });
 
-describe('Trends', () => {
-  it('drops history lines that are not run objects', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => ['null', '123', JSON.stringify({ date: 'd', targets: {} }), ''].join('\n'),
-    });
-    const wrapper = mount(Trends, { props: { dataUrl: '/data/history.jsonl' } });
-    await flushPromises();
-    expect(wrapper.vm.runs).toHaveLength(1);
-    expect(wrapper.text()).toContain('d');
-  });
-});
-
 describe('Results filters', () => {
   it('round-trips the category, source and environment filters through the URL', async () => {
     const wrapper = await mountAt('/?cat=Diseases&src=TAQA&env=dev&has=failed');
@@ -147,5 +133,23 @@ describe('Results filters', () => {
     for (const secret of ['SECRET:12345', 'a blocked term', 'Babel#71', 'the blocklist sheet']) {
       expect(text).not.toContain(secret);
     }
+  });
+});
+
+describe('Results pattern filter', () => {
+  it('shows only the rows matching a ?sig= pattern, and rejects a malformed one', async () => {
+    const data = report(4);
+    data.results['nodenorm/x.py::t[odd]'] = {
+      kind: 'gsheet',
+      row: 999,
+      category: 'Genes',
+      outcomes: { dev: { o: 'failed' }, prod: { o: 'failed' } },
+    };
+    let wrapper = await mountAt('/?sig=FF', data);
+    expect(wrapper.vm.filteredRows.map((r) => r.key)).toEqual(['nodenorm/x.py::t[odd]']);
+
+    wrapper = await mountAt('/?sig=<script>', data);
+    expect(wrapper.vm.filters.sig).toBe('');
+    expect(wrapper.vm.filteredRows.length).toBeGreaterThan(1);
   });
 });

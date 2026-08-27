@@ -43,6 +43,26 @@ export const OUTCOME_LABELS = {
   error: 'ERR',
 };
 
+// One character per outcome, so a row's behaviour across every environment fits
+// in a short string: "pppppF" is "passes everywhere except prod". Compact
+// enough for a URL, and the alphabet is closed, so ?sig= can be validated.
+export const OUTCOME_CODES = {
+  passed: 'p',
+  failed: 'F',
+  xfailed: 'x',
+  xpassed: 'X',
+  skipped: 's',
+  error: 'E',
+};
+
+export const SIGNATURE_PATTERN = /^[pFxXsE-]{1,32}$/;
+
+export function signature(result, targetNames) {
+  return targetNames
+    .map((target) => OUTCOME_CODES[result.outcomes[target]?.o] ?? '-')
+    .join('');
+}
+
 // Rendering thousands of all-passing rows at once freezes the browser, so the
 // matrix is paginated. The default page size is large enough that the
 // interesting rows normally fit on one page.
