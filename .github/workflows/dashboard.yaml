@@ -69,6 +69,15 @@ jobs:
             --raw-dir raw --targets-ini tests/targets.ini \
             --history-in old_history.jsonl --out-dir website/public/data
 
+      # Node 24 for npm 11 — see the note in tests.yaml. Without this the job
+      # gets the runner's default Node and fails at npm ci, four hours into the
+      # run, after every test has already been paid for.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
       - name: Build the website
         working-directory: website
         run: |
