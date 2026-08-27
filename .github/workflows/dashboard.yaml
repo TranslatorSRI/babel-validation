@@ -6,10 +6,6 @@ on:
   schedule:
     - cron: '30 6 * * *'
   workflow_dispatch:
-  # Temporary, remove before merge: workflow_dispatch only works once this
-  # file is on the default branch, so pre-merge test runs trigger on push.
-  push:
-    branches: [replace-website]
 
 permissions:
   contents: write   # the deploy action pushes to the gh-pages branch
