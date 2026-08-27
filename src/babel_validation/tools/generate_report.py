@@ -267,6 +267,10 @@ def trim_status(raw):
 def fetch_status(base_url):
     """GET {base_url}status and whitelist it. Errors become just a type name —
     no message text, since it could echo the URL or response body."""
+    if not base_url:
+        # A targets.ini section that defines only one of the two services: one
+        # blank card, not a crashed report.
+        return {"error": "NoURL"}
     try:
         response = requests.get(
             base_url.rstrip("/") + "/status", timeout=STATUS_TIMEOUT_SECONDS
@@ -290,7 +294,9 @@ def read_raw_records(raw_dir):
                     continue
                 try:
                     record = json.loads(line)
-                    if not isinstance(record, dict) or "id" not in record:
+                    if not isinstance(record, dict) or not isinstance(
+                        record.get("id"), str
+                    ):
                         raise ValueError("not a record object")
                     records.append(record)
                 except (json.JSONDecodeError, ValueError) as e:
@@ -303,11 +309,13 @@ def build_results(records, targets, allowlist):
     Aggregate raw records into the report's results dict, plus per-target
     outcome counts and whether the GitHub issue tests produced any results.
     """
-    # (key, target) -> list of records
+    # (key, target) -> list of records, plus key -> records across all targets
     by_test = {}
+    by_key = {}
     for record in records:
         key, target, rest = parse_nodeid(record["id"], targets)
         by_test.setdefault((key, target, rest), []).append(record)
+        by_key.setdefault(key, []).append(record)
 
     results = {}
     counts = {
@@ -335,7 +343,7 @@ def build_results(records, targets, allowlist):
         result["outcomes"][target] = cell
 
         if "kind" not in result:
-            _annotate_result(result, key, rest, test_records, allowlist)
+            _annotate_result(result, key, rest, by_key[key], allowlist)
         # Only the real issue-driven tests count — github_issues/unit/ are
         # unit tests of the parser and run without a token.
         if key.startswith("github_issues/test_github_issues.py"):
@@ -453,8 +461,12 @@ def append_history(history_in_path, history_line):
                 if not line:
                     continue
                 try:
-                    json.loads(line)
-                except json.JSONDecodeError:
+                    prior = json.loads(line)
+                    if not isinstance(prior, dict) or not isinstance(
+                        prior.get("targets"), dict
+                    ):
+                        raise ValueError("not a history object")
+                except (json.JSONDecodeError, ValueError):
                     logger.warning("Dropping bad history line: %.80r", line)
                     continue
                 lines.append(line)

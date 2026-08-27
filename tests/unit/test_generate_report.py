@@ -11,7 +11,9 @@ from src.babel_validation.tools.generate_report import (
     append_history,
     build_results,
     classify_record,
+    fetch_status,
     parse_nodeid,
+    read_raw_records,
     sanitize,
     split_target,
     trim_status,
@@ -200,6 +202,18 @@ class TestResultAnnotation:
             result["source_url"] == "https://github.com/NCATSTranslator/Babel/issues/12"
         )
 
+    def test_gsheet_props_merged_across_targets(self):
+        # dev errors during setup, before record_property runs, so its records
+        # carry no props. The row must still get its metadata from prod.
+        base = "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[%s-r:row=7]"
+        records = [
+            _record(base % "dev", "error", when="setup", msg="boom"),
+            _record(base % "prod", "passed", props={"category": "Genes"}),
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["category"] == "Genes"
+
     def test_gsheet_bad_source_url_omitted(self):
         nodeid = "nameres/test_nameres_from_gsheet.py::test_label[prod-x:row=5]"
         records = [
@@ -380,3 +394,27 @@ class TestHistory:
     def test_missing_history_file(self):
         content = append_history("/nonexistent/history.jsonl", {"date": "2026-08-26"})
         assert content == json.dumps({"date": "2026-08-26"}) + "\n"
+
+
+class TestBadInputIsSkippedNotFatal:
+    def test_non_string_id_is_skipped(self, tmp_path, caplog):
+        (tmp_path / "raw.jsonl").write_text(
+            json.dumps({"id": 5})
+            + "\n"
+            + json.dumps(_record("a/b.py::t[dev-x]"))
+            + "\n",
+            encoding="utf-8",
+        )
+        records = read_raw_records(str(tmp_path))
+        assert [r["id"] for r in records] == ["a/b.py::t[dev-x]"]
+
+    def test_history_line_without_targets_is_dropped(self, tmp_path):
+        old = tmp_path / "history.jsonl"
+        good = json.dumps({"date": "2026-08-24", "targets": {}})
+        old.write_text(f"{good}\nnull\n123\n{{}}\n", encoding="utf-8")
+        lines = append_history(str(old), {"date": "2026-08-26", "targets": {}}).strip()
+        assert lines.split("\n")[0] == good
+        assert len(lines.split("\n")) == 2
+
+    def test_missing_url_does_not_reach_the_network(self):
+        assert fetch_status(None) == {"error": "NoURL"}
