@@ -68,6 +68,19 @@ body {
   background: var(--bs-body-bg);
 }
 
+/* The controls above the results table stay put while it scrolls, and the
+   table header sticks directly beneath them - hence --filterbar-h, which
+   FilterBar.vue measures because the bar wraps at narrow widths. Sticky
+   elements need an opaque background of their own or rows show through. */
+.filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bs-body-bg);
+  border-bottom: 1px solid var(--bs-border-color);
+  margin-bottom: 1rem;
+}
+
 /* --- Test outcomes ------------------------------------------------------ */
 
 /* Only failures and errors are saturated. Everything else is a subtle pair, so

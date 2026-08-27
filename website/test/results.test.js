@@ -1,9 +1,9 @@
-// Regression tests for the dashboard's client-side logic. Everything here was
-// a real bug: shared links that lost their page, and a query parameter that
-// reached Object.prototype.
+// Regression tests for the results page's client-side logic. Everything in the
+// first block was a real bug: shared links that lost their page, and a query
+// parameter that reached Object.prototype.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import Dashboard from '../src/components/Dashboard.vue';
+import Results from '../src/components/Results.vue';
 import Trends from '../src/components/Trends.vue';
 
 const TARGETS = ['dev', 'prod'];
@@ -27,6 +27,7 @@ function report(rowCount = 60) {
       kind: 'gsheet',
       row: i,
       category: i % 2 ? 'Diseases' : 'Genes',
+      source: i % 3 ? 'Reported in an issue' : 'TAQA',
       outcomes: { dev: { o: 'failed' }, prod: { o: 'passed' } },
     };
   }
@@ -44,12 +45,12 @@ function report(rowCount = 60) {
 async function mountAt(query, data = report()) {
   window.history.replaceState(null, '', query);
   global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => data });
-  const wrapper = mount(Dashboard, { props: { dataUrl: '/data/report.json' } });
+  const wrapper = mount(Results, { props: { dataUrl: '/data/report.json' } });
   await flushPromises();
   return wrapper;
 }
 
-describe('Dashboard URL state', () => {
+describe('Results URL state', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
   });
@@ -100,5 +101,51 @@ describe('Trends', () => {
     await flushPromises();
     expect(wrapper.vm.runs).toHaveLength(1);
     expect(wrapper.text()).toContain('d');
+  });
+});
+
+describe('Results filters', () => {
+  it('round-trips the category, source and environment filters through the URL', async () => {
+    const wrapper = await mountAt('/?cat=Diseases&src=TAQA&env=dev&has=failed');
+    expect(wrapper.vm.filters.cat).toBe('Diseases');
+    expect(wrapper.vm.filters.src).toBe('TAQA');
+    expect(wrapper.vm.filters.env).toBe('dev');
+    wrapper.vm.filters.q = 'row';
+    await flushPromises();
+    const params = new URLSearchParams(window.location.search);
+    expect([params.get('cat'), params.get('src'), params.get('env')]).toEqual([
+      'Diseases',
+      'TAQA',
+      'dev',
+    ]);
+  });
+
+  it('applies the outcome filter to the chosen environment only', async () => {
+    const wrapper = await mountAt('/?env=prod&has=failed');
+    // Every row passes in prod and fails in dev, so nothing matches.
+    expect(wrapper.vm.filteredRows).toHaveLength(0);
+    wrapper.vm.filters.env = 'dev';
+    await flushPromises();
+    expect(wrapper.vm.filteredRows.length).toBeGreaterThan(0);
+  });
+
+  it('withholds every detail of a blocklist row, whatever the report carries', async () => {
+    const key = 'nameres/test_blocklist.py::test_check_blocklist_entry[blocklist_entry47]';
+    const data = report(2);
+    // A generator regression that started emitting these must not leak them here.
+    data.results[key] = {
+      kind: 'blocklist',
+      query_id: 'SECRET:12345',
+      query_label: 'a blocked term',
+      issue: 'NCATSTranslator/Babel#71',
+      source: 'the blocklist sheet',
+      outcomes: { dev: { o: 'failed', msg: 'blocked term SECRET:12345 was returned' } },
+    };
+    const wrapper = await mountAt(`/?all=1&test=${encodeURIComponent(key)}`, data);
+    const text = wrapper.text();
+    expect(text).toContain('blocklist entry (details withheld)');
+    for (const secret of ['SECRET:12345', 'a blocked term', 'Babel#71', 'the blocklist sheet']) {
+      expect(text).not.toContain(secret);
+    }
   });
 });
