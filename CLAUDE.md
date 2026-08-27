@@ -13,6 +13,9 @@ Babel Validation is a test suite and web tools for validating outputs from [Babe
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Run from repo root:
 
 ```bash
+# With -n (xdist), always pass the tests path explicitly (`pytest tests -n 8 ...`):
+# without it, workers do not load tests/conftest.py early enough to know the
+# custom options, and every worker dies at argparse — or collects nothing.
 pytest --target dev                    # Run all tests against dev environment (default if no --target)
 pytest --target prod                   # Run against production
 pytest --target dev --target prod      # Run against multiple targets
@@ -45,6 +48,10 @@ npm run build                              # astro check + production build
 The dashboard fetches `data/report.json` and `data/history.jsonl`, which are gitignored;
 generate them first with `pytest --report-jsonl` plus
 `uv run python -m src.babel_validation.tools.generate_report` (see README).
+
+Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
+`lib`, including under `website/src/` — a file there builds locally but never reaches CI.
+Check `git status` shows new frontend files as tracked.
 
 ## Architecture
 
