@@ -4,7 +4,7 @@
   history file is derived from untrusted service responses.
 -->
 <script>
-import { sortByDeploymentOrder } from '../lib/deploymentOrder.js';
+import { sortByDeploymentOrder } from '../deploymentOrder.js';
 
 export default {
   props: {

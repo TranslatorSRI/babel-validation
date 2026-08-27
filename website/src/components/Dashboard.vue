@@ -13,7 +13,9 @@
   and key lookups, never markup or fetch targets.
 -->
 <script>
-import { sortByDeploymentOrder } from '../lib/deploymentOrder.js';
+// Not in a lib/ subdirectory: the root .gitignore's Python-template `lib/`
+// pattern silently swallows any directory of that name.
+import { sortByDeploymentOrder } from '../deploymentOrder.js';
 
 const KIND_ORDER = { issue: 0, gsheet: 1, other: 2, blocklist: 3 };
 const KIND_HEADINGS = {
