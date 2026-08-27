@@ -5,6 +5,7 @@
 -->
 <script>
 import { sortByDeploymentOrder } from '../deploymentOrder.js';
+import { fetchHistory, formatCount } from '../reportData.js';
 
 export default {
   props: {
@@ -18,15 +19,7 @@ export default {
   },
   async mounted() {
     try {
-      const response = await fetch(this.dataUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = await response.text();
-      this.runs = text
-        .split('\n')
-        .filter((line) => line.trim())
-        .map((line) => JSON.parse(line))
-        .filter((run) => run && typeof run === 'object')
-        .reverse();
+      this.runs = await fetchHistory(this.dataUrl);
     } catch (e) {
       this.loadError = String(e);
     }
@@ -44,7 +37,7 @@ export default {
   },
   methods: {
     formatCount(value) {
-      return typeof value === 'number' ? value.toLocaleString('en-US') : '—';
+      return formatCount(value) ?? '—';
     },
   },
 };

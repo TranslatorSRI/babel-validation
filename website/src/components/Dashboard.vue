@@ -13,72 +13,26 @@
   and key lookups, never markup or fetch targets.
 -->
 <script>
-// Not in a lib/ subdirectory: the root .gitignore's Python-template `lib/`
-// pattern silently swallows any directory of that name.
 import { sortByDeploymentOrder } from '../deploymentOrder.js';
-
-const KIND_ORDER = { issue: 0, gsheet: 1, other: 2, blocklist: 3 };
-const KIND_HEADINGS = {
-  issue: 'GitHub issues',
-  gsheet: 'Babel Validation Google Sheet',
-  other: 'Other tests',
-  blocklist: 'Blocklist',
-};
-const ALL_KINDS = ['issue', 'gsheet', 'other', 'blocklist'];
-const ALL_OUTCOMES = ['passed', 'failed', 'xfailed', 'xpassed', 'skipped', 'error'];
-
-// One row per /status value; adding a row here is all it takes to show a new
-// one. `value` receives one entry of report.targets; null renders as an em
-// dash. `href` may return a generator-validated URL to link the value to.
-const STATUS_ROWS = [
-  {
-    label: 'Babel version',
-    value: (t) => t.nodenorm_status.babel_version,
-    href: (t) => t.nodenorm_status.babel_version_url,
-  },
-  { label: 'Biolink model', value: (t) => t.nodenorm_status.biolink_version },
-  {
-    label: 'NodeNorm status',
-    value: (t) => t.nodenorm_status.error ?? t.nodenorm_status.status,
-    danger: (t) => Boolean(t.nodenorm_status.error),
-  },
-  {
-    label: 'NodeNorm records',
-    value: (t) => formatCount(t.nodenorm_status.databases?.eq_id_to_id_db?.count),
-  },
-  {
-    label: 'NodeNorm memory',
-    value: (t) => t.nodenorm_status.databases?.eq_id_to_id_db?.used_memory_rss_human,
-  },
-  {
-    label: 'NameRes status',
-    value: (t) => t.nameres_status.error ?? t.nameres_status.status,
-    danger: (t) => Boolean(t.nameres_status.error),
-  },
-  { label: 'NameRes version', value: (t) => t.nameres_status.nameres_version },
-  {
-    label: 'Solr documents',
-    value: (t) => formatCount(t.nameres_status.solr?.numDocs),
-  },
-  { label: 'Solr index size', value: (t) => t.nameres_status.solr?.size },
-  {
-    label: 'NameRes p95 latency',
-    value: (t) => {
-      const p95 = t.nameres_status.recent_queries?.p95_ms;
-      return p95 == null ? null : `${p95} ms`;
-    },
-  },
-];
-
-// Rendering thousands of all-passing rows at once freezes the browser, so the
-// matrix is paginated. The default page size is large enough that the
-// interesting rows normally fit on one page.
-const DEFAULT_PAGE_SIZE = 100;
-const PAGE_SIZES = [25, 100, 500];
-
-function formatCount(value) {
-  return typeof value === 'number' ? value.toLocaleString('en-US') : null;
-}
+import {
+  ALL_KINDS,
+  ALL_OUTCOMES,
+  DEFAULT_PAGE_SIZE,
+  KIND_HEADINGS,
+  KIND_ORDER,
+  OUTCOME_LABELS,
+  PAGE_SIZES,
+  STATUS_ROWS,
+  explorerLink,
+  fetchReport,
+  formatCount,
+  isInteresting,
+  isNodeNorm,
+  issueLink,
+  rowLabel,
+  runLink,
+  serviceLinks,
+} from '../reportData.js';
 
 export default {
   props: {
@@ -108,6 +62,7 @@ export default {
       allKinds: ALL_KINDS,
       allOutcomes: ALL_OUTCOMES,
       kindHeadings: KIND_HEADINGS,
+      outcomeLabels: OUTCOME_LABELS,
       outcomeBadges: {
         passed: 'text-bg-success',
         failed: 'text-bg-danger',
@@ -115,14 +70,6 @@ export default {
         xpassed: 'text-bg-warning',
         skipped: 'text-bg-light',
         error: 'text-bg-dark',
-      },
-      outcomeLabels: {
-        passed: 'pass',
-        failed: 'FAIL',
-        xfailed: 'xfail',
-        xpassed: 'XPASS',
-        skipped: 'skip',
-        error: 'ERR',
       },
     };
   },
@@ -134,9 +81,7 @@ export default {
   },
   async mounted() {
     try {
-      const response = await fetch(this.dataUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      this.report = await response.json();
+      this.report = await fetchReport(this.dataUrl);
     } catch (e) {
       this.loadError = String(e);
     }
@@ -325,20 +270,8 @@ export default {
     },
 
     // --- Results matrix ---
-    isInteresting(result) {
-      const outcomes = Object.values(result.outcomes).map((cell) => cell.o);
-      if (outcomes.some((o) => o === 'failed' || o === 'xpassed' || o === 'error')) return true;
-      return new Set(outcomes).size > 1;
-    },
-    rowLabel(key, result) {
-      if (result.kind === 'gsheet') {
-        return `row ${result.row}: ${result.query_label || result.query_id || ''}`;
-      }
-      if (result.kind === 'issue') return result.issue;
-      if (result.kind === 'blocklist') return 'blocklist entry (details withheld)';
-      // Trim the test-file path down to module::test[param].
-      return key.replace(/^.*\//, '');
-    },
+    isInteresting,
+    rowLabel,
     kindHeading(index) {
       const kind = this.rows[index].result.kind;
       if (index > 0 && this.rows[index - 1].result.kind === kind) return null;
@@ -346,56 +279,15 @@ export default {
     },
 
     // --- Link construction, from validated parts only. ---
-    issueLink(result) {
-      // result.issue was validated against the repository allowlist by the generator.
-      const match = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#([0-9]+)$/.exec(result.issue ?? '');
-      if (!match) return null;
-      return `https://github.com/${match[1]}/issues/${match[2]}`;
-    },
-    isNodeNorm(key) {
-      return key.startsWith('nodenorm/') || key.startsWith('github_issues/');
-    },
+    issueLink,
+    isNodeNorm,
     serviceLinks(key, result) {
-      // Direct query links to each environment's service for this test's query.
-      const links = [];
-      for (const target of this.targetNames) {
-        if (!(target in result.outcomes)) continue;
-        const urls = this.report.targets[target];
-        if (result.query_id && this.isNodeNorm(key) && urls.nodenorm_url) {
-          links.push({
-            label: `NodeNorm ${target}`,
-            url: `${urls.nodenorm_url}get_normalized_nodes?curie=${encodeURIComponent(result.query_id)}`,
-          });
-        }
-        if (result.query_label && key.startsWith('nameres/') && urls.nameres_url) {
-          links.push({
-            label: `NameRes ${target}`,
-            url: `${urls.nameres_url}lookup?string=${encodeURIComponent(result.query_label)}`,
-          });
-        }
-      }
-      return links;
+      return serviceLinks(key, result, this.report, this.targetNames);
     },
     explorerLink(key, result) {
-      const targets = this.targetNames
-        .filter((t) => t in result.outcomes)
-        .map((t) => `target=${encodeURIComponent(t)}`)
-        .join('&');
-      if (result.query_id && this.isNodeNorm(key)) {
-        return `https://translatorsri.github.io/babel-explorer/nodenorm/?curie=${encodeURIComponent(result.query_id)}&${targets}`;
-      }
-      if (result.query_label && key.startsWith('nameres/')) {
-        const term = result.query_id
-          ? `${result.query_label} [[${result.query_id}]]`
-          : result.query_label;
-        return `https://translatorsri.github.io/babel-explorer/nameres/?term=${encodeURIComponent(term)}&${targets}`;
-      }
-      return null;
+      return explorerLink(key, result, this.targetNames);
     },
-    runLink(runId) {
-      if (!/^[0-9]+$/.test(runId ?? '')) return null;
-      return `https://github.com/TranslatorSRI/babel-validation/actions/runs/${runId}`;
-    },
+    runLink,
     toggleExpanded(key) {
       this.expandedKey = this.expandedKey === key ? null : key;
     },
