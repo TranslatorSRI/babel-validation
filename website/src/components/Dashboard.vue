@@ -589,16 +589,11 @@ export default {
 </template>
 
 <style scoped>
-.failure-message {
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 0.5rem;
-  margin-bottom: 0;
-}
+/* .failure-message and the sticky header live in src/styles/theme.css, which is
+   written in terms of Bootstrap's theme variables so both work in dark mode. */
 .results-matrix thead th {
   position: sticky;
   top: 0;
-  background: var(--bs-body-bg, #fff);
+  background: var(--bs-body-bg);
 }
 </style>
