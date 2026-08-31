@@ -9,14 +9,14 @@ import requests
 from openapi_spec_validator import validate_url
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
+from tests._service_helpers import openapi_url
+
 def test_openapi_json(target_info):
     """
     Test the OpenAPI specification.
     """
 
-    nameres_url = target_info['NameResURL']
-
-    url = urllib.parse.urljoin(nameres_url, 'openapi.json')
+    url = openapi_url(target_info, 'NameResURL', 'NameResOpenAPIPath')
     response = requests.get(url)
     assert response.ok, f"Could not GET {url}: {response}"
 
