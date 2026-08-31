@@ -227,4 +227,8 @@ When writing new tests:
   `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
   perfectly valid. The spurious error is also first, so it masks the real one further down the
   document.
+- **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
+  job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
+  like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
+  in #112 had six tests that had never run.
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)

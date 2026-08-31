@@ -26,15 +26,9 @@ Nothing here queries NodeNorm or NameRes. The site renders two files that
   that `pytest --report-jsonl` emits.
 - **`data/history.jsonl`** — one summary line per run, appended to the previously published file.
 
-To work against real data locally, download the published report into `public/data/`:
-
-```sh
-mkdir -p public/data
-curl -o public/data/report.json https://translatorsri.github.io/babel-validation/data/report.json
-curl -o public/data/history.jsonl https://translatorsri.github.io/babel-validation/data/history.jsonl
-```
-
-Or generate your own from a test run — see `generate_report.py`'s header for the invocation.
+To work against real data locally, `npm run fetch-data` downloads the published copies into
+`public/data/`, which is gitignored. Or generate your own from a test run — see
+`generate_report.py`'s header for the invocation.
 
 ## Commands
 
@@ -63,6 +57,13 @@ server-side, but this site must also:
 the "interesting" predicate, the link builders — and is the right place for logic that would
 otherwise be duplicated across two components. It is deliberately not in a `lib/` directory: the
 root `.gitignore`'s Python-template `lib/` pattern silently swallows any directory of that name.
+
+**The site is served under `<base href="/babel-validation/">`, and vitest is not.** A relative URL
+passed to `history.pushState`/`replaceState` resolves against the *document base*, not the current
+path, so `replaceState(null, '', '?q=1')` on `/results/` silently rewrites the address bar to the
+site root — a different page, which ignores the parameters. Always build these from
+`window.location.pathname`. No test can catch it: the suite mounts components at `/` with no
+`<base>` element, so the relative form works there and fails only in production.
 
 `src/deploymentOrder.js` fixes the left-to-right order of every table. Environments read in
 promotion order, so a value that differs from its left neighbour is a change on its way through.
