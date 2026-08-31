@@ -55,3 +55,20 @@ describe('what changed since the previous run', () => {
     expect(wrapper.text()).not.toContain('Nothing changed');
   });
 });
+
+describe('a malformed history file', () => {
+  it('drops only the unparseable line, not every run in the file', async () => {
+    // A deploy interrupted mid-write, or a partial CDN response, leaves a
+    // truncated last line. JSON.parse over the whole file threw, and the page
+    // showed "Could not load the run history" instead of the runs it had.
+    const wrapper = await mountWith([
+      run('2026-08-26', '2025sep1', 12),
+      '{"date": "2026-08-27", "targets": {"dev": {"babel_ver',
+    ]);
+
+    expect(wrapper.vm.loadError).toBe(null);
+    expect(wrapper.vm.runs).toHaveLength(1);
+    expect(wrapper.text()).toContain('2026-08-26');
+  });
+});
+

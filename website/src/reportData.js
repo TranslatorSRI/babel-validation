@@ -147,7 +147,16 @@ export async function fetchHistory(url) {
   return text
     .split('\n')
     .filter((line) => line.trim())
-    .map((line) => JSON.parse(line))
+    .map((line) => {
+      // Per line, not over the whole file: a truncated last line — a partial
+      // CDN response, a deploy interrupted mid-write — must cost one run, not
+      // the entire page.
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
     .filter((run) => run && typeof run === 'object')
     .reverse();
 }
