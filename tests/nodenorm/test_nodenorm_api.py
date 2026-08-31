@@ -6,7 +6,7 @@ import urllib.parse
 
 import pytest
 import requests
-from openapi_spec_validator import validate_url
+from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
 from tests._service_helpers import assert_backend, assert_x_translator, openapi_url
@@ -17,10 +17,16 @@ def test_openapi_json(target_info):
     response = requests.get(url)
     assert response.ok, f"Could not GET {url}: {response}"
 
-    assert_x_translator(url, response.json(), 'infores:sri-node-normalizer')
+    openapi_json = response.json()
+    assert_x_translator(url, openapi_json, 'infores:sri-node-normalizer')
 
     try:
-        validate_url(url)
+        # Validate the document we already parsed as JSON, rather than validate_url(url),
+        # which re-fetches it and reads it as YAML. YAML 1.1 requires a '.' and a signed
+        # exponent in a float, so it parses this service's `1e-06` as the *string*
+        # '1e-06' and reports "'1e-06' is not of type 'number'" against a document whose
+        # JSON is perfectly valid. That is a spurious failure, and it hid a real one.
+        validate(openapi_json, base_uri=url)
     except OpenAPIValidationError as e:
         pytest.fail(f"Could not validate OpenAPI at {url}: {e}")
 

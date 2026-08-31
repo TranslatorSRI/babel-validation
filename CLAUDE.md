@@ -165,4 +165,10 @@ When writing new tests:
 - To check behaviour when no GitHub token is available, run with `GITHUB_TOKEN=` (set but
   empty) rather than unsetting it: `dotenv.load_dotenv()` will not override a key already
   present in `os.environ`, so this defeats the token in the developer's `.env` file
+- **Validate an OpenAPI document with `validate(parsed_json, base_uri=url)`, never
+  `validate_url(url)`.** `validate_url` re-fetches the URL and reads it as YAML, and YAML 1.1 needs
+  both a `.` and a signed exponent in a float — so NodeNorm's `1e-06` parses as the *string*
+  `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
+  perfectly valid. The spurious error is also first, so it masks the real one further down the
+  document.
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
