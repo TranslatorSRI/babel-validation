@@ -134,6 +134,11 @@ export const STATUS_ROWS = [
 
 // --- Loading -------------------------------------------------------------
 
+// Fetched whole on both pages: report.json is ~1.8 MB. No sessionStorage memo,
+// because there is nothing to fix — GitHub Pages serves it with
+// `cache-control: max-age=600` (measured 2026-08-31), so a navigation between
+// the Dashboard and Results inside ten minutes is served from the browser cache
+// and never reaches the network. Re-measure before adding one.
 export async function fetchReport(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -175,7 +180,10 @@ export function isInteresting(result) {
 
 export function rowLabel(key, result) {
   if (result.kind === 'gsheet') {
-    return `row ${result.row}: ${result.query_label || result.query_id || ''}`;
+    // A sheet row can carry neither a label nor an ID, and rendered as "row 53:"
+    // trailing off into nothing. The row number is the whole label in that case.
+    const label = result.query_label || result.query_id;
+    return label ? `row ${result.row}: ${label}` : `row ${result.row}`;
   }
   if (result.kind === 'issue') return result.issue;
   if (result.kind === 'blocklist') return 'blocklist entry (details withheld)';

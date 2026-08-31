@@ -43,3 +43,18 @@ describe('row classification', () => {
     expect(label).toBe('blocklist entry (details withheld)');
   });
 });
+
+describe('row labels', () => {
+  it('labels a sheet row by its number when it has neither a label nor an id', () => {
+    expect(rowLabel('k', { kind: 'gsheet', row: 53 })).toBe('row 53');
+    expect(rowLabel('k', { kind: 'gsheet', row: 53, query_label: '' })).toBe('row 53');
+  });
+
+  it('still puts the label after the row number when there is one', () => {
+    expect(rowLabel('k', { kind: 'gsheet', row: 53, query_label: 'MONDO:1' })).toBe(
+      'row 53: MONDO:1'
+    );
+    expect(rowLabel('k', { kind: 'gsheet', row: 7, query_id: 'CHEBI:2' })).toBe('row 7: CHEBI:2');
+  });
+});
+
