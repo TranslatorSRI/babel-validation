@@ -14,6 +14,7 @@ from src.babel_validation.tools.generate_report import (
     fetch_status,
     parse_nodeid,
     read_raw_records,
+    read_targets,
     sanitize,
     split_target,
     trim_status,
@@ -438,3 +439,51 @@ class TestBadInputIsSkippedNotFatal:
 
     def test_missing_url_does_not_reach_the_network(self):
         assert fetch_status(None) == {"error": "NoURL"}
+
+
+# read_targets is the single source of truth for which environments exist: as of
+# the dashboard workflow taking its loop from it, a section it returns is one that
+# gets run, and one it drops is never mentioned again. When those two disagreed,
+# the extra target reached the site as a permanently unreachable column.
+class TestReadTargets:
+    def _ini(self, tmp_path, text):
+        path = tmp_path / "targets.ini"
+        path.write_text(text, encoding="utf8")
+        return path
+
+    def test_it_returns_every_section_except_localhost(self, tmp_path):
+        path = self._ini(
+            tmp_path,
+            "[DEFAULT]\nRepositories =\n    org/one\n\n"
+            "[prod]\nNodeNormURL = https://prod.example/\n\n"
+            "[test-redis]\nNodeNormURL = https://redis.example/\n\n"
+            "[localhost]\nNodeNormURL = http://localhost:2434/\n",
+        )
+
+        targets, allowlist, _ = read_targets(path)
+
+        assert targets == ["prod", "test-redis"]
+        assert allowlist == ["org/one"]
+
+    def test_it_keeps_the_order_the_file_gives(self, tmp_path):
+        # The site sorts by DEPLOYMENT_ORDER, but the workflow runs them in this
+        # order, and a report is easier to read against the file it came from.
+        path = self._ini(tmp_path, "".join(f"[{name}]\nNodeNormURL = https://{name}.example/\n\n"
+                                           for name in ("exp", "dev", "ci", "prod")))
+
+        assert read_targets(path)[0] == ["exp", "dev", "ci", "prod"]
+
+    def test_the_repository_allowlist_is_lowercased_and_stripped(self, tmp_path):
+        path = self._ini(
+            tmp_path,
+            "[DEFAULT]\nRepositories =\n    NCATSTranslator/Babel\n   \n    TranslatorSRI/Babel-Explorer\n\n"
+            "[prod]\nNodeNormURL = https://prod.example/\n",
+        )
+
+        assert read_targets(path)[1] == ["ncatstranslator/babel", "translatorsri/babel-explorer"]
+
+    def test_the_checked_in_targets_ini_has_no_localhost_and_is_not_empty(self):
+        targets, _, _ = read_targets("tests/targets.ini")
+
+        assert "localhost" not in targets
+        assert targets, "the workflow builds its run loop from this list"
