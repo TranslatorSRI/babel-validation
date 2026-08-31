@@ -241,6 +241,11 @@ export default {
       if (PAGE_SIZES.includes(pageSize)) this.pageSize = pageSize;
     },
     writeUrl() {
+      // Clamp before writing: ?page=9999 on a three-page result set renders page
+      // 3, and the link we put in the address bar has to say 3 too. Safe here
+      // because writeUrl only runs after urlReady, i.e. after a user edit, by
+      // which time the report has loaded and pageCount is real.
+      if (this.page !== this.currentPage) this.page = this.currentPage;
       const params = new URLSearchParams();
       if (!this.filters.interestingOnly) params.set('all', '1');
       if (this.filters.q.trim()) params.set('q', this.filters.q.trim());
@@ -254,7 +259,12 @@ export default {
       if (this.pageSize !== DEFAULT_PAGE_SIZE) params.set('ps', String(this.pageSize));
       if (this.expandedKey) params.set('test', this.expandedKey);
       const query = params.toString();
-      window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
+      // Always absolute. replaceState resolves a relative URL against the
+      // *document base*, and Layout.astro emits <base href="/babel-validation/">,
+      // so a bare `?q=...` here rewrites the address bar from /results/ to the
+      // Dashboard — which ignores every one of these parameters, so a reloaded
+      // or copied link comes back empty.
+      window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
     },
     resetFilters() {
       this.filters = emptyFilters();

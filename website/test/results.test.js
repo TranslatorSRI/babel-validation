@@ -191,3 +191,40 @@ describe('FilterBar', () => {
     expect(window.location.search).toBe('');
   });
 });
+
+// Layout.astro emits <base href="/babel-validation/">, and history.replaceState
+// resolves a *relative* URL against the document base rather than the current
+// path — so `?q=...` silently moved the address bar from /results/ to the
+// Dashboard, which ignores every one of these parameters. jsdom has no <base>,
+// so the only thing that catches a regression is the shape of the URL we pass.
+describe('the URL written back to the address bar', () => {
+  it('is absolute, so it cannot be re-based onto another page', async () => {
+    const wrapper = await mountAt('/results/');
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+
+    await wrapper.find('input[type="search"]').setValue('row=3');
+    await flushPromises();
+
+    expect(replaceState).toHaveBeenCalled();
+    for (const [, , url] of replaceState.mock.calls) {
+      expect(url.startsWith('/results/')).toBe(true);
+    }
+    replaceState.mockRestore();
+  });
+
+  it('never shares a page number the results do not have', async () => {
+    const wrapper = await mountAt('/results/?all=1&page=9999');
+    expect(wrapper.vm.page).toBe(9999);
+    expect(wrapper.vm.pageCount).toBeLessThan(9999);
+
+    // Expanding a row rewrites the URL without touching the page — unlike a
+    // filter edit, which resets it to 1 and would hide the bug being tested.
+    await wrapper.findAll('tbody tr[role="button"]')[0].trigger('click');
+    await flushPromises();
+
+    expect(window.location.search).toContain('test=');
+    expect(window.location.search).not.toContain('page=9999');
+    expect(wrapper.vm.page).toBe(wrapper.vm.pageCount);
+  });
+});
+
