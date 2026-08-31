@@ -18,7 +18,16 @@ permissions:
   contents: write   # the deploy action pushes to the gh-pages branch
   issues: read      # the GitHub issue tests read this repo's issues
 
-concurrency: dashboard-deploy
+concurrency:
+  group: dashboard-deploy
+  # Only a manual dispatch supersedes what is already running: you press Run
+  # workflow because you want fresh output now, and the run it cancels would have
+  # produced the same two files, so nothing is lost by killing it. A scheduled run
+  # never cancels anything — a cron run must not be able to kill a slower one that
+  # is mid-flight, because that is the run that appends the day's history line —
+  # and neither does a push, which queues behind whatever is deploying rather than
+  # racing it.
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   test-and-deploy:
