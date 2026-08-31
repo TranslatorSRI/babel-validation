@@ -9,7 +9,7 @@ import requests
 from openapi_spec_validator import validate_url
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
-from tests._service_helpers import openapi_url
+from tests._service_helpers import assert_x_translator, openapi_url
 
 def test_openapi_json(target_info):
     """
@@ -20,17 +20,7 @@ def test_openapi_json(target_info):
     response = requests.get(url)
     assert response.ok, f"Could not GET {url}: {response}"
 
-    openapi_json = response.json()
-    info = openapi_json.get('info', {})
-    assert isinstance(info.get('x-translator'), dict), (
-        f"{url} has no info.x-translator block (info keys: {sorted(info)!r}). Every Translator "
-        f"service needs one to be registered in SmartAPI; a service that is missing it altogether "
-        f"is usually serving FastAPI's default OpenAPI document instead of its own openapi.yml."
-    )
-    assert info['x-translator'].get('infores') == 'infores:sri-name-resolver', (
-        f"{url} declares info.x-translator.infores as {info['x-translator'].get('infores')!r}, "
-        f"expected 'infores:sri-name-resolver'."
-    )
+    assert_x_translator(url, response.json(), 'infores:sri-name-resolver')
 
     try:
         validate_url(url)

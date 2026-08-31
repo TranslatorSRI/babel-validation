@@ -15,6 +15,12 @@ The one trusted input here is the URL we ask for, which comes from the checked-i
 
 import urllib.parse
 
+# The longest repr() we will put into an assertion message, and the most keys we
+# will list from an object, so that a service returning something enormous or
+# pathological cannot blow up the pytest report.
+MAX_REPR_LENGTH = 200
+MAX_KEYS_LISTED = 20
+
 
 def openapi_url(target_info, url_key, path_key):
     """
@@ -34,3 +40,75 @@ def openapi_url(target_info, url_key, path_key):
     :return: The URL of the OpenAPI document.
     """
     return urllib.parse.urljoin(target_info[url_key], target_info.get(path_key, 'openapi.json'))
+
+
+def truncated_repr(value, max_length=MAX_REPR_LENGTH):
+    """
+    Return ``repr(value)``, truncated to a length safe to put in a test report.
+
+    :param value: The value to represent.
+    :param max_length: The maximum number of characters of the repr() to keep.
+    :return: The (possibly truncated) repr() of value.
+    """
+    text = repr(value)
+    if len(text) <= max_length:
+        return text
+    return f"{text[:max_length]}... ({len(text)} characters, truncated to {max_length})"
+
+
+def truncated_keys_repr(mapping, max_keys=MAX_KEYS_LISTED):
+    """
+    Return a truncated repr() of a JSON object's keys, sorted.
+
+    :param mapping: The dictionary whose keys should be listed.
+    :param max_keys: The maximum number of keys to list.
+    :return: The (possibly truncated) repr() of the sorted keys.
+    """
+    keys = sorted(mapping)
+    text = truncated_repr(keys[:max_keys])
+    if len(keys) > max_keys:
+        text += f" (+{len(keys) - max_keys} more)"
+    return text
+
+
+def assert_x_translator(url, openapi_json, expected_infores):
+    """
+    Assert that an OpenAPI document carries the info.x-translator block Translator requires.
+
+    Each step is checked on its own so that the failure says what is actually
+    wrong: a block that is absent and a block that is present but malformed have
+    different causes and different fixes, and reaching into a value that isn't a
+    JSON object would otherwise raise a bare AttributeError or TypeError instead
+    of reporting anything useful.
+
+    :param url: The URL the document was retrieved from, for the error messages.
+    :param openapi_json: The parsed OpenAPI document.
+    :param expected_infores: The infores identifier this service should declare.
+    """
+    assert isinstance(openapi_json, dict), (
+        f"{url} did not return a JSON object: {truncated_repr(openapi_json)}"
+    )
+
+    assert 'info' in openapi_json, (
+        f"{url} has no info block (top-level keys: {truncated_keys_repr(openapi_json)})."
+    )
+    info = openapi_json['info']
+    assert isinstance(info, dict), (
+        f"{url} has an info that is not a JSON object: {truncated_repr(info)}"
+    )
+
+    assert 'x-translator' in info, (
+        f"{url} has no info.x-translator block (info keys: {truncated_keys_repr(info)}). Every "
+        f"Translator service needs one to be registered in SmartAPI; a service that is missing it "
+        f"altogether is usually serving FastAPI's default OpenAPI document instead of its own "
+        f"openapi.yml."
+    )
+    x_translator = info['x-translator']
+    assert isinstance(x_translator, dict), (
+        f"{url} has an info.x-translator that is not a JSON object: {truncated_repr(x_translator)}"
+    )
+
+    assert x_translator.get('infores') == expected_infores, (
+        f"{url} declares info.x-translator.infores as "
+        f"{truncated_repr(x_translator.get('infores'))}, expected {expected_infores!r}."
+    )
