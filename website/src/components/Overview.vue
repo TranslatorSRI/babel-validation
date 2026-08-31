@@ -9,7 +9,7 @@
   built with URLSearchParams rather than string concatenation.
 -->
 <script>
-import { sortByDeploymentOrder } from '../deploymentOrder.js';
+import { sortByDeploymentOrder, unknownTargets } from '../deploymentOrder.js';
 import DriftPanel from './DriftPanel.vue';
 import StatusMatrix from './StatusMatrix.vue';
 import { fetchReport, formatCount, isInteresting, runLink } from '../reportData.js';
@@ -32,6 +32,12 @@ export default {
     },
     unreachableTargets() {
       return this.targetNames.filter((t) => this.report.targets[t].unreachable);
+    },
+    unorderedTargets() {
+      return unknownTargets(this.targetNames);
+    },
+    orderedTargets() {
+      return this.targetNames.filter((t) => !this.unorderedTargets.includes(t));
     },
     totalResults() {
       return Object.keys(this.report?.results ?? {}).length;
@@ -107,9 +113,15 @@ export default {
       unreachable during the run.
     </div>
 
-    <p class="small text-body-secondary mb-2">
+    <div v-if="unorderedTargets.length" class="alert alert-warning">
+      Not in the known promotion order: {{ unorderedTargets.join(', ') }}. They are shown last,
+      wherever they actually sit in the pipeline. Add them to <code>DEPLOYMENT_ORDER</code> in
+      <code>deploymentOrder.js</code>.
+    </div>
+
+    <p v-if="orderedTargets.length > 1" class="small text-body-secondary mb-2">
       Environments in promotion order — a new Babel version reaches
-      {{ targetNames[0] }} first and {{ targetNames[targetNames.length - 1] }} last.
+      {{ orderedTargets[0] }} first and {{ orderedTargets[orderedTargets.length - 1] }} last.
     </p>
     <!-- A grid, not a flex row: the cards must stay one per environment across,
          so the pipeline reads left to right rather than wrapping mid-sequence. -->

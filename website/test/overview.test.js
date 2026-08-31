@@ -72,3 +72,34 @@ describe('Overview', () => {
     expect(wrapper.text()).toContain('A green board proves nothing about them');
   });
 });
+
+describe('an environment the promotion order has never heard of', () => {
+  // DEPLOYMENT_ORDER is the one place a target still has to be registered by
+  // hand. An unrecognised one sorts last, which looks exactly like "this is the
+  // end of the pipeline", so it has to be said out loud rather than rendered.
+  const withUnknown = {
+    ...REPORT,
+    targets: { ...REPORT.targets, staging: target({ passed: 5 }) },
+  };
+
+  it('names it, instead of quietly showing it last', async () => {
+    const wrapper = await mountOverview(withUnknown);
+
+    expect(wrapper.text()).toContain('Not in the known promotion order: staging');
+  });
+
+  it('does not claim it is the end of the pipeline', async () => {
+    const wrapper = await mountOverview(withUnknown);
+
+    expect(wrapper.text()).toContain('reaches exp first and prod last');
+    expect(wrapper.text()).not.toContain('staging last');
+  });
+
+  it('says nothing when every environment is known', async () => {
+    const wrapper = await mountOverview();
+
+    expect(wrapper.text()).not.toContain('Not in the known promotion order');
+    expect(wrapper.text()).toContain('reaches exp first and prod last');
+  });
+});
+
