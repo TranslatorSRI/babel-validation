@@ -15,8 +15,10 @@
   --filterbar-h: 0px;
 }
 
-body {
-  /* A deep link to a test must not land underneath the sticky filter bar. */
+html {
+  /* A deep link to a test must not land underneath the sticky filter bar. The
+     viewport takes its scroll padding from the root element; setting this on
+     body does nothing at all. */
   scroll-padding-top: calc(var(--filterbar-h) + 1rem);
 }
 
