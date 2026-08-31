@@ -3,7 +3,13 @@
 import datetime
 from types import SimpleNamespace
 
+import pytest
+
 from src.babel_validation.tools.milestones_page import is_bucket, render, sort_key
+
+# These build milestones out of SimpleNamespace and touch no network, and CI runs
+# `pytest -m unit`: without this marker all six are deselected and never run there.
+pytestmark = pytest.mark.unit
 
 
 def _milestone(title, due_on=None):
