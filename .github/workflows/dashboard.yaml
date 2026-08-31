@@ -47,7 +47,15 @@ jobs:
         # know --target/--report-jsonl, and every worker dies at argparse.
         run: |
           mkdir -p raw
-          for t in prod test ci ci-es dev exp; do
+          # Ask the report generator which targets exist rather than keeping a
+          # second list here. The two silently disagreed once already: adding
+          # [test-redis] to targets.ini put it in every table on the site — as a
+          # permanently unreachable environment, sorted after prod, and as an
+          # always-empty column in every ?sig= signature — because read_targets
+          # takes every section but localhost while this loop did not run it.
+          targets=$(uv run python -c "from src.babel_validation.tools.generate_report import read_targets; print(' '.join(read_targets('tests/targets.ini')[0]))")
+          echo "Running against: $targets"
+          for t in $targets; do
             timeout 45m uv run pytest tests --target "$t" -n 8 -m "not unit" \
               --report-jsonl "raw/$t.jsonl" || echo "target $t exited $?"
           done
