@@ -6,30 +6,56 @@ import urllib.parse
 
 import pytest
 import requests
-from openapi_spec_validator import validate_url
+from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
+
+from tests._service_helpers import assert_backend, assert_x_translator, openapi_url
 
 
 def test_openapi_json(target_info):
-    nodenorm_url = target_info['NodeNormURL']
-
-    url = urllib.parse.urljoin(nodenorm_url, 'openapi.json')
+    url = openapi_url(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath')
     response = requests.get(url)
     assert response.ok, f"Could not GET {url}: {response}"
 
     openapi_json = response.json()
-    info = openapi_json.get('info', {})
-    assert isinstance(info.get('x-translator'), dict), (
-        f"{url} has no info.x-translator block (info keys: {sorted(info)!r}). Every Translator "
-        f"service needs one to be registered in SmartAPI; a service that is missing it altogether "
-        f"is usually serving FastAPI's default OpenAPI document instead of its own openapi.yml."
-    )
-    assert info['x-translator'].get('infores') == 'infores:sri-node-normalizer', (
-        f"{url} declares info.x-translator.infores as {info['x-translator'].get('infores')!r}, "
-        f"expected 'infores:sri-node-normalizer'."
-    )
+    assert_x_translator(url, openapi_json, 'infores:sri-node-normalizer')
 
     try:
-        validate_url(url)
+        # Validate the document we already parsed as JSON, rather than validate_url(url),
+        # which re-fetches it and reads it as YAML. YAML 1.1 requires a '.' and a signed
+        # exponent in a float, so it parses this service's `1e-06` as the *string*
+        # '1e-06' and reports "'1e-06' is not of type 'number'" against a document whose
+        # JSON is perfectly valid. That is a spurious failure, and it hid a real one.
+        validate(openapi_json, base_uri=url)
     except OpenAPIValidationError as e:
         pytest.fail(f"Could not validate OpenAPI at {url}: {e}")
+
+
+def test_status_backend(target_info):
+    """
+    Test that /status reports the backend this target is configured to be talking to.
+
+    NodeNorm's Redis- and Elasticsearch-backed deployments are both supported, and
+    checking that they don't drift apart is a purpose of this repo — so a target moving
+    from one to the other should be a deliberate edit to targets.ini, not something
+    discovered later through an unrelated test failing for a reason that doesn't name it.
+
+    :param target_info: The target information for this set of tests.
+    """
+    url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
+    response = requests.get(url)
+    assert response.ok, f"Could not GET {url}: {response}"
+
+    status_json = response.json()
+    expected_backend = target_info.get('NodeNormBackend', 'redis')
+
+    if isinstance(status_json, dict) and 'backend' not in status_json:
+        # Only the newer releases report one. Skipping is honest here — the service
+        # genuinely cannot answer — but it does mean a green run has not checked this
+        # target, so say which one and why.
+        pytest.skip(
+            f"{url} does not report a backend, so this target cannot be checked against its "
+            f"configured backend of {expected_backend!r}. Only newer NodeNorm releases report it."
+        )
+
+    assert_backend(url, status_json, expected_backend)
