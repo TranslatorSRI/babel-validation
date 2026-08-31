@@ -58,3 +58,22 @@ describe('StatusMatrix', () => {
     expect(row.findAll('td')[2].classes()).toContain('table-danger');
   });
 });
+
+describe('an even split', () => {
+  it('shades nothing when no value has a majority', () => {
+    // Half the environments on the new Babel version and half on the old is
+    // what mid-promotion looks like. Picking a "majority" by Map insertion
+    // order would shade three of six amber to say nothing at all.
+    const wrapper = mountWith({
+      exp: target('2025oct1'),
+      dev: target('2025oct1'),
+      ci: target('2025oct1'),
+      test: target('2025sep1'),
+      prod: target('2025sep1'),
+      staging: target('2025sep1'),
+    });
+
+    expect(babelRow(wrapper).join(' ')).not.toContain('table-warning');
+  });
+});
+

@@ -69,7 +69,13 @@ export default {
       for (const value of values) {
         if (value != null) tally.set(value, (tally.get(value) ?? 0) + 1);
       }
-      const majority = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      const ranked = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+      // A tie has no odd one out. Three environments on the new Babel version
+      // and three on the old is exactly what mid-promotion looks like, and
+      // picking a winner by Map insertion order would shade half the row amber
+      // to say nothing.
+      if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) return '';
+      const majority = ranked[0][0];
       return this.statusValue(statusRow, target) === majority ? '' : 'table-warning';
     },
     database(target, name) {
