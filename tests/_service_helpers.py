@@ -112,3 +112,29 @@ def assert_x_translator(url, openapi_json, expected_infores):
         f"{url} declares info.x-translator.infores as "
         f"{truncated_repr(x_translator.get('infores'))}, expected {expected_infores!r}."
     )
+
+
+def assert_backend(url, status_json, expected_backend):
+    """
+    Assert that a service's /status reports the backend its target says it should be.
+
+    Both the Redis- and the Elasticsearch-backed deployments are supported, and
+    checking one against the other is a purpose of this repo, so which one a target
+    points at is a deliberate choice that should be stated in targets.ini and held
+    to. Deployments predating the `backend` field can't answer, and are skipped
+    rather than assumed: see the caller, which owns that decision.
+
+    :param url: The URL the status was retrieved from, for the error messages.
+    :param status_json: The parsed /status response.
+    :param expected_backend: The backend this target is configured to be talking to.
+    """
+    assert isinstance(status_json, dict), (
+        f"{url} did not return a JSON object: {truncated_repr(status_json)}"
+    )
+
+    assert status_json.get('backend') == expected_backend, (
+        f"{url} reports backend {truncated_repr(status_json.get('backend'))}, but this target is "
+        f"configured as {expected_backend!r}. Either the deployment was repointed at the other "
+        f"backend, in which case targets.ini needs to follow it (including the path to its "
+        f"OpenAPI document), or it is answering from somewhere unexpected."
+    )

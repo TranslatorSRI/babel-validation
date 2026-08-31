@@ -12,6 +12,7 @@ import pytest
 from tests._service_helpers import (
     MAX_KEYS_LISTED,
     MAX_REPR_LENGTH,
+    assert_backend,
     assert_x_translator,
     openapi_url,
     truncated_keys_repr,
@@ -121,3 +122,32 @@ class TestOpenAPIURL:
 
         assert openapi_url(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath') == \
             'https://nodenorm-es.example.org/webapp/openapi.json'
+
+
+class TestBackend:
+    """Which backend a target talks to is configuration, and /status is how we hold it to that."""
+
+    def test_the_configured_backend_passes(self):
+        assert_backend(URL, {'status': 'running', 'backend': 'elasticsearch'}, 'elasticsearch')
+
+    def test_the_other_backend_fails(self):
+        with pytest.raises(AssertionError) as excinfo:
+            assert_backend(URL, {'status': 'running', 'backend': 'redis'}, 'elasticsearch')
+
+        message = str(excinfo.value)
+        assert "reports backend 'redis'" in message
+        assert "configured as 'elasticsearch'" in message
+
+    def test_a_status_that_is_not_an_object_fails_readably(self):
+        with pytest.raises(AssertionError) as excinfo:
+            assert_backend(URL, ['running'], 'redis')
+
+        assert 'did not return a JSON object' in str(excinfo.value)
+
+    def test_a_backend_that_is_not_a_string_is_reported_safely(self):
+        with pytest.raises(AssertionError) as excinfo:
+            assert_backend(URL, {'backend': {'name': '\x1b[2Jredis'}}, 'redis')
+
+        message = str(excinfo.value)
+        assert '\x1b' not in message
+        assert '\\x1b[2Jredis' in message
