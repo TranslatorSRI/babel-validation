@@ -40,6 +40,18 @@ async function mountOverview(report = REPORT) {
 }
 
 describe('Overview', () => {
+  it('shows an errored count, and only where there is one', async () => {
+    // A target with passing tests and one setup/teardown error is not healthy,
+    // but the card led with "0 failed" and said nothing about the error.
+    const report = { ...REPORT, targets: { ...REPORT.targets, dev: target({ passed: 500, error: 3 }) } };
+    const wrapper = await mountOverview(report);
+    const link = wrapper.findAll('a').find((a) => a.text().includes('errored'));
+    expect(link.text()).toContain('3 errored');
+    expect(link.attributes('href')).toBe('/babel-validation/results/?env=dev&has=error');
+    // prod has no errors, so it gets no line rather than a "0 errored" one.
+    expect(wrapper.findAll('a').filter((a) => a.text().includes('errored'))).toHaveLength(1);
+  });
+
   it('orders the environment cards by deployment, not by report order', async () => {
     const wrapper = await mountOverview();
     const names = wrapper.findAll('.col .card-body > .d-flex > .fw-semibold').map((el) => el.text());

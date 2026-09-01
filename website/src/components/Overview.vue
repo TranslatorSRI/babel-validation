@@ -146,6 +146,18 @@ export default {
                   {{ formatCount(counts(target).failed) }} failed
                 </a>
               </div>
+              <!-- Only when there are any: an error is rare and actionable, and
+                   a "0 errors" line on all six cards would read as noise. A
+                   target with passing tests and one setup error is not healthy,
+                   but with only the failed headline above it looked it. -->
+              <div v-if="counts(target).error" class="small">
+                <a
+                  class="link-danger text-decoration-none"
+                  :href="resultsLink({ env: target, has: 'error' })"
+                >
+                  {{ formatCount(counts(target).error) }} errored
+                </a>
+              </div>
               <div class="small">
                 <a
                   class="link-warning text-decoration-none"
