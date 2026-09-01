@@ -3,3 +3,6 @@ __marimo__/
 
 # Generated benchmark artifacts — regenerated from the (uncommitted) logs.
 benchmark/
+
+# Generated CSV exports — regenerated from the (uncommitted) logs.
+output/
