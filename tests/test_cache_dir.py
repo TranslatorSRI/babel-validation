@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import src.babel_validation.core as core
 from src.babel_validation.core import cache_dir
 from tests.conftest import unlink_if_exists
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
@@ -29,6 +30,44 @@ def test_default_cache_dir_is_not_in_the_shared_temp_dir(monkeypatch):
 
     assert Path(tempfile.gettempdir()) not in path.parents
     assert Path.home() in path.parents
+
+
+def test_cache_dir_loads_dotenv_itself(monkeypatch, tmp_path):
+    """cache_dir() must not depend on someone else having loaded .env first.
+
+    It used to read os.environ directly, so the answer changed mid-process:
+    tests/conftest.py asks at import time, before anything has called
+    resolve_sheet_id() (the only other .env reader), and got the default; the sheet
+    downloads ask afterwards and got BABEL_VALIDATION_CACHE_DIR's value. The
+    start-of-run gsheet_*.csv sweep was therefore globbing an empty directory, and
+    unlink_if_exists()'s containment check compares against a cache_dir() that must
+    not move under it.
+    """
+    target = tmp_path / "from-dotenv"
+
+    def fake_load_dotenv(*args, **kwargs):
+        os.environ["BABEL_VALIDATION_CACHE_DIR"] = str(target)
+
+    monkeypatch.delenv("BABEL_VALIDATION_CACHE_DIR", raising=False)
+    monkeypatch.setattr(core, "_dotenv_loaded", False)
+    monkeypatch.setattr(core.dotenv, "load_dotenv", fake_load_dotenv)
+
+    assert cache_dir() == target
+
+
+def test_a_deleted_override_stays_deleted(monkeypatch):
+    """.env is loaded once per process, not on every call.
+
+    load_dotenv() will not override a key already in os.environ, but it does re-set
+    one that has been deleted — so reloading on each call would make it impossible
+    to unset the override, here or anywhere else. (By the time any test runs, the
+    import of tests/conftest.py has already triggered the one load.)
+    """
+    monkeypatch.delenv("BABEL_VALIDATION_CACHE_DIR", raising=False)
+    default = Path.home() / ".cache" / "babel-validation"
+
+    assert cache_dir() == default
+    assert cache_dir() == default
 
 
 def test_cache_dir_is_created_private(monkeypatch, tmp_path):
@@ -68,7 +107,7 @@ def test_unlink_if_exists_survives_a_directory_in_the_way():
     blocker = cache_dir() / "unit-test-scratch-dir.csv"
     blocker.mkdir(exist_ok=True)
     try:
-        unlink_if_exists(blocker)          # warns, does not raise
+        unlink_if_exists(blocker)  # warns, does not raise
         assert blocker.is_dir()
     finally:
         blocker.rmdir()
@@ -82,10 +121,13 @@ def test_unset_home_still_resolves(monkeypatch):
     assert cache_dir().is_dir()
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the permission bits this relies on")
+@pytest.mark.skipif(
+    os.geteuid() == 0, reason="root ignores the permission bits this relies on"
+)
 def test_unwritable_location_names_the_override(monkeypatch, tmp_path):
     """A locked-down runner or container is the realistic case. The bare PermissionError names a
-    path but not the escape hatch, so the error has to mention the environment variable."""
+    path but not the escape hatch, so the error has to mention the environment variable.
+    """
     readonly = tmp_path / "readonly"
     readonly.mkdir(mode=0o500)
     monkeypatch.setenv("BABEL_VALIDATION_CACHE_DIR", str(readonly / "cache"))
