@@ -77,7 +77,10 @@ def classify_record(record):
     when = record.get("when")
     outcome = record.get("outcome")
     wasxfail = record.get("wasxfail", False)
-    msg = record.get("msg") or ""
+    # str(), because read_raw_records validates only that the record is a dict
+    # with a string id: a hand-edited or truncated raw file can put anything in
+    # msg, and one bad record must cost one record, not the whole report.
+    msg = str(record.get("msg") or "")
 
     if when in ("setup", "teardown"):
         return "error" if outcome == "failed" else "skipped"
@@ -337,7 +340,9 @@ def build_results(records, targets, allowlist):
         # built — the blocklist sheet may not be public, and the messages
         # interpolate its entries.
         if outcome in OUTCOMES_WITH_MESSAGES and "test_blocklist.py" not in key:
-            messages = [r["msg"] for r in test_records if r.get("msg")]
+            # str() for the same reason as in classify_record: join() raises
+            # on a non-string, and that would sink every other result too.
+            messages = [str(r["msg"]) for r in test_records if r.get("msg")]
             if messages:
                 cell["msg"] = sanitize("\n---\n".join(messages))
         result["outcomes"][target] = cell

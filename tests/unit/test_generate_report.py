@@ -429,6 +429,23 @@ class TestBadInputIsSkippedNotFatal:
         records = read_raw_records(str(tmp_path))
         assert [r["id"] for r in records] == ["a/b.py::t[dev-x]"]
 
+    def test_non_string_msg_costs_one_record_not_the_report(self):
+        # read_raw_records validates only that a record is a dict with a string
+        # id, so a hand-edited or truncated raw file can put anything in msg. It
+        # must not take the whole generator down with it: classify_record and the
+        # message join both see the raw value.
+        nodeid = "nodenorm/test_x.py::t[dev-row=1]"
+        records = [
+            _record(nodeid, "failed", msg=123),
+            _record("nodenorm/test_y.py::t[dev-row=2]", "passed"),
+        ]
+        results, counts, _ = build_results(records, TARGETS, ALLOWLIST)
+        assert len(results) == 2
+        assert results["nodenorm/test_x.py::t[row=1]"]["outcomes"]["dev"] == {
+            "o": "failed",
+            "msg": "123",
+        }
+
     def test_history_line_without_targets_is_dropped(self, tmp_path):
         old = tmp_path / "history.jsonl"
         good = json.dumps(_run("2026-08-24"))
@@ -487,3 +504,4 @@ class TestReadTargets:
 
         assert "localhost" not in targets
         assert targets, "the workflow builds its run loop from this list"
+
