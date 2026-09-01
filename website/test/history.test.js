@@ -59,6 +59,19 @@ describe('what changed since the previous run', () => {
     expect(badge.classes()).toContain('outcome-failed');
   });
 
+  it('counts errors as a change, not as nothing', async () => {
+    // error is one of the report's actionable outcomes, but it was not in
+    // COUNTS: a run that gained three setup errors and moved nothing else
+    // reported "Nothing changed".
+    const withErrors = (error) =>
+      JSON.stringify({ date: 'd', targets: { dev: { counts: { passed: 10, error } } } });
+    const wrapper = await mountWith([withErrors(0), withErrors(3)]);
+    expect(wrapper.vm.changes).toEqual([
+      { target: 'dev', label: 'error', delta: 3, worse: true, to: '3' },
+    ]);
+    expect(wrapper.text()).not.toContain('Nothing changed');
+  });
+
   it('says so when nothing moved, and shows nothing with only one run', async () => {
     let wrapper = await mountWith([run('2026-08-26', '2025sep1', 12), run('2026-08-27', '2025sep1', 12)]);
     expect(wrapper.vm.changes).toEqual([]);

@@ -13,7 +13,10 @@
 import { sortByDeploymentOrder } from '../deploymentOrder.js';
 import { fetchHistory, formatCount } from '../reportData.js';
 
-const COUNTS = ['failed', 'xpassed', 'passed'];
+// Every outcome the dashboard treats as actionable, plus passed as the
+// denominator. error belongs here: a run that gains setup/teardown errors
+// and moves nothing else used to report "Nothing changed".
+const COUNTS = ['failed', 'error', 'xpassed', 'passed'];
 
 export default {
   props: {
@@ -159,6 +162,12 @@ export default {
                     class="badge outcome outcome-failed me-1"
                   >
                     {{ run.targets[target].counts.failed }} failed
+                  </span>
+                  <span
+                    v-if="run.targets[target].counts?.error"
+                    class="badge outcome outcome-error me-1"
+                  >
+                    {{ run.targets[target].counts.error }} error
                   </span>
                   <span
                     v-if="run.targets[target].counts?.xpassed"
