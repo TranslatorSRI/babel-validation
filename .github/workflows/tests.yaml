@@ -35,3 +35,27 @@ jobs:
       # secret instead.
       - name: Run unit tests
         run: uv run pytest -m unit -v
+
+  website-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 for npm 11: the lockfile npm 11 writes omits `optional: true` on
+      # platform-specific packages, and npm 10 then refuses to install it
+      # (EBADPLATFORM on lightningcss-android-arm64). Keep this in step with the
+      # same block in dashboard.yaml.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      # The dashboard's URL round-tripping, filtering and pagination: logic the
+      # Python tests cannot see, and where a shared link quietly losing its page
+      # looks like nothing is wrong.
+      - name: Run the website unit tests
+        working-directory: website
+        run: |
+          npm ci
+          npm test

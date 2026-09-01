@@ -2,6 +2,7 @@
 # conftest.py - pytest configuration settings
 #
 import glob
+import json
 import logging
 import os
 import os.path
@@ -62,7 +63,22 @@ def unlink_if_exists(path) -> None:
         logging.getLogger(__name__).warning("Could not delete cached file %s: %s", path, e)
 
 
+# Open file handle for --report-jsonl, or None. Controller-only: xdist workers
+# forward their TestReports (including user_properties and wasxfail) to the
+# controller, where pytest_runtest_logreport fires again, so only the controller
+# needs to write.
+_report_file = None
+
+
 def pytest_configure(config):
+    global _report_file
+    report_path = config.getoption('--report-jsonl')
+    if report_path and not os.environ.get('PYTEST_XDIST_WORKER'):
+        # Truncate, not append: build_results takes the worst outcome per test,
+        # so leftover records from an earlier run would keep a fixed test red.
+        os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
+        _report_file = open(report_path, 'w', encoding='utf-8')
+
     # Delete the Google Sheet CSV cache at the start of each run so tests always
     # use a fresh download. Only the controller does this — xdist workers skip it
     # so they can share the cache file written by the controller.
@@ -76,6 +92,42 @@ def pytest_configure(config):
         # alone: deleting it out from under a concurrently running pytest would
         # let that run and this one hold two different inodes of "the" lock.
         unlink_if_exists(GITHUB_ISSUES_CACHE_FILE)
+
+
+def pytest_runtest_logreport(report):
+    """
+    When --report-jsonl is set, write one JSON line per test phase: every 'call'
+    report, plus setup/teardown reports that did not pass (setup skips and
+    errors). Raw pytest facts only — classification into
+    passed/failed/xfailed/xpassed/skipped/error happens in
+    src.babel_validation.tools.generate_report, where it is unit-testable.
+
+    longrepr may contain untrusted text (issue bodies, sheet cells, service
+    responses); it is truncated here and repr-escaped by the report generator
+    before it is displayed anywhere.
+    """
+    if _report_file is None:
+        return
+    if report.when != 'call' and report.outcome == 'passed':
+        return
+    # Prefer the one-line crash message ("AssertionError: ...") over the full
+    # traceback with source and locals; skips have a (path, line, reason) tuple
+    # longrepr with no reprcrash, for which str() is already the short form.
+    msg = None
+    if report.longrepr is not None:
+        crash = getattr(report.longrepr, 'reprcrash', None)
+        msg = crash.message if crash is not None else str(report.longrepr)
+    record = {
+        "id": report.nodeid,
+        "when": report.when,
+        "outcome": report.outcome,
+        "wasxfail": hasattr(report, 'wasxfail'),
+        "duration": round(report.duration, 3),
+        "props": dict(report.user_properties or []),
+        "msg": msg[:2000] if msg else None,
+    }
+    _report_file.write(json.dumps(record) + "\n")
+    _report_file.flush()
 
 
 def pytest_addoption(parser):
@@ -98,6 +150,14 @@ def pytest_addoption(parser):
         default=[],
         action='append',
         help="The categories of tests to exclude."
+    )
+
+    # Write one JSON line per test outcome, for the dashboard report generator.
+    parser.addoption(
+        '--report-jsonl',
+        default=None,
+        help="Append raw per-test outcome records (JSONL) to this file, for "
+             "src.babel_validation.tools.generate_report."
     )
 
     # Only test particular GitHub issues.

@@ -13,6 +13,9 @@ Babel Validation is a test suite and web tools for validating outputs from [Babe
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Run from repo root:
 
 ```bash
+# With -n (xdist), always pass the tests path explicitly (`pytest tests -n 8 ...`):
+# without it, workers do not load tests/conftest.py early enough to know the
+# custom options, and every worker dies at argparse — or collects nothing.
 pytest --target dev                    # Run all tests against dev environment (default if no --target)
 pytest --target prod                   # Run against production
 pytest --target dev --target prod      # Run against multiple targets
@@ -20,7 +23,9 @@ pytest --target all                    # Run against all targets in targets.ini
 pytest --category "Unit Tests"         # Filter by Google Sheet category
 pytest --category-exclude "Slow"       # Exclude a category
 pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
-pytest tests/nodenorm/test_nodenorm_from_gsheet.py -k "row=42"  # Run a specific test row
+# Run a specific test row: -k rejects '=' in its expression, so use the full node ID
+# (the target name's position in the parametrize id varies; ask pytest with --collect-only -q)
+pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nodenorm_from_gsheet.test_row:row=42-dev]"
 ```
 
 ### Code Formatting
@@ -33,20 +38,32 @@ Note that the repository is *not* currently black-clean — `black --check tests
 ~30 files it would reformat. Running `black` across the tree would bury a real change in
 unrelated churn, so format only the files you touch, or match the surrounding style.
 
-### Vue Website (website-vue3-vite/)
+### Dashboard Website (website/)
 
 ```bash
-cd website-vue3-vite && npm install && npm run dev     # Dev server
-npm run build     # Production build
-npm run lint      # ESLint + auto-fix
-npm run test:unit # Vitest unit tests
+cd website && npm install && npm run dev   # Dev server at localhost:4321/babel-validation/
+npm run build                              # astro check + production build
+npm test                                   # vitest: the Vue components' URL/filter/pagination logic
+npm run fetch-data                         # download the published report.json/history.jsonl
 ```
 
-### Astro Documentation Site (website/)
+The dashboard fetches `data/report.json` and `data/history.jsonl`, which are gitignored.
+`npm run fetch-data` downloads the live site's copies into `website/public/data/` — the
+quickest way to get real data for frontend work. To make them from scratch instead, run
+`pytest --report-jsonl` plus `uv run python -m src.babel_validation.tools.generate_report`
+(see README).
 
-```bash
-cd website && npm install && npm run dev   # Dev server at localhost:4321
-```
+CI installs with `npm ci`, which is far stricter than the `npm install` you run locally: it
+refuses a lockfile that does not match `package.json`, and it fails on platform-specific
+packages that npm 11 writes into the lock without `optional: true` when the runner's npm is
+10 (`EBADPLATFORM` on an Android build of lightningcss). Both workflows therefore pin
+`node-version: 24`. After changing any dependency, run `npm ci` locally — not just
+`npm test` — or the failure surfaces only on the runner, and in `dashboard.yaml` it surfaces
+four hours in, at the build step, after every test has been paid for.
+
+Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
+`lib`, including under `website/src/` — a file there builds locally but never reaches CI.
+Check `git status` shows new frontend files as tracked.
 
 ## Architecture
 
@@ -65,7 +82,11 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 
 **Target system:** `tests/targets.ini` defines endpoints for each environment (dev, prod, test, ci, exp, localhost). Tests use `target_info` fixture to get URLs. The `conftest.py` parametrizes tests across targets via `--target` CLI option; default is `dev`.
 
-**Google Sheet integration:** ~2000+ test cases are pulled from a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/). `src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses these into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
+**Google Sheet integration:** ~2000+ test cases are pulled from the shared Babel Validation
+Google Sheet. Its ID comes from the `BABEL_VALIDATION_SHEET_ID` environment variable (`.env`
+locally, a repository secret in Actions) and is deliberately not checked in.
+`src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses
+the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
 
 **Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
 
@@ -74,10 +95,19 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
 - `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
 
-### Web Applications
+### Dashboard Website
 
-- **`website-vue3-vite/`** — Active Vue 3 + Vite app that fetches test cases from the same Google Sheet and runs them against multiple endpoints in the browser
-- **`website/`** — Newer Astro-based site deployed to GitHub Pages with prefix comparator and autocomplete tools
+- **`website/`** — Astro + Vue site deployed to GitHub Pages
+  (https://translatorsri.github.io/babel-validation/). Three pages under one `Layout.astro`
+  shell (nav bar, cards on a tinted page, `data-bs-theme` dark mode, all custom CSS in
+  `src/styles/theme.css`): `/` renders the environment cards, the promotion-drift panel and
+  the `/status` matrix from `report.json`; `/results/` renders the tests-by-environment
+  matrix behind a sticky filter bar; `/history/` renders `history.jsonl` plus a diff against
+  the previous run. Everything about the report that is not markup — link builders, labels,
+  the interestingness predicate — lives in `src/reportData.js`. Regenerated daily by `.github/workflows/dashboard.yaml`: pytest per target with
+  `--report-jsonl` (a `pytest_runtest_logreport` hook in `tests/conftest.py`), then
+  `src/babel_validation/tools/generate_report.py` aggregates the raw outcomes, fetches each
+  target's `/status`, and writes both data files into `website/public/data/`.
 - **`scala-validation/`** — Legacy, unmaintained
 
 ## Untrusted Input
@@ -125,6 +155,58 @@ allowlist *before* the call, or the value reaches the GitHub API as a URL path.
 truncated part of it. The same goes for missing credentials: the GitHub issue tests *skip* without
 a token, so a green run may have tested nothing.
 
+**The dashboard publishes untrusted text on a public website.**
+`src/babel_validation/tools/generate_report.py` is the choke point between the raw pytest
+outcomes and `report.json`: it repr-escapes and truncates all text, passes `/status`
+responses through a key whitelist, only emits issue ids and source URLs that match the
+`targets.ini` `Repositories` allowlist, and withholds blocklist test details entirely (that
+sheet may not be public — do not add `ids=` to the blocklist parametrize or link to it).
+The Vue components must render report values with `{{ }}` interpolation only — never
+`v-html` — and construct links from validated parts (allowlisted `org/repo#N`,
+`targets.ini` URLs), never verbatim from report text. A facet is as public as a cell: the
+filter bar's category and source dropdowns are built from report values, so they exclude
+blocklist rows exactly as the table does. Anything that aggregates over `results` needs the
+same check.
+
+**A query parameter must never index a JSON-parsed object directly.** `report.results` and
+each result's `outcomes` are plain objects, so they inherit `Object.prototype`: `?test=`,
+`?env=` or any other URL-supplied key can name `constructor`, `toString` or `valueOf` and
+come back truthy with none of the fields the code expects. This has now been two separate
+bugs in `Results.vue` — one pinned an `Object.prototype` member as a table row, the other
+made the environment filter match *every* row instead of none. Guard with `Object.hasOwn`
+before the lookup. An allowlist is not available here: these parameters are read in
+`readUrl()` before the report has loaded, so the set of valid values is not yet known.
+
+**Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
+Git commit must not contain the test-case sheet's ID or a link to either sheet — casual
+observers of the public site must not be able to find them, and the ID is the capability
+that grants access (the sheets are shared as "anyone with the link", because the CSV fetch
+is unauthenticated). The IDs live only in the `BABEL_VALIDATION_SHEET_ID` and
+`BABEL_VALIDATION_BLOCKLIST_SHEET_ID` environment variables (`.env` locally — gitignored —
+and repository secrets in Actions), resolved through
+`src/babel_validation/sources/google_sheets/resolve_sheet_id()`. Refer to it as the
+"Babel Validation Google Sheet"; sheet *content* (row numbers, queried/expected CURIEs and
+labels, category, source — often a GitHub issue link) is fine to publish once it passes the
+generator's validation. The sheet is expected to be fully replaced by the GitHub issue
+system over the next few months, at which point it can be removed from this repo entirely.
+
+**Do not read `.env`, and do not print the variables it sets.** Everything a coding agent
+reads goes into a transcript that is stored, replayed and pasted into issues, so `cat .env`,
+`Read`ing it, `grep`ping it, `echo $BABEL_VALIDATION_SHEET_ID` or printing a CSV export URL
+turns a secret into a logged one. This holds even when the user asks for help with the
+values: `env.default` documents every variable, so there is no reason to look at the filled-in
+copy. Writing is fine — `cp env.default .env`, or appending a line the user dictates — it is
+reading back that leaks. To check whether something is set without revealing it, print a
+boolean and nothing else:
+
+```bash
+uv run python -c "import os, dotenv; dotenv.load_dotenv(); print('BABEL_VALIDATION_SHEET_ID' in os.environ)"
+```
+
+If a value does end up in the transcript, say so plainly rather than carrying on: the sheet is
+shared as "anyone with the link", so an exposed ID means re-sharing that sheet under a new ID
+and rotating the repository secret.
+
 **Caches belong in `cache_dir()`** (`src/babel_validation/core/__init__.py`), a 0700 directory
 under the user's home — never a fixed name in the shared temp directory. On a CI runner or a
 shared machine anyone can pre-create such a file, and the issue cache decides what a later run
@@ -171,4 +253,8 @@ When writing new tests:
   `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
   perfectly valid. The spurious error is also first, so it masks the real one further down the
   document.
+- **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
+  job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
+  like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
+  in #112 had six tests that had never run.
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)

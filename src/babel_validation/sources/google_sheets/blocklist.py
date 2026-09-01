@@ -5,6 +5,8 @@ from typing import Optional
 
 import requests
 
+from . import resolve_sheet_id
+
 
 # The Translator Blocklist is stored in a private GitHub repository; however,
 # we are currently using a spreadsheet to manage "Red Team" exercises where
@@ -16,6 +18,7 @@ class BlocklistEntry:
     """
     A single Blocklist entry.
     """
+
     Query: Optional[str] = None
     CURIE: Optional[str] = None
     Blocked: Optional[str] = None
@@ -26,8 +29,8 @@ class BlocklistEntry:
     Comment: Optional[str] = None
 
     def is_blocked(self):
-        """ Is this term supposed to be blocked? """
-        if self.Blocked is not None and self.Blocked == 'y':
+        """Is this term supposed to be blocked?"""
+        if self.Blocked is not None and self.Blocked == "y":
             return True
         return False
 
@@ -40,14 +43,14 @@ class BlocklistEntry:
         """
 
         return BlocklistEntry(
-            Query=row.get('String (optional)', None),
-            CURIE=row.get('CURIE (optional)', None),
-            Blocked=row['Blocked?'],
-            Status=row['Status (Feb 21, 2024)'],
-            Issue=row['Blocklist issue'],
+            Query=row.get("String (optional)", None),
+            CURIE=row.get("CURIE (optional)", None),
+            Blocked=row["Blocked?"],
+            Status=row["Status (Feb 21, 2024)"],
+            Issue=row["Blocklist issue"],
             TreatsOnly=row['Block for "treats" only?'],
-            Submitter=row['Submitter'],
-            Comment=row['Comment (optional)'],
+            Submitter=row["Submitter"],
+            Comment=row["Comment (optional)"],
         )
 
 
@@ -57,7 +60,9 @@ def load_blocklist_from_gsheet():
 
     :return: A list of BlocklistEntry.
     """
-    google_sheet_id = '1UR2eplHBvFRwaSIVOhlB44wpfNPY1z7AVzUkqzDqIWA'
+    # This sheet logs "Red Team" offensive terms, so its ID is doubly a secret:
+    # it comes only from the environment and must never be checked in.
+    google_sheet_id = resolve_sheet_id("BABEL_VALIDATION_BLOCKLIST_SHEET_ID")
     csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
 
     response = requests.get(csv_url, timeout=10)

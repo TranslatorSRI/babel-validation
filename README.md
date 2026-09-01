@@ -9,8 +9,12 @@ underlying data used for the Translator
 ## PyTest
 
 The best tests in this repository are Python tests stored in the [`./tests`](./tests/) folder.
-This includes both unit tests as well as "Google Sheet"-based tests, which uses
-a [shared Google Sheet](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?gid=0#gid=0) containing facts that we can use to test a NodeNorm instance.
+This includes both unit tests as well as "Google Sheet"-based tests, which use the shared
+Babel Validation Google Sheet containing facts that we can use to test a NodeNorm instance.
+The sheet's ID is deliberately not checked in: copy [`env.default`](./env.default) to `.env`
+and fill in `BABEL_VALIDATION_SHEET_ID` (ask a maintainer for the ID; in GitHub Actions it
+comes from a repository secret of the same name). `env.default` documents every variable
+this repository reads, and what each one turns on.
 
 To run these tests, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 You can then use `uv` to run the tests. The file [`tests/targets.ini`](./tests/targets.ini) allows you to
@@ -126,22 +130,42 @@ $ curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_l
 The Jupyter Notebook in `log-analysis/` contains some basic analysis of the
 logs from NodeNorm (and, someday, NameRes) instances.
 
-## The Babel Validator Vue Application
+## The dashboard website
 
-The easiest way to validate Babel results on NodeNorm is by running the
-Vue app.
+The Astro site in `website/` is deployed to https://translatorsri.github.io/babel-validation/.
+It shows the results of running this test suite against every environment in
+`tests/targets.ini`, alongside each environment's `/status` information (Babel version,
+database sizes, NameRes latency). Because test expectations are pinned to the environment
+where a new Babel version lands first, environments are not expected to all be green — the
+dashboard's purpose is to show *which* issues are visible in *which* environment.
+
+The `.github/workflows/dashboard.yaml` workflow regenerates and deploys it daily (or on
+manual dispatch): it runs pytest per target with `--report-jsonl`, turns the raw outcomes
+and `/status` responses into `report.json` and `history.jsonl` with
+`src.babel_validation.tools.generate_report`, and publishes the built site to the
+`gh-pages` branch.
+
+The Vue components' client-side logic (URL round-tripping, filtering, pagination, the
+odd-one-out shading, the drift grouping, and the withholding of blocklist detail) has vitest
+tests in `website/test/`, run by `npm test` and by the Tests workflow.
+
+To work on the site against the data the live dashboard is showing, download the published
+`report.json` and `history.jsonl` instead of generating them (both land in
+`website/public/data/`, which is gitignored):
 
 ```shell
-$ cd website-vue3-vite
-$ npm install
-$ npm run dev
+$ cd website && npm install && npm run fetch-data && npm run dev
 ```
 
-This will start a local web application and report the URL for accessing it. This website
-retrieves tests from [a Google Sheet document](https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?usp=sharing)
-and displays their results across multiple NodeNorm (and, someday, NameRes) endpoints.
+To regenerate it locally against a couple of environments:
 
-A new website is in development at `website/` and is currently deployed to https://translatorsri.github.io/babel-validation/.
+```shell
+$ uv run pytest tests/nodenorm/test_nodenorm_from_gsheet.py tests/nameres/test_nameres_from_gsheet.py \
+      --target dev --target prod -n 8 --report-jsonl raw/local.jsonl
+$ uv run python -m src.babel_validation.tools.generate_report --raw-dir raw \
+      --targets-ini tests/targets.ini --out-dir website/public/data
+$ cd website && npm install && npm run dev
+```
 
 ## The Babel Validator in Scala
 

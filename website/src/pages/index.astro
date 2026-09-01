@@ -1,37 +1,28 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Overview from '../components/Overview.vue';
 ---
 
-<Layout title="Welcome to Babel Validation" description="Babel Validation includes several JavaScript-based tools to test Babel tools.">
-	<main>
-		<h1>Babel Validation</h1>
-		<p class="instructions">
-			<a href="https://github.com/TranslatorSRI/babel">Babel</a> is the program that generates the datasets of
-			interrelated identifiers that underlies <a href="https://github.com/TranslatorSRI/NodeNormalization">Node Normalization</a>
-			and <a href="https://github.com/TranslatorSRI/NameResolution">Name Resolution</a>. This website is intended to
-			provide allows JavaScript-based tests to be executed against different instances of these tools.
-		</p>
+<Layout
+  title="Babel Validation"
+  description="Daily validation results for NodeNorm and NameRes across all Translator environments."
+  active="dashboard"
+>
+  <h1 class="h3 mt-4 mb-2">Babel Validation</h1>
+  <p class="text-body-secondary mb-4" style="max-width: 60rem">
+    <a href="https://github.com/NCATSTranslator/Babel">Babel</a> generates the datasets of
+    interrelated identifiers behind <a href="https://github.com/NCATSTranslator/NodeNormalization"
+      >Node Normalization</a
+    > and <a href="https://github.com/NCATSTranslator/NameResolution">Name Resolution</a>. This
+    dashboard runs the <a href="https://github.com/TranslatorSRI/babel-validation">babel-validation</a
+    > test suite daily against every deployment environment. Because test expectations are pinned to
+    the environment where a new Babel version lands first, environments are not expected to all be
+    green — the point is to see <em>which</em> issues are visible in <em>which</em> environment.
+  </p>
 
-		<h2>Individual queries</h2>
-		<ul>
-			<li><a href="./autocomplete/">Autocomplete with Name Resolver</a></li>
-			<li><a href="./prefix-comparator/">Prefix Comparator</a></li>
-		</ul>
-
-		<!--
-
-		Hide non-working links.
-
-		<h2>Test sets</h2>
-		<ul>
-			<li><a href="./test-sets/nodenorm/">Node Normalization Test Sets</a></li>
-			<li><a href="./test-sets/nameres/">Name Resolver Test Sets</a></li>
-			<li><a href="./test-sets/nameres/character-by-character">Name Resolver Test Sets - character by character</a></li>
-		</ul>
-		-->
-	</main>
+  <Overview
+    client:only="vue"
+    dataUrl={import.meta.env.BASE_URL + 'data/report.json'}
+    resultsUrl={import.meta.env.BASE_URL + 'results/'}
+  />
 </Layout>
-
-<style>
-
-</style>
