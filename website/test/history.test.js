@@ -72,6 +72,26 @@ describe('what changed since the previous run', () => {
     expect(wrapper.text()).not.toContain('Nothing changed');
   });
 
+  it('reports a target that appeared or disappeared between runs', async () => {
+    // Comparing field by field skipped the target entirely, so the run that
+    // added or dropped a whole environment said "Nothing changed".
+    const one = JSON.stringify({ date: 'a', targets: { dev: { counts: { passed: 10 } } } });
+    const two = JSON.stringify({
+      date: 'b',
+      targets: { dev: { counts: { passed: 10 } }, exp: { counts: { passed: 4 } } },
+    });
+    let wrapper = await mountWith([one, two]);
+    expect(wrapper.vm.changes).toEqual([
+      { target: 'exp', label: 'first reported in this run', worse: false },
+    ]);
+    expect(wrapper.text()).toContain('first reported in this run');
+
+    wrapper = await mountWith([two, one]);
+    expect(wrapper.vm.changes).toEqual([
+      { target: 'exp', label: 'no longer reported', worse: true },
+    ]);
+  });
+
   it('says so when nothing moved, and shows nothing with only one run', async () => {
     let wrapper = await mountWith([run('2026-08-26', '2025sep1', 12), run('2026-08-27', '2025sep1', 12)]);
     expect(wrapper.vm.changes).toEqual([]);

@@ -51,7 +51,18 @@ export default {
       for (const target of this.targetNames) {
         const now = latest.targets?.[target];
         const before = previous.targets?.[target];
-        if (!now || !before) continue;
+        // An environment appearing or disappearing is a bigger change than any
+        // count, and comparing field by field would silently skip it: with
+        // nothing else moving, the page said "Nothing changed" on the run that
+        // added or dropped a whole target.
+        if (!now || !before) {
+          changes.push({
+            target,
+            label: now ? 'first reported in this run' : 'no longer reported',
+            worse: !now,
+          });
+          continue;
+        }
         for (const field of ['babel_version', 'nameres_version']) {
           if (now[field] !== before[field]) {
             changes.push({
@@ -124,7 +135,9 @@ export default {
             </span>
             → {{ change.to }}
           </template>
-          <template v-else> {{ change.from }} → {{ change.to }} </template>
+          <!-- A target that only appeared or disappeared carries neither a
+               delta nor a from/to: its label says the whole thing. -->
+          <template v-else-if="change.to != null"> {{ change.from }} → {{ change.to }} </template>
         </li>
       </ul>
     </div>
