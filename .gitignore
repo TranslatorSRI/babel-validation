@@ -1,5 +1,7 @@
-# Ignore all data files.
+# Ignore all data files. Both spellings are needed: `data/` matches a real
+# directory, `data` also matches a symlink to one (as in the worktrees).
 data/
+data
 
 # From GitHub
 *.class
