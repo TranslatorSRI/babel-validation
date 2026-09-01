@@ -207,10 +207,19 @@ If a value does end up in the transcript, say so plainly rather than carrying on
 shared as "anyone with the link", so an exposed ID means re-sharing that sheet under a new ID
 and rotating the repository secret.
 
+**A `requests` exception message contains the URL, and the URL contains the sheet ID.** So a
+429 or a connect timeout on a sheet download published the capability into a public Actions
+log. `fetch_sheet_csv()` catches `RequestException` and re-raises with only the status line —
+and with `from None`, because pytest prints an exception chain in full, so a merely-attached
+context leaks the original message anyway. Any new outbound call built from a secret needs the
+same treatment.
+
 **Caches belong in `cache_dir()`** (`src/babel_validation/core/__init__.py`), a 0700 directory
 under the user's home — never a fixed name in the shared temp directory. On a CI runner or a
 shared machine anyone can pre-create such a file, and the issue cache decides what a later run
-fetches and executes.
+fetches and executes. `cache_dir()` loads `.env` itself (once per process): it used to read
+`os.environ` directly, so its answer depended on whether `resolve_sheet_id()` had run yet, and
+the two halves of the codebase disagreed about where the cache was.
 
 ## Key Dependencies
 
@@ -257,4 +266,14 @@ When writing new tests:
   job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
   like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
   in #112 had six tests that had never run.
+- **Anything fetched at collection time must go through a shared cache.**
+  `pytest_generate_tests` runs in *every* xdist worker, so an uncached download is one request
+  per worker (8 in `dashboard.yaml`, 14 on a laptop with `-n auto`), fired simultaneously at an
+  unauthenticated endpoint. If one of them fails or comes back different, that worker collects a
+  different set of tests and xdist aborts the whole run before executing anything:
+  `ERROR gw2 - Different tests were collected between gw0 and gw2`. Use
+  `src.babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
+  `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
+  mode reappears if a cache's TTL can expire *during* a run, which is why
+  `pytest_configure` deletes `gsheet_*.csv` before collection starts.
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
