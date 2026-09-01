@@ -46,7 +46,10 @@ def test_cache_dir_loads_dotenv_itself(monkeypatch, tmp_path):
     target = tmp_path / "from-dotenv"
 
     def fake_load_dotenv(*args, **kwargs):
-        os.environ["BABEL_VALIDATION_CACHE_DIR"] = str(target)
+        # monkeypatch.setenv, not os.environ[...]: where there is no .env at all
+        # (CI), the delenv below has no previous value to restore, so a raw write
+        # here outlives the test and poisons whatever runs next.
+        monkeypatch.setenv("BABEL_VALIDATION_CACHE_DIR", str(target))
 
     monkeypatch.delenv("BABEL_VALIDATION_CACHE_DIR", raising=False)
     monkeypatch.setattr(core, "_dotenv_loaded", False)
