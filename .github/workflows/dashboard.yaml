@@ -71,6 +71,18 @@ jobs:
                 # 0 = everything passed, 1 = tests failed. Failing tests are the
                 # artifact this workflow exists to publish, so neither is a
                 # problem with the run.
+                #
+                # But the command is `uv run pytest`, and uv exits 1 for its own
+                # failures too — a failed dependency sync, a resolution error —
+                # before pytest ever starts. That target then has no records, the
+                # report renders it as unreachable during the run, and the job
+                # goes green: exactly the silent partial failure this triage
+                # exists to catch. pytest_configure truncates raw/$t.jsonl before
+                # collection, so an empty file means pytest never got that far.
+                if [ ! -s "raw/$t.jsonl" ]; then
+                  echo "::error title=Target run broke::pytest for $t exited $status without writing any results"
+                  broken="$broken $t"
+                fi
                 ;;
               124)
                 # `timeout` killed it: the environment hung. That is a finding
