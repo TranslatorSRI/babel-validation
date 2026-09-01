@@ -58,10 +58,41 @@ jobs:
           # takes every section but localhost while this loop did not run it.
           targets=$(uv run python -c "from src.babel_validation.tools.generate_report import read_targets; print(' '.join(read_targets('tests/targets.ini')[0]))")
           echo "Running against: $targets"
+          broken=""
           for t in $targets; do
+            # `|| status=$?` rather than a bare call: steps run under `bash -e`,
+            # so an unguarded nonzero exit would abort the loop at the first
+            # target with a failing test — which is most of them.
+            status=0
             timeout 45m uv run pytest tests --target "$t" -n 8 -m "not unit" \
-              --report-jsonl "raw/$t.jsonl" || echo "target $t exited $?"
+              --report-jsonl "raw/$t.jsonl" || status=$?
+            case "$status" in
+              0|1)
+                # 0 = everything passed, 1 = tests failed. Failing tests are the
+                # artifact this workflow exists to publish, so neither is a
+                # problem with the run.
+                ;;
+              124)
+                # `timeout` killed it: the environment hung. That is a finding
+                # about the deployment, not about us, and the report already
+                # renders the target as unreachable — so say it loudly and carry
+                # on rather than going red every day an environment is down.
+                echo "::warning title=Target timed out::$t exceeded 45m; it has no results in this report"
+                ;;
+              *)
+                # 2 interrupted (a collection error — a missing sheet ID lands
+                # here), 3 internal error, 4 usage error, 5 nothing collected.
+                # None of these are findings about a deployment: they mean the
+                # run did not do what its green tick suggests.
+                echo "::error title=Target run broke::pytest for $t exited $status; no usable results"
+                broken="$broken $t"
+                ;;
+            esac
           done
+          # Recorded, not raised here: the report is still worth generating and
+          # publishing for the targets that did work. The last step turns this
+          # into a failed job, after the deploy.
+          echo "BROKEN_TARGETS=$broken" >> "$GITHUB_ENV"
 
       - name: Fetch the previous run history
         # The published file is the source of truth: the deploy action
@@ -100,6 +131,17 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: website/dist
+
+      - name: Fail if any target's run broke
+        # Last, so the report for the targets that worked is already published.
+        # `all_targets_unreachable` in generate_report already stops a run where
+        # *everything* died; this catches the partial case, which otherwise
+        # renders as "environment unreachable" and reads as someone else's fault.
+        if: env.BROKEN_TARGETS != ''
+        run: |
+          echo "These targets produced no usable results:${BROKEN_TARGETS}" >&2
+          echo "See the annotations above for each one's pytest exit code." >&2
+          exit 1
 
       - name: Upload raw outcomes for debugging
         if: always()
