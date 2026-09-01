@@ -162,6 +162,11 @@ def test_label(target_info, test_row, test_category, record_property):
             elif expected_id in all_curies:
                 expected_index = all_curies.index(expected_id)
 
+                # Record the rank even when we are about to xfail. A demotion from rank 1
+                # to rank 2 is the most common regression there is, and the imperative
+                # xfail below hides it from the failure count entirely.
+                record_property("expected_rank", expected_index + 1)
+
                 fail_message = f"{test_summary} returns {results[0]['curie']} ('{results[0]['label']}') as the " \
                     f"top result, but {expected_id} is at {expected_index} index."
                 if expected_index <= nameres_xfail_if_in_top:
