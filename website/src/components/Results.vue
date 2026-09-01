@@ -209,6 +209,11 @@ export default {
       // With an environment chosen, the outcome filter applies to that
       // environment only: "failing in dev" rather than "failing anywhere".
       if (this.filters.env) {
+        // hasOwn, not a raw index, for the same reason as ?test= above:
+        // ?env=constructor would otherwise find a truthy Object.prototype
+        // member whose .o is undefined, and with no outcome filter set every
+        // row would pass — the filter matching everything rather than nothing.
+        if (!Object.hasOwn(result.outcomes ?? {}, this.filters.env)) return false;
         const cell = result.outcomes[this.filters.env];
         if (!cell) return false;
         return !this.filters.has.length || this.filters.has.includes(cell.o);

@@ -115,6 +115,17 @@ describe('Results filters', () => {
     expect(wrapper.vm.filteredRows.length).toBeGreaterThan(0);
   });
 
+  it('matches nothing when ?env= names only an Object.prototype key', async () => {
+    // outcomes is a plain object parsed from JSON, so `outcomes.constructor` is
+    // truthy with an undefined .o. Indexed rather than checked, the environment
+    // filter then matched every row instead of none.
+    const wrapper = await mountAt('/?env=constructor');
+    expect(wrapper.vm.filteredRows).toHaveLength(0);
+    wrapper.vm.filters.env = 'toString';
+    await flushPromises();
+    expect(wrapper.vm.filteredRows).toHaveLength(0);
+  });
+
   it('withholds every detail of a blocklist row, whatever the report carries', async () => {
     const key = 'nameres/test_blocklist.py::test_check_blocklist_entry[blocklist_entry47]';
     const data = report(2);
