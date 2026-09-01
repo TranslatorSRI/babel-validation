@@ -164,7 +164,9 @@ export default {
       return Math.max(1, Math.ceil(this.filteredRows.length / this.pageSize));
     },
     currentPage() {
-      return Math.min(this.page, this.pageCount);
+      // Floored at 1 as well as capped: page 0 slices a negative window, which
+      // renders as an empty table rather than as an obviously wrong page.
+      return Math.min(Math.max(this.page, 1), this.pageCount);
     },
     rows() {
       const start = (this.currentPage - 1) * this.pageSize;
@@ -420,14 +422,30 @@ export default {
 
     <nav v-if="pageCount > 1" class="d-flex align-items-center gap-3 flex-wrap mt-3">
       <ul class="pagination pagination-sm mb-0">
+        <!-- :disabled as well as the class: Bootstrap's .disabled only styles
+             the <li>, so the button stayed keyboard-activatable and exposed no
+             disabled state to assistive technology. Pressing Previous on page 1
+             set page to 0, which slices an empty window and blanks the table. -->
         <li class="page-item" :class="{ disabled: currentPage <= 1 }">
-          <button class="page-link" @click="page = currentPage - 1">&laquo; Previous</button>
+          <button
+            class="page-link"
+            :disabled="currentPage <= 1"
+            @click="page = currentPage - 1"
+          >
+            &laquo; Previous
+          </button>
         </li>
         <li class="page-item disabled">
           <span class="page-link">Page {{ currentPage }} of {{ formatCount(pageCount) }}</span>
         </li>
         <li class="page-item" :class="{ disabled: currentPage >= pageCount }">
-          <button class="page-link" @click="page = currentPage + 1">Next &raquo;</button>
+          <button
+            class="page-link"
+            :disabled="currentPage >= pageCount"
+            @click="page = currentPage + 1"
+          >
+            Next &raquo;
+          </button>
         </li>
       </ul>
       <label class="small text-body-secondary">

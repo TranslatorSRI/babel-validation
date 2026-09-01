@@ -157,6 +157,27 @@ describe('Results filters', () => {
   });
 });
 
+describe('Results pagination', () => {
+  it('really disables the arrow at each end, and never renders page 0', async () => {
+    // Bootstrap's .disabled class only styles the <li>: the button underneath
+    // stayed focusable, and activating Previous on page 1 set page to 0, which
+    // slices a negative window and blanks the table.
+    const wrapper = await mountAt('/?ps=25');
+    const [previous, next] = wrapper.findAll('.pagination button');
+    expect(previous.attributes('disabled')).toBeDefined();
+    expect(next.attributes('disabled')).toBeUndefined();
+
+    await previous.trigger('click');
+    expect(wrapper.vm.currentPage).toBe(1);
+    expect(wrapper.vm.rows.length).toBeGreaterThan(0);
+
+    wrapper.vm.page = wrapper.vm.pageCount;
+    await flushPromises();
+    const [, last] = wrapper.findAll('.pagination button');
+    expect(last.attributes('disabled')).toBeDefined();
+  });
+});
+
 describe('Results pattern filter', () => {
   it('shows only the rows matching a ?sig= pattern, and rejects a malformed one', async () => {
     const data = report(4);
