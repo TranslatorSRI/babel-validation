@@ -181,6 +181,23 @@ labels, category, source — often a GitHub issue link) is fine to publish once 
 generator's validation. The sheet is expected to be fully replaced by the GitHub issue
 system over the next few months, at which point it can be removed from this repo entirely.
 
+**Do not read `.env`, and do not print the variables it sets.** Everything a coding agent
+reads goes into a transcript that is stored, replayed and pasted into issues, so `cat .env`,
+`Read`ing it, `grep`ping it, `echo $BABEL_VALIDATION_SHEET_ID` or printing a CSV export URL
+turns a secret into a logged one. This holds even when the user asks for help with the
+values: `env.default` documents every variable, so there is no reason to look at the filled-in
+copy. Writing is fine — `cp env.default .env`, or appending a line the user dictates — it is
+reading back that leaks. To check whether something is set without revealing it, print a
+boolean and nothing else:
+
+```bash
+uv run python -c "import os, dotenv; dotenv.load_dotenv(); print('BABEL_VALIDATION_SHEET_ID' in os.environ)"
+```
+
+If a value does end up in the transcript, say so plainly rather than carrying on: the sheet is
+shared as "anyone with the link", so an exposed ID means re-sharing that sheet under a new ID
+and rotating the repository secret.
+
 **Caches belong in `cache_dir()`** (`src/babel_validation/core/__init__.py`), a 0700 directory
 under the user's home — never a fixed name in the shared temp directory. On a CI runner or a
 shared machine anyone can pre-create such a file, and the issue cache decides what a later run

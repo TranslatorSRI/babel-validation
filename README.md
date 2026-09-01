@@ -11,9 +11,10 @@ underlying data used for the Translator
 The best tests in this repository are Python tests stored in the [`./tests`](./tests/) folder.
 This includes both unit tests as well as "Google Sheet"-based tests, which use the shared
 Babel Validation Google Sheet containing facts that we can use to test a NodeNorm instance.
-The sheet's ID is deliberately not checked in: set `BABEL_VALIDATION_SHEET_ID` in `.env`
-(ask a maintainer for the ID; in GitHub Actions it comes from a repository secret of the
-same name).
+The sheet's ID is deliberately not checked in: copy [`env.default`](./env.default) to `.env`
+and fill in `BABEL_VALIDATION_SHEET_ID` (ask a maintainer for the ID; in GitHub Actions it
+comes from a repository secret of the same name). `env.default` documents every variable
+this repository reads, and what each one turns on.
 
 To run these tests, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 You can then use `uv` to run the tests. The file [`tests/targets.ini`](./tests/targets.ini) allows you to
