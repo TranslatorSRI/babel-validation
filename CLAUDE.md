@@ -168,6 +168,15 @@ filter bar's category and source dropdowns are built from report values, so they
 blocklist rows exactly as the table does. Anything that aggregates over `results` needs the
 same check.
 
+**A query parameter must never index a JSON-parsed object directly.** `report.results` and
+each result's `outcomes` are plain objects, so they inherit `Object.prototype`: `?test=`,
+`?env=` or any other URL-supplied key can name `constructor`, `toString` or `valueOf` and
+come back truthy with none of the fields the code expects. This has now been two separate
+bugs in `Results.vue` — one pinned an `Object.prototype` member as a table row, the other
+made the environment filter match *every* row instead of none. Guard with `Object.hasOwn`
+before the lookup. An allowlist is not available here: these parameters are read in
+`readUrl()` before the report has loaded, so the set of valid values is not yet known.
+
 **Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
 Git commit must not contain the test-case sheet's ID or a link to either sheet — casual
 observers of the public site must not be able to find them, and the ID is the capability
