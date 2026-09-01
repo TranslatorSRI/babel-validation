@@ -505,3 +505,33 @@ class TestReadTargets:
         assert "localhost" not in targets
         assert targets, "the workflow builds its run loop from this list"
 
+
+class TestUnattributedResults:
+    """
+    A test whose node ID names no target lands in the "?" bucket. The site has no
+    column for it — Results.vue renders one per entry of report["targets"] — so
+    such a row would appear on /results/ with a label and every cell blank, and
+    nothing on that page explains why. It is reported through
+    unattributed_counts instead.
+    """
+
+    def test_unattributed_test_is_counted_but_not_a_row(self):
+        records = [
+            _record("test_environment/test_env.py::test_sheet_has_cases", "failed"),
+            _record("nodenorm/test_x.py::t[dev-row=1]", "passed"),
+        ]
+        results, counts, _ = build_results(records, TARGETS, ALLOWLIST)
+        assert list(results) == ["nodenorm/test_x.py::t[row=1]"]
+        assert counts["?"]["failed"] == 1
+
+    def test_a_row_keeps_the_targets_it_does_have(self):
+        # Only the unattributed cell is dropped, not the whole result: the same
+        # key can appear both with and without a parseable target.
+        key = "nodenorm/test_x.py::t"
+        records = [
+            _record(f"{key}[dev-row=1]", "failed"),
+            _record(f"{key}[row=1]", "passed"),
+        ]
+        results, counts, _ = build_results(records, TARGETS, ALLOWLIST)
+        assert list(results[f"{key}[row=1]"]["outcomes"]) == ["dev"]
+        assert counts["?"]["passed"] == 1

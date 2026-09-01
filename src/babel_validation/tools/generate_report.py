@@ -334,6 +334,19 @@ def build_results(records, targets, allowlist):
         )
         counts[target][outcome] += 1
 
+        # Only the real issue-driven tests count — github_issues/unit/ are
+        # unit tests of the parser and run without a token.
+        if key.startswith("github_issues/test_github_issues.py"):
+            github_issues_ran = True
+
+        if target == "?":
+            # No target could be parsed out of the node ID. Results.vue renders
+            # one column per entry of report["targets"], which never includes
+            # "?", so such a row would show a label above an entirely blank set
+            # of cells with nothing on the page to explain it. These are
+            # reported through unattributed_counts instead.
+            continue
+
         result = results.setdefault(key, {"outcomes": {}})
         cell = {"o": outcome}
         # Blocklist messages are withheld unconditionally, before any cell is
@@ -349,10 +362,6 @@ def build_results(records, targets, allowlist):
 
         if "kind" not in result:
             _annotate_result(result, key, rest, by_key[key], allowlist)
-        # Only the real issue-driven tests count — github_issues/unit/ are
-        # unit tests of the parser and run without a token.
-        if key.startswith("github_issues/test_github_issues.py"):
-            github_issues_ran = True
 
     return results, counts, github_issues_ran
 
