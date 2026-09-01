@@ -65,11 +65,18 @@ Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* dir
 `lib`, including under `website/src/` — a file there builds locally but never reaches CI.
 Check `git status` shows new frontend files as tracked.
 
-The `gh-pages` branch is shared by more than one publisher. `deploy-website-to-gh-pages.yaml`
-deploys `website/dist` to the *root* of that branch, and `github-pages-deploy-action` cleans the
-target by default — so anything else published there is deleted on the next release unless it is
-added to that job's `clean-exclude`. See [docs/milestones-page.md](docs/milestones-page.md) for
-the milestones page, the one current example.
+**Exactly one workflow writes `gh-pages`, and it must stay that way.** `dashboard.yaml` deploys
+`website/dist` to the *root* of that branch with `github-pages-deploy-action`, which cleans by
+default — it force-pushes the branch as a single commit. So a second publisher does not coexist
+with it: whichever ran last deletes the other's output, and a `clean-exclude` plus a shared
+`concurrency` group is two things to keep in step forever. This was a real near-miss — the
+milestones page was originally published by its own workflow into `gh-pages:milestones/`, which
+the dashboard's deploy would have silently deleted on the next daily run.
+
+A new page therefore joins the existing pipeline rather than adding a publisher: a generator
+writing one more JSON file into `website/public/data/`, an Astro route mounting a Vue island, and
+a job in `dashboard.yaml` feeding the one deploy. See [docs/milestones-page.md](docs/milestones-page.md)
+for the worked example.
 
 ## Architecture
 
