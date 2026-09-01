@@ -18,13 +18,20 @@ with a small theme layer in `src/styles/theme.css`.
 
 ## Where the data comes from
 
-Nothing here queries NodeNorm or NameRes. The site renders two files that
+Nothing here queries NodeNorm or NameRes. The site renders three files that
 `.github/workflows/dashboard.yaml` regenerates daily and publishes to `gh-pages` alongside it:
 
 - **`data/report.json`** — one entry per test, with an outcome per environment, plus each
   deployment's `/status`. Written by `src/babel_validation/tools/generate_report.py` from the JSONL
   that `pytest --report-jsonl` emits.
 - **`data/history.jsonl`** — one summary line per run, appended to the previously published file.
+- **`data/milestones.json`** — open milestones across the Babel repositories and their open
+  issues. Written by `src/babel_validation/tools/generate_milestones.py` from the GitHub API,
+  in a job of its own so the milestones page does not wait on the test suite or fail with it.
+
+Any of the three may be a *carried-forward* copy: when a run fails to regenerate one, the
+publish job refetches the last published version rather than let the cleaning deploy delete
+the page. Each page renders its own `generated_at` for that reason.
 
 To work against real data locally, `npm run fetch-data` downloads the published copies into
 `public/data/`, which is gitignored. Or generate your own from a test run — see
