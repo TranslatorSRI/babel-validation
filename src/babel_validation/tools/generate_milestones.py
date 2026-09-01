@@ -116,21 +116,25 @@ def build_milestones(collected, allowlist, generated_at):
     milestones = []
     for repo_name, milestone, issues in collected:
         due = milestone.due_on.date() if milestone.due_on else None
-        milestones.append(
-            {
-                "repo": sanitize(repo_name, MAX_TITLE_CHARS),
-                "title": sanitize(milestone.title, MAX_TITLE_CHARS),
-                "number": milestone.number,
-                "due_on": due.isoformat() if due else None,
-                "past_due": bool(due and due < today),
-                "bucket": is_bucket(milestone),
-                "open_issues": milestone.open_issues,
-                "closed_issues": milestone.closed_issues,
-                "issues": [
-                    _issue_entry(repo_name, issue, allowlist) for issue in issues
-                ],
-            }
-        )
+        entry = {
+            "repo": sanitize(repo_name, MAX_TITLE_CHARS),
+            "title": sanitize(milestone.title, MAX_TITLE_CHARS),
+            "number": milestone.number,
+            "due_on": due.isoformat() if due else None,
+            "past_due": bool(due and due < today),
+            "bucket": is_bucket(milestone),
+            "open_issues": milestone.open_issues,
+            "closed_issues": milestone.closed_issues,
+            "issues": [_issue_entry(repo_name, issue, allowlist) for issue in issues],
+        }
+        # The same validated org/repo#N shape the issues use, so the page can
+        # build a milestone link from parts that passed the allowlist rather
+        # than from the repo name as text. Absent when it fails, leaving the
+        # title to render unlinked.
+        milestone_id = validate_issue_id(f"{repo_name}#{milestone.number}", allowlist)
+        if milestone_id:
+            entry["milestone"] = milestone_id
+        milestones.append(entry)
     return {
         "generated_at": generated_at.isoformat(timespec="seconds"),
         "run": {

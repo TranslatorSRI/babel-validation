@@ -139,11 +139,13 @@ export const STATUS_ROWS = [
 // `cache-control: max-age=600` (measured 2026-08-31), so a navigation between
 // the Dashboard and Results inside ten minutes is served from the browser cache
 // and never reaches the network. Re-measure before adding one.
-export async function fetchReport(url) {
+export async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return await response.json();
 }
+
+export const fetchReport = fetchJson;
 
 export async function fetchHistory(url) {
   const response = await fetch(url);
@@ -200,6 +202,15 @@ export function issueLink(result) {
   const match = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#([0-9]+)$/.exec(result.issue ?? '');
   if (!match) return null;
   return `https://github.com/${match[1]}/issues/${match[2]}`;
+}
+
+export function milestoneLink(milestone) {
+  // Same shape and same re-validation as issueLink: the generator emitted
+  // org/repo#N only after checking it against targets.ini's allowlist, and the
+  // URL is built from the captured parts, never from milestone.repo as text.
+  const match = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#([0-9]+)$/.exec(milestone.milestone ?? '');
+  if (!match) return null;
+  return `https://github.com/${match[1]}/milestone/${match[2]}`;
 }
 
 export function isNodeNorm(key) {

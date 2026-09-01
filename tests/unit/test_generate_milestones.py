@@ -129,6 +129,24 @@ class TestUntrustedText:
         assert "issue" not in entry
         assert entry["title"] == "t"
 
+    def test_the_milestone_itself_gets_a_validated_id_or_none(self):
+        """The page links the milestone title too, and from validated parts only."""
+        allowed = _build(
+            [
+                (
+                    "NCATSTranslator/Babel",
+                    _milestone("m", _utc(2026, 9, 1), number=12),
+                    [],
+                )
+            ]
+        )
+        assert allowed["milestones"][0]["milestone"] == "NCATSTranslator/Babel#12"
+
+        # repo is sanitized but never allowlist-checked as text, so a repo the
+        # allowlist does not name must leave nothing to build a URL from.
+        denied = _build([("Someone/Elsewhere", _milestone("m", _utc(2026, 9, 1)), [])])
+        assert "milestone" not in denied["milestones"][0]
+
     def test_an_allowlisted_issue_gets_an_org_repo_hash_id(self):
         data = _build(
             [
