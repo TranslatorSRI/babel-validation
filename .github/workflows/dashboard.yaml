@@ -6,13 +6,6 @@ on:
   schedule:
     - cron: '30 6 * * *'
   workflow_dispatch:
-  # Temporary, remove before merge: workflow_dispatch only works once this file
-  # is on the default branch, so pre-merge runs of the redesign trigger on push.
-  # Development moved here from #118, which carried the same trigger on its own
-  # branch; only one branch should have it at a time, since each run takes
-  # 20-35 minutes and force-pushes gh-pages.
-  push:
-    branches: [redesign-dashboard]
 
 permissions:
   contents: write   # the deploy action pushes to the gh-pages branch
