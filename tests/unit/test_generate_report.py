@@ -363,6 +363,16 @@ class TestTrimStatus:
     def test_not_a_dict(self):
         assert trim_status(["nope"]) == {"error": "InvalidStatus"}
 
+    @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", float("inf")])
+    def test_non_finite_numbers_are_dropped(self, value):
+        # float() accepts all of these, and json.dump would then write the bare
+        # tokens NaN/Infinity — valid Python, invalid JSON. JSON.parse rejects
+        # the file, so one bad latency from one service blanks every page.
+        trimmed = trim_status({"recent_queries": {"p95_ms": value}})
+        assert trimmed["recent_queries"] == {}
+        trimmed = trim_status({"solr": {"numDocs": value, "size": "1 GB"}})
+        assert trimmed["solr"] == {"size": "1 GB"}
+
 
 class TestAllTargetsUnreachable:
     def test_all_unreachable_means_the_run_broke(self):

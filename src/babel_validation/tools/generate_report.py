@@ -23,6 +23,7 @@ import configparser
 import datetime
 import json
 import logging
+import math
 import os
 import re
 import sys
@@ -185,17 +186,24 @@ def validate_source_url(source_url, allowlist):
 
 
 def _trimmed_int(value):
+    # OverflowError as well as the obvious two: int(float("inf")) raises it, and
+    # a /status response is service output we do not control.
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
 def _trimmed_float(value):
+    # Non-finite values are dropped rather than kept. Python's json writes them
+    # as the bare tokens NaN, Infinity and -Infinity, which are valid Python but
+    # not valid JSON: JSON.parse rejects the file, so one service reporting a
+    # NaN latency would blank every page of the dashboard rather than one cell.
     try:
-        return round(float(value), 2)
-    except (TypeError, ValueError):
+        value = round(float(value), 2)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return value if math.isfinite(value) else None
 
 
 def trim_status(raw):
@@ -545,7 +553,9 @@ def main(argv=None):
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "report.json", "w", encoding="utf-8") as f:
-        json.dump(report, f, separators=(",", ":"))
+        # allow_nan=False so this fails loudly rather than writing a file no
+        # browser can parse, if a non-finite ever reaches here by another route.
+        json.dump(report, f, separators=(",", ":"), allow_nan=False)
     with open(out_dir / "history.jsonl", "w", encoding="utf-8") as f:
         f.write(append_history(args.history_in, build_history_line(report)))
     logger.info(
