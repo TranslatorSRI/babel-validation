@@ -104,6 +104,22 @@ def read_targets(targets_ini_path):
     return targets, allowlist, config
 
 
+def read_repositories(config):
+    """
+    The `Repositories` list in the case targets.ini writes it.
+
+    read_targets() lowercases it, because its job is comparison: an allowlist is
+    only ever asked "is this in you?". Anything that has to *call* GitHub or
+    render a repository name needs the original case back, so it comes from
+    here instead of being re-cased at the call site.
+    """
+    return [
+        repo.strip()
+        for repo in config.defaults().get("repositories", "").splitlines()
+        if repo.strip()
+    ]
+
+
 def split_target(param_id, targets):
     """
     Split a parametrize id like 'ci-es-test_row:row=42' or 'test_row:row=42-ci-es'
