@@ -72,5 +72,13 @@ site root — a different page, which ignores the parameters. Always build these
 `window.location.pathname`. No test can catch it: the suite mounts components at `/` with no
 `<base>` element, so the relative form works there and fails only in production.
 
+**Vue condenses whitespace at a `<template>` boundary, and a dropped separator looks like bad
+data.** A trailing `" · "` inside a `<template v-if>` is a whitespace-only text node at the end of
+the block, so it is removed: the summary line on `/milestones/` rendered `3 past due· as of
+2026-09-01`, which reads as a generator bug rather than a template one. Put separators at the
+*start* of each part instead of joining parts with them — a leading `·` has no boundary to be
+eaten at. Assertions on `wrapper.text()` will not catch this unless they compare the whole string,
+because the words are all still there.
+
 `src/deploymentOrder.js` fixes the left-to-right order of every table. Environments read in
 promotion order, so a value that differs from its left neighbour is a change on its way through.
