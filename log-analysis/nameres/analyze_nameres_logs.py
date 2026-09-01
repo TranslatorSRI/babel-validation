@@ -27,6 +27,16 @@ def title(mo):
       highlighting=False, offset=0, limit=10, biolink_types=[], only_prefixes=,
       exclude_prefixes=, only_taxa=) took 56.13ms (with 55.58ms waiting for Solr)
     ```
+
+    This can be downloaded from CloudWatch by running the query:
+
+    ```
+    SOURCE "[application logs]" START=-1w END=now |
+    fields @timestamp, @message, @logStream, @log
+    | filter @message like "Lookup query to Solr"
+    | sort @timestamp desc
+    | limit 10000
+    ```
     """)
     return
 
@@ -38,6 +48,7 @@ def imports():
     import ast
     from dataclasses import dataclass, field, asdict
     from datetime import datetime
+    from itertools import combinations
     from pathlib import Path
 
     import marimo as mo
@@ -45,28 +56,63 @@ def imports():
     import numpy as np
     import altair as alt
 
-    return Path, alt, asdict, ast, dataclass, datetime, json, mo, np, pd, re
+    return (
+        Path,
+        alt,
+        asdict,
+        ast,
+        combinations,
+        dataclass,
+        datetime,
+        json,
+        mo,
+        np,
+        pd,
+        re,
+    )
 
 
 @app.cell
 def log_path(Path, mo):
-    # Path to the raw NameRes log export (a CloudWatch/Log Insights JSON dump).
-    # This file is intentionally NOT checked into the repository (see logs/.gitignore).
-    LOG_PATH = Path("logs/nameres-log-analytics-results-2026-07-06.json")
-    mo.md(f"Reading log file: `{LOG_PATH}`")
-    return (LOG_PATH,)
+    # Raw NameRes log exports (CloudWatch Logs Insights JSON dumps). Every
+    # `nameres-*.json` file in LOG_DIR is loaded and concatenated, so dropping a new
+    # export into the directory is all it takes to widen the analysis window.
+    #
+    # These exports are large and are intentionally NOT checked into the repository:
+    # `data/` is a symlink to a shared, gitignored data directory.
+    LOG_DIR = Path("data/log-analysis")
+    LOG_PATHS = sorted(LOG_DIR.glob("nameres-*.json"))
+
+    if not LOG_PATHS:
+        raise FileNotFoundError(
+            f"No NameRes log exports matched {LOG_DIR}/nameres-*.json — "
+            f"is the data/ symlink in place?"
+        )
+
+    mo.md(
+        f"Reading **{len(LOG_PATHS)}** log export(s) from `{LOG_DIR}`:\n\n"
+        + "\n".join(f"- `{_p.name}` ({_p.stat().st_size / 1e6:.1f} MB)" for _p in LOG_PATHS)
+    )
+    return (LOG_PATHS,)
 
 
 @app.cell(hide_code=True)
 def load_section(mo):
     mo.md(r"""
-    ## Loading the log file into a dataclass
+    ## Loading the log files into a dataclass
 
-    Each record in the JSON export wraps a single Solr `lookup` log line. We parse
+    Each record in a JSON export wraps a single Solr `lookup` log line. We parse
     each line into a `QueryLogEntry` dataclass capturing the query, its parameters,
     and both latency measurements. Filter fields (`only_prefixes`, `exclude_prefixes`,
     `only_taxa`) are `|`-delimited in the log and normalized here into lists; an empty
     value or the literal `None` becomes an empty list (i.e. no filter).
+
+    All exports in `LOG_DIR` are loaded together. Because Logs Insights exports are
+    plain time-window dumps with no record IDs, two exports covering the same window
+    would silently double-count the same lookups — so we compute each file's time
+    span up front and **refuse to load overlapping exports** rather than skew every
+    statistic downstream. (De-duplicating overlapping exports is future work; for now
+    the fix is to re-export non-overlapping windows.)
     """)
     return
 
@@ -93,6 +139,7 @@ def parser(ast, dataclass, datetime, re):
         slow_query: bool        # emitted as a WARNING "SLOW QUERY" line
         pod_name: str = ""
         image_tag: str = ""
+        source_file: str = ""   # export the line came from, for provenance
 
 
     # Matches both the INFO and the WARNING ("SLOW QUERY:") log variants.
@@ -117,7 +164,7 @@ def parser(ast, dataclass, datetime, re):
         return [part for part in value.split("|") if part]
 
 
-    def parse_record(record: dict) -> QueryLogEntry | None:
+    def parse_record(record: dict, source_file: str = "") -> QueryLogEntry | None:
         """Parse one CloudWatch record into a QueryLogEntry, or None if it is not a
         NameRes lookup line we recognize."""
         message = record.get("@message")
@@ -150,30 +197,108 @@ def parser(ast, dataclass, datetime, re):
             slow_query="SLOW QUERY" in line,
             pod_name=k8s.get("pod_name", ""),
             image_tag=image.split(":")[-1] if image else "",
+            source_file=source_file,
         )
 
     return QueryLogEntry, parse_record
 
 
 @app.cell
-def loader(LOG_PATH, QueryLogEntry, json, mo, parse_record):
-    raw_records = json.loads(LOG_PATH.read_text())
+def loader(
+    LOG_PATHS,
+    QueryLogEntry,
+    combinations,
+    datetime,
+    json,
+    mo,
+    parse_record,
+    pd,
+):
+    def log_file_span(records: list[dict]) -> tuple[datetime, datetime]:
+        """Earliest and latest `@timestamp` across every record in one export.
 
+        Uses the raw records rather than the parsed lookups, so a file's span
+        reflects the window that was exported even if few lines are lookups.
+        """
+        times = [datetime.fromisoformat(rec["@timestamp"]) for rec in records]
+        if not times:
+            raise ValueError("Log export contains no records")
+        return min(times), max(times)
+
+
+    def assert_no_overlapping_spans(spans: dict[str, tuple[datetime, datetime]]) -> None:
+        """Raise if any two exports cover overlapping time ranges.
+
+        Logs Insights exports carry no per-record ID, so overlapping windows would
+        double-count the same lookups and quietly bias every statistic below. Until
+        we have a way to de-duplicate across files, refuse to load them together.
+        """
+        clashes = [
+            (name_a, span_a, name_b, span_b)
+            for (name_a, span_a), (name_b, span_b) in combinations(sorted(spans.items()), 2)
+            if span_a[0] <= span_b[1] and span_b[0] <= span_a[1]
+        ]
+        if clashes:
+            detail = "\n".join(
+                f"  - {a} ({a_span[0]} .. {a_span[1]})\n"
+                f"    overlaps {b} ({b_span[0]} .. {b_span[1]})"
+                for a, a_span, b, b_span in clashes
+            )
+            raise ValueError(
+                f"{len(clashes)} pair(s) of log exports cover overlapping time "
+                f"spans, which would double-count lookups:\n{detail}\n"
+                f"Remove or re-export one of each pair so the windows are disjoint."
+            )
+
+
+    # Pass 1: read every export and work out what window it covers, so that an
+    # overlap fails fast rather than after minutes of regex parsing.
+    records_by_file = {path.name: json.loads(path.read_text()) for path in LOG_PATHS}
+    log_file_spans = {name: log_file_span(recs) for name, recs in records_by_file.items()}
+    assert_no_overlapping_spans(log_file_spans)
+
+    # Pass 2: parse the lookup lines, oldest export first.
+    raw_records: list[dict] = []
     entries: list[QueryLogEntry] = []
     skipped_records = 0
-    for _rec in raw_records:
-        _entry = parse_record(_rec)
-        if _entry is None:
-            skipped_records += 1
-        else:
-            entries.append(_entry)
+    _summary_rows = []
+    for _name in sorted(records_by_file, key=lambda n: log_file_spans[n][0]):
+        _recs = records_by_file[_name]
+        _kept = 0
+        for _rec in _recs:
+            _entry = parse_record(_rec, source_file=_name)
+            if _entry is None:
+                skipped_records += 1
+            else:
+                entries.append(_entry)
+                _kept += 1
+        raw_records.extend(_recs)
+        _start, _end = log_file_spans[_name]
+        _summary_rows.append(
+            {
+                "file": _name,
+                "records": len(_recs),
+                "lookups": _kept,
+                "from": _start,
+                "to": _end,
+                "span": _end - _start,
+            }
+        )
 
-    mo.md(
-        f"Parsed **{len(entries):,}** lookup entries from "
-        f"**{len(raw_records):,}** records "
-        f"(skipped {skipped_records} non-lookup records)."
+    log_file_summary = pd.DataFrame(_summary_rows)
+
+    mo.vstack(
+        [
+            mo.md(
+                f"Parsed **{len(entries):,}** lookup entries from "
+                f"**{len(raw_records):,}** records across "
+                f"**{len(LOG_PATHS)}** export(s) "
+                f"(skipped {skipped_records:,} non-lookup records)."
+            ),
+            log_file_summary,
+        ]
     )
-    return (entries,)
+    return entries, log_file_summary
 
 
 @app.cell
@@ -556,13 +681,19 @@ def bench_build(df, mo, pd):
 
 
 @app.cell
-def bench_export(LOG_PATH, Path, benchmark_cases, df, json, mo):
+def bench_export(Path, benchmark_cases, df, json, log_file_summary, mo):
     BENCHMARK_DIR = Path("benchmark")
     BENCHMARK_DIR.mkdir(exist_ok=True)
-    benchmark_path = BENCHMARK_DIR / "nameres_solr_benchmark_2026-07-06.json"
+    # Name the export after the window the source logs actually cover, so two runs
+    # over different log sets do not overwrite each other.
+    benchmark_path = BENCHMARK_DIR / (
+        f"nameres_solr_benchmark_"
+        f"{df['time'].min():%Y-%m-%d}_to_{df['time'].max():%Y-%m-%d}.json"
+    )
 
     benchmark_payload = {
-        "source_log": LOG_PATH.name,
+        "source_logs": sorted(log_file_summary["file"]),
+        "log_span": [str(df["time"].min()), str(df["time"].max())],
         "generated_from_rows": int(len(df)),
         "num_cases": len(benchmark_cases),
         "cases": benchmark_cases,
@@ -610,13 +741,18 @@ def next_steps(mo):
        backend returns (do the top-N hits match?), so an ES speedup isn't bought at
        the cost of relevance.
 
-    4. **More representative input.** This export is a capped, non-uniform 10k-row
-       CloudWatch sample. Pull a larger and/or time-stratified sample for
-       benchmarking, and re-run the loader (the parser handles the same log format).
+    4. **More representative input.** The loader concatenates every
+       `data/log-analysis/nameres-*.json` export, so widening the window is now just
+       a matter of dropping in another CloudWatch dump. Two gaps remain: each export
+       is still a capped, non-uniform sample of its window, and **overlapping
+       exports are rejected outright** rather than de-duplicated. Logs Insights
+       records carry no ID, so de-duplication would have to key on something like
+       (`@timestamp`, `pod_name`, log line) — see `assert_no_overlapping_spans`.
 
     5. **Extra breakdowns.** Latency by `biolink_types` filter set, by
        prefix/taxa filters, and by pod / image tag (`pod_name`, `image_tag` are
-       already parsed) to check for per-instance or per-version effects.
+       already parsed) to check for per-instance or per-version effects. With
+       multiple exports loaded, `source_file` also allows per-export comparison.
 
     6. **CSV export variant.** Emit a flattened CSV alongside the JSON for
        spreadsheet-based review (list params joined with `|`).
