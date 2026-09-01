@@ -88,6 +88,16 @@ describe('Results URL state', () => {
     const wrapper = await mountAt(`/?ps=25&test=${encodeURIComponent(key)}`);
     expect(wrapper.vm.rows[0].key).toBe(key);
   });
+
+  it('gives the pinned row its own heading instead of repeating its kind', async () => {
+    // The pinned row sits outside the sorted grouping, so it must not be read
+    // as the start of its kind's block: that printed the kind heading twice,
+    // once above the pinned row and once where the block actually began.
+    const key = 'nodenorm/test_nodenorm_from_gsheet.py::test_normalization[row=59]';
+    const wrapper = await mountAt(`/?ps=25&test=${encodeURIComponent(key)}`);
+    const headings = wrapper.vm.rows.map((_, i) => wrapper.vm.kindHeading(i)).filter(Boolean);
+    expect(headings).toEqual(['Linked test', 'Babel Validation Google Sheet']);
+  });
 });
 
 describe('Results filters', () => {

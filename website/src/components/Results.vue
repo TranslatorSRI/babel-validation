@@ -182,6 +182,10 @@ export default {
           key: this.expandedKey,
           result,
           label: rowLabel(this.expandedKey, result),
+          // Outside the page window and outside the kind grouping: it gets its
+          // own heading, so the extra row reads as pinned rather than as an
+          // off-by-one in the page size.
+          pinned: true,
         });
       }
       return rows;
@@ -275,9 +279,15 @@ export default {
       this.filters = emptyFilters();
     },
     kindHeading(index) {
-      const kind = this.rows[index].result.kind;
-      if (index > 0 && this.rows[index - 1].result.kind === kind) return null;
-      return KIND_HEADINGS[kind] ?? kind;
+      const row = this.rows[index];
+      if (row.pinned) return 'Linked test';
+      // A pinned row never suppresses the heading of the block below it: its
+      // kind is whatever the shared link happened to point at, so treating it
+      // as the start of that kind's run printed the heading twice — once above
+      // the pinned row, and again where that kind's sorted block began.
+      const previous = index > 0 ? this.rows[index - 1] : null;
+      if (previous && !previous.pinned && previous.result.kind === row.result.kind) return null;
+      return KIND_HEADINGS[row.result.kind] ?? row.result.kind;
     },
     serviceLinks(key, result) {
       return serviceLinks(key, result, this.report, this.targetNames);
