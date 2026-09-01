@@ -66,6 +66,11 @@ export default {
               target,
               label: count,
               delta,
+              // Which direction is bad depends on the count: more failures or
+              // more strict XPASSes is a regression, but *fewer* passes is one
+              // too — an environment going down, or collection breaking, shows
+              // up here as a large negative `passed`.
+              worse: count === 'passed' ? delta < 0 : delta > 0,
               to: formatCount(now.counts?.[count]) ?? '—',
             });
           }
@@ -110,7 +115,7 @@ export default {
           <template v-if="change.delta != null">
             <span
               class="badge"
-              :class="change.delta > 0 ? 'outcome outcome-failed' : 'outcome outcome-passed'"
+              :class="change.worse ? 'outcome outcome-failed' : 'outcome outcome-passed'"
             >
               {{ change.delta > 0 ? '+' : '' }}{{ change.delta }}
             </span>

@@ -40,9 +40,23 @@ describe('what changed since the previous run', () => {
     ]);
     expect(wrapper.vm.changes).toEqual([
       { target: 'dev', label: 'babel version', from: '2025sep1', to: '2025oct1' },
-      { target: 'dev', label: 'failed', delta: 8, to: '20' },
+      { target: 'dev', label: 'failed', delta: 8, worse: true, to: '20' },
     ]);
     expect(wrapper.text()).toContain('+8');
+  });
+
+  it('colours a drop in passing tests as a regression, not an improvement', async () => {
+    // The polarity is per count: more failures is bad, but so are *fewer*
+    // passes — an environment going down, or collection breaking, arrives here
+    // as a large negative `passed`, and it used to render green.
+    const dev = (passed, failed) =>
+      JSON.stringify({ date: 'd', targets: { dev: { counts: { passed, failed } } } });
+    const wrapper = await mountWith([dev(1000, 5), dev(800, 5)]);
+    const passedChange = wrapper.vm.changes.find((c) => c.label === 'passed');
+    expect(passedChange.delta).toBe(-200);
+    expect(passedChange.worse).toBe(true);
+    const badge = wrapper.findAll('.list-group-item .badge').find((b) => b.text() === '-200');
+    expect(badge.classes()).toContain('outcome-failed');
   });
 
   it('says so when nothing moved, and shows nothing with only one run', async () => {
