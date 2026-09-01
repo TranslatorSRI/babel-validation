@@ -3,9 +3,7 @@ import io
 from dataclasses import dataclass
 from typing import Optional
 
-import requests
-
-from . import resolve_sheet_id
+from . import fetch_sheet_csv
 
 
 # The Translator Blocklist is stored in a private GitHub repository; however,
@@ -62,12 +60,10 @@ def load_blocklist_from_gsheet():
     """
     # This sheet logs "Red Team" offensive terms, so its ID is doubly a secret:
     # it comes only from the environment and must never be checked in.
-    google_sheet_id = resolve_sheet_id("BABEL_VALIDATION_BLOCKLIST_SHEET_ID")
-    csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
-
-    response = requests.get(csv_url, timeout=10)
-    response.raise_for_status()
-    csv_content = response.text
+    #
+    # This runs at collection time in every xdist worker, so it must go through
+    # the cached, locked helper: see the note on fetch_sheet_csv().
+    csv_content = fetch_sheet_csv("BABEL_VALIDATION_BLOCKLIST_SHEET_ID", "Tests")
 
     rows = []
     with io.StringIO(csv_content) as f:
