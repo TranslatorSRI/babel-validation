@@ -3,10 +3,17 @@
 # in an environment variable (via .env locally, a repository secret in GitHub
 # Actions) and must never appear in the code, the Git history, or anything we
 # publish.
+import hashlib
 import os
 import re
+import time
+import urllib.parse
 
 import dotenv
+import requests
+from filelock import FileLock
+
+from ...core import cache_dir
 
 _SHEET_ID_RE = re.compile(r"[A-Za-z0-9_-]{20,}")
 
@@ -29,3 +36,79 @@ def resolve_sheet_id(env_var, sheet_id=None):
     if not _SHEET_ID_RE.fullmatch(sheet_id):
         raise RuntimeError(f"{env_var} does not look like a Google Sheet ID.")
     return sheet_id
+
+
+def fetch_sheet_csv(
+    env_var,
+    sheet_name,
+    sheet_id=None,
+    cache_ttl_seconds: int = 3600,
+    timeout: int = 30,
+) -> str:
+    """
+    Download one tab of a Google Sheet as CSV and return the text.
+
+    The download is cached in cache_dir() and guarded by a FileLock, so a whole
+    xdist run costs one request no matter how many workers ask: the first worker
+    to take the lock fetches, the rest read the file it wrote. pytest deletes the
+    cache at the start of every run (see tests/conftest.py), so the TTL mainly
+    protects other consumers (e.g. csv-to-babeltests) from reading stale data
+    forever.
+
+    :param env_var: The environment variable holding this sheet's ID.
+    :param sheet_name: The name of the tab to export.
+    :param sheet_id: An explicit sheet ID, overriding the environment variable.
+    :param cache_ttl_seconds: How long a cached download stays valid.
+    :param timeout: Per-request timeout, in seconds.
+    :return: The CSV text of that tab.
+    """
+    sheet_id = resolve_sheet_id(env_var, sheet_id)
+
+    # The tab is part of the identity of the download: two tabs of one sheet are
+    # two different CSVs and must not share a cache file.
+    key = hashlib.md5(f"{sheet_id}\0{sheet_name}".encode()).hexdigest()
+    cache_file = cache_dir() / f"gsheet_{key}.csv"
+    lock_file = cache_file.with_suffix(".lock")
+
+    with FileLock(lock_file):
+        if (
+            cache_file.exists()
+            and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds
+        ):
+            return cache_file.read_text(encoding="utf-8")
+
+        csv_url = (
+            f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq"
+            f"?tqx=out:csv&sheet={urllib.parse.quote(sheet_name)}"
+        )
+        try:
+            response = requests.get(csv_url, timeout=timeout)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            # requests puts the request URL in its exception message, and the URL
+            # contains the sheet ID — the capability that grants access to the
+            # sheet. A transient Google error would otherwise print it straight
+            # into a public GitHub Actions log. `from None` is load-bearing: with
+            # `from e` pytest prints the whole chain, original message included,
+            # which is exactly what we are trying not to publish.
+            raise RuntimeError(
+                f"Could not download tab {sheet_name!r} of the {env_var} sheet: "
+                f"{_redacted_reason(e)}."
+            ) from None
+        csv_content = response.text
+        cache_file.write_text(csv_content, encoding="utf-8")
+
+    return csv_content
+
+
+def _redacted_reason(e: requests.RequestException) -> str:
+    """Describe a failed sheet download without repeating the URL it failed on.
+
+    Anything derived from the exception's own message is unsafe here, so this
+    reports only the status line (when there was a response) or the exception
+    type (when the request never got that far).
+    """
+    response = getattr(e, "response", None)
+    if response is not None:
+        return f"HTTP {response.status_code} {response.reason}"
+    return f"{type(e).__name__} (no response)"

@@ -3,6 +3,31 @@
 import os
 from pathlib import Path
 
+import dotenv
+
+_dotenv_loaded = False
+
+
+def _load_dotenv_once() -> None:
+    """Populate os.environ from .env, at most once per process.
+
+    cache_dir() used to read os.environ directly, which made its answer depend on
+    whether anything had called resolve_sheet_id() (the only other .env reader)
+    yet. tests/conftest.py asks at import time and got ~/.cache/babel-validation,
+    while the sheet downloads ask afterwards and got BABEL_VALIDATION_CACHE_DIR's
+    value — so the start-of-run cache sweep was globbing an empty directory, and
+    a cache_dir() that can change mid-process also breaks the containment check
+    in unlink_if_exists().
+
+    Once, not on every call: load_dotenv() does not override a key already in
+    os.environ, but it does re-set one that has been deleted, which would make it
+    impossible to unset the override for the duration of a test.
+    """
+    global _dotenv_loaded
+    if not _dotenv_loaded:
+        dotenv.load_dotenv()
+        _dotenv_loaded = True
+
 
 def cache_dir() -> Path:
     """A private, per-user directory for cached downloads, created if missing.
@@ -18,9 +43,12 @@ def cache_dir() -> Path:
     rather than mitigating it. Set BABEL_VALIDATION_CACHE_DIR to override it (a CI runner
     without a writable home, say).
     """
+    _load_dotenv_once()
     override = os.environ.get("BABEL_VALIDATION_CACHE_DIR")
     try:
-        path = Path(override) if override else Path.home() / ".cache" / "babel-validation"
+        path = (
+            Path(override) if override else Path.home() / ".cache" / "babel-validation"
+        )
         # mode applies to this directory only; any parents get the default permissions.
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
     except OSError as e:

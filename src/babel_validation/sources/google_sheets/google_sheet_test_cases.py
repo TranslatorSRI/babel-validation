@@ -7,19 +7,13 @@
 #
 # This library contains classes and methods for accessing those test cases.
 import csv
-import hashlib
 import io
-import time
 from collections import Counter
-from pathlib import Path
 
 import pytest
-import requests
 from _pytest.mark import ParameterSet
-from filelock import FileLock
 
-from . import resolve_sheet_id
-from ...core import cache_dir
+from . import fetch_sheet_csv
 from ...core.testrow import TestRow
 
 
@@ -43,26 +37,14 @@ class GoogleSheetTestCases:
             (e.g. csv-to-babeltests) from reading stale data forever.
         """
 
-        google_sheet_id = resolve_sheet_id("BABEL_VALIDATION_SHEET_ID", google_sheet_id)
-
-        self.google_sheet_id = google_sheet_id
-
-        sheet_hash = hashlib.md5(google_sheet_id.encode()).hexdigest()
-        cache_file = cache_dir() / f"gsheet_{sheet_hash}.csv"
-        lock_file = cache_file.with_suffix(".lock")
-
-        with FileLock(lock_file):
-            if (
-                cache_file.exists()
-                and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds
-            ):
-                self.csv_content = cache_file.read_text(encoding="utf-8")
-            else:
-                csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
-                response = requests.get(csv_url, timeout=30)
-                response.raise_for_status()
-                self.csv_content = response.text
-                cache_file.write_text(self.csv_content, encoding="utf-8")
+        # The ID is deliberately not kept on the instance: nothing reads it, and
+        # this object's str() ends up in assertion messages the dashboard publishes.
+        self.csv_content = fetch_sheet_csv(
+            "BABEL_VALIDATION_SHEET_ID",
+            "Tests",
+            sheet_id=google_sheet_id,
+            cache_ttl_seconds=cache_ttl_seconds,
+        )
 
         self.rows = []
         with io.StringIO(self.csv_content) as f:
