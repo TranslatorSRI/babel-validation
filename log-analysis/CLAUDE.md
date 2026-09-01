@@ -55,11 +55,46 @@ skill. Read this before editing a running notebook.
 - Altair embeds at most 5,000 rows by default; call
   `alt.data_transformers.disable_max_rows()` for larger datasets.
 
+## Paths inside a notebook
+
+- **Never use a cwd-relative path.** marimo inherits the cwd of whatever
+  launched it, so `Path("output")` resolves next to the notebook when opened
+  from its own directory and at the repo root when opened from there. That is
+  how generated artifacts end up outside the `log-analysis/<service>/.gitignore`
+  written to catch them — silently, because both spellings "work".
+- Anchor on `mo.notebook_dir()` instead: outputs under
+  `NOTEBOOK_DIR / "output"`, shared inputs under
+  `NOTEBOOK_DIR.parents[1] / "data" / ...`.
+
+## Testing notebook logic
+
+Notebooks are not importable as modules — the `log-analysis` directory has a
+hyphen in it and cells are `@app.cell` functions, not module-level defs. But
+they *are* loadable by path, and marimo's `Cell.run()` executes one cell plus
+its ancestors and hands back its definitions:
+
+```python
+spec = importlib.util.spec_from_file_location("nb", NOTEBOOK)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module          # marimo resolves annotations via sys.modules
+spec.loader.exec_module(module)
+_output, defs = module.parser.run()      # -> {"parse_record": ..., ...}
+```
+
+This only works for cells that touch no data, since the log exports are not
+checked in. So **keep pure helpers in their own cells**, separate from the cell
+that loads or transforms the data — `span_helpers` and `chain_helpers` in
+`nameres/analyze_nameres_logs.py` exist for exactly this reason. Tests live in
+`tests/log_analysis/`.
+
 ## Data & git hygiene
 
 - **Raw log exports and generated artifacts are not committed.** gitignore the
-  log files, any generated `benchmark/` output, and marimo's `__marimo__/`
-  session cache (output snapshots, regenerated on run). Commit only the
-  notebook `.py` source + supporting code.
+  log files, any generated `benchmark/`/`output/` artifacts, and marimo's
+  `__marimo__/` session cache (output snapshots, regenerated on run). Commit
+  only the notebook `.py` source + supporting code.
+- The repo-root `.gitignore` needs **both** `data/` and `data`: the first
+  matches a real directory, the second also matches a worktree's symlink to a
+  shared one. `data/` alone leaves the symlink showing as untracked.
 - Make small, logical commits as the notebook grows (loader → stats → viz →
   export), not one giant commit.
