@@ -49,8 +49,9 @@ jobs:
         # A nonzero pytest exit (failing tests) is normal here: the report is
         # the artifact. `timeout 45m` caps the damage from a hung or down
         # environment, whose per-test timeouts would otherwise add up.
-        # ponytail: sequential loop; split into a matrix job with artifact
-        # merging if total runtime ever approaches the 6h job limit.
+        # ponytail: sequential loop, and ~25 of the run's ~26 minutes. Splitting it
+        # into a matrix job with artifact merging is #122; the 6h job limit is not
+        # the reason to do it, the feedback loop is.
         # The explicit `tests` path is required: without a path argument,
         # pytest-xdist workers do not load tests/conftest.py early enough to
         # know --target/--report-jsonl, and every worker dies at argparse.
