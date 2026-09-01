@@ -34,6 +34,7 @@ import datetime
 import json
 import logging
 import os
+from pathlib import Path
 
 from github import Github, Auth
 
@@ -176,7 +177,12 @@ def main(argv=None):
     generated_at = datetime.datetime.now(datetime.timezone.utc)
     data = build_milestones(collected, allowlist, generated_at)
 
-    with open(args.output, "w", encoding="utf-8") as f:
+    # Created here rather than by the caller, as generate_report.py does with
+    # --out-dir: the workflow writes into a directory that does not exist on a
+    # fresh checkout, and so does anyone running this locally.
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with open(output, "w", encoding="utf-8") as f:
         # allow_nan=False for the same reason generate_report.py sets it: a file
         # no browser can parse is worse than a run that failed.
         json.dump(data, f, separators=(",", ":"), allow_nan=False)

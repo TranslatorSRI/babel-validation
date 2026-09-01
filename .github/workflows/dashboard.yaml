@@ -205,7 +205,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p milestones-data
           uv run python -m src.babel_validation.tools.generate_milestones \
             --targets-ini tests/targets.ini \
             --output milestones-data/milestones.json

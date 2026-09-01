@@ -78,12 +78,15 @@ export default {
   </div>
 
   <div v-else>
+    <!-- Separators go before each part, not between them: Vue condenses
+         whitespace at a <template> boundary, so a trailing " · " inside the
+         conditional is silently dropped and the line reads "past due· as of". -->
     <p class="text-body-secondary">
-      {{ milestones.length }} open milestones · {{ openIssueCount }} open issues<template
-        v-if="pastDueCount"
-      >
-        · <span class="text-danger fw-semibold">{{ pastDueCount }} past due</span> </template
-      >· as of {{ generatedOn }}
+      {{ milestones.length }} open milestones · {{ openIssueCount }} open issues
+      <template v-if="pastDueCount">
+        · <span class="text-danger fw-semibold">{{ pastDueCount }} past due</span>
+      </template>
+      · as of {{ generatedOn }}
     </p>
 
     <p v-if="!milestones.length" class="text-body-secondary">
