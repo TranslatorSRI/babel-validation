@@ -81,9 +81,34 @@ def fetch_sheet_csv(
             f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq"
             f"?tqx=out:csv&sheet={urllib.parse.quote(sheet_name)}"
         )
-        response = requests.get(csv_url, timeout=timeout)
-        response.raise_for_status()
+        try:
+            response = requests.get(csv_url, timeout=timeout)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            # requests puts the request URL in its exception message, and the URL
+            # contains the sheet ID — the capability that grants access to the
+            # sheet. A transient Google error would otherwise print it straight
+            # into a public GitHub Actions log. `from None` is load-bearing: with
+            # `from e` pytest prints the whole chain, original message included,
+            # which is exactly what we are trying not to publish.
+            raise RuntimeError(
+                f"Could not download tab {sheet_name!r} of the {env_var} sheet: "
+                f"{_redacted_reason(e)}."
+            ) from None
         csv_content = response.text
         cache_file.write_text(csv_content, encoding="utf-8")
 
     return csv_content
+
+
+def _redacted_reason(e: requests.RequestException) -> str:
+    """Describe a failed sheet download without repeating the URL it failed on.
+
+    Anything derived from the exception's own message is unsafe here, so this
+    reports only the status line (when there was a response) or the exception
+    type (when the request never got that far).
+    """
+    response = getattr(e, "response", None)
+    if response is not None:
+        return f"HTTP {response.status_code} {response.reason}"
+    return f"{type(e).__name__} (no response)"
