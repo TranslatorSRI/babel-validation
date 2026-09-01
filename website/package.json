@@ -6,21 +6,23 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro check && astro build",
+    "test": "vitest run",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "fetch-data": "mkdir -p public/data && curl -fsSL -o public/data/report.json https://translatorsri.github.io/babel-validation/data/report.json -o public/data/history.jsonl https://translatorsri.github.io/babel-validation/data/history.jsonl"
   },
   "dependencies": {
     "@astrojs/check": "^0.4.1",
     "@astrojs/vue": "^4.0.8",
-    "@popperjs/core": "^2.11.8",
-    "@types/bootstrap": "^5.2.10",
     "astro": "^4.1.1",
-    "astro-bootstrap": "^0.6.2",
-    "bootstrap": "^5.3.2",
-    "csv-stringify": "^6.4.5",
-    "file-saver": "^2.0.5",
-    "lodash": "^4.17.21",
+    "bootstrap": "^5.3.8",
     "typescript": "^5.3.3",
     "vue": "^3.4.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.5.0",
+    "happy-dom": "^20.11.12",
+    "vitest": "^4.1.11"
   }
 }

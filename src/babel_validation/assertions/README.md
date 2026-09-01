@@ -39,6 +39,29 @@ The meaning of each element in a params list depends on the assertion type (see 
 For most assertions the elements are CURIEs; for `HasLabel` the second element is a
 label string; for `ResolvesWithType` the first element is a Biolink type.
 
+## Limits
+
+Issue bodies are untrusted input — anyone can write one, and nothing reviews it before the
+harness parses it and turns it into live NodeNorm and NameRes calls. These caps bound what
+one issue can cost. They sit far above anything a real issue contains:
+
+| Limit | Value |
+| --- | --- |
+| Assertions per issue | 100 |
+| Params lists per issue | 1,000 |
+| Parameters per issue | 1,000 |
+| Characters per parameter | 1,000 |
+
+Exceeding one of the first three fails the whole issue rather than running part of it — split
+the assertions across several issues. An individual parameter that is too long, empty, or
+contains non-printable characters fails only its own params list; the rest of the issue still
+runs.
+
+YAML anchors and aliases (`&name` / `*name`, including merge keys) are rejected: they let a few
+hundred bytes expand into megabytes. Duplicate keys in a `babel_tests` block are rejected too,
+since YAML would silently keep only the last one — and then the block a reviewer reads would
+not be the one that runs.
+
 ---
 
 ## NodeNorm Assertions
@@ -248,15 +271,21 @@ babel_tests:
    These are rendered into this file, so write them for someone reading this README
    rather than for someone reading the class.
 
-3. Implement `test_params_list()` (or both `test_with_*` methods for `AssertionHandler`
-   subclasses). It receives one params_list at a time, already stripped and — unless the
-   handler sets `VALIDATE_CURIES = False` — with its CURIEs validated and pre-warmed in
-   the NodeNorm cache. Yield one result per thing checked, usually one per CURIE, so a
-   failure names the CURIE that failed. Override `curie_params()` if some params are not
-   CURIEs; see `HasLabel` and `SearchByName`.
+3. Declare how many params a params_list may have with `MIN_PARAMS` and `MAX_PARAMS`
+   (default: one or more). Arity is checked during preparation, so a params_list of the
+   wrong length is rejected before any CURIE is looked up and `test_params_list()` never
+   sees it — do not re-check it by hand.
 
-4. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
+4. Implement `test_params_list()` (or both `test_with_*` methods for `AssertionHandler`
+   subclasses). It receives one params_list at a time, of a length you declared, already
+   stripped and — unless the handler sets `VALIDATE_CURIES = False` — with its CURIEs
+   validated and pre-warmed in the NodeNorm cache, so you can index into it directly.
+   Yield one result per thing checked, usually one per CURIE, so a failure names the CURIE
+   that failed. Override `curie_params()` if some params are not CURIEs; see `HasLabel`
+   and `SearchByName`.
+
+5. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
    matter — this file groups handlers by the service they test.
 
-5. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
+6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
    and `uv run pytest -m unit` to confirm the checked-in copy is in sync.

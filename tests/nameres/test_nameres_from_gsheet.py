@@ -33,10 +33,18 @@ def pytest_generate_tests(metafunc):
     )
 
 
-def test_label(target_info, test_row, test_category):
+def test_label(target_info, test_row, test_category, record_property):
     nameres_url = target_info['NameResURL']
     limit = target_info['NameResLimit']
     nameres_xfail_if_in_top = int(target_info['NameResXFailIfInTop'])
+
+    # Structured metadata for the dashboard report (--report-jsonl); forwarded
+    # to the controller by xdist as user_properties.
+    record_property("category", test_row.Category)
+    record_property("source", test_row.Source)
+    record_property("source_url", test_row.SourceURL)
+    record_property("query_id", test_row.QueryID)
+    record_property("query_label", test_row.QueryLabel)
 
     category = test_row.Category
     if not test_category(category):

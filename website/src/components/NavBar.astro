@@ -1,0 +1,120 @@
+---
+// The site's top navigation. Astro, not Vue: it is static, and the only script
+// it needs is the theme toggle below.
+//
+// Every in-page control here is a <button>, never <a href="#">: Layout.astro
+// sets <base href="/babel-validation/">, so "#" resolves against the base and
+// navigates away from the page.
+interface Props {
+  active?: 'dashboard' | 'results' | 'history';
+}
+
+const { active } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+const pages = [
+  { id: 'dashboard', label: 'Dashboard', href: base },
+  { id: 'results', label: 'Results', href: `${base}results/` },
+  { id: 'history', label: 'History', href: `${base}history/` },
+];
+
+const external = [
+  { label: 'Babel', href: 'https://github.com/NCATSTranslator/Babel' },
+  { label: 'Babel Explorer', href: 'https://translatorsri.github.io/babel-explorer/' },
+  { label: 'GitHub', href: 'https://github.com/TranslatorSRI/babel-validation' },
+];
+---
+
+<nav class="navbar navbar-expand bg-dark mb-4" data-bs-theme="dark">
+  <div class="container-xxl">
+    <a class="navbar-brand" href={base}>Babel Validation</a>
+
+    <ul class="navbar-nav flex-row gap-3">
+      {
+        pages.map((page) => (
+          <li class="nav-item">
+            <a
+              class:list={['nav-link', { active: active === page.id }]}
+              aria-current={active === page.id ? 'page' : undefined}
+              href={page.href}
+            >
+              {page.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+
+    <ul class="navbar-nav flex-row gap-3 ms-auto align-items-center">
+      {
+        external.map((link) => (
+          <li class="nav-item d-none d-md-block">
+            <a class="nav-link" href={link.href} target="_blank" rel="noopener">
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+      <li class="nav-item">
+        <button
+          type="button"
+          id="theme-toggle"
+          class="btn btn-sm btn-outline-light"
+          aria-label="Switch between light, dark and system colour themes"
+          title="Colour theme"
+        >
+          <span id="theme-toggle-label">Auto</span>
+        </button>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<script is:inline>
+  // Cycles light -> dark -> auto. The initial theme is applied in <head>,
+  // before first paint, so the page never flashes the wrong one.
+  (() => {
+    const button = document.getElementById('theme-toggle');
+    const label = document.getElementById('theme-toggle-label');
+    if (!button || !label) return;
+
+    const LABELS = { light: 'Light', dark: 'Dark', auto: 'Auto' };
+    const NEXT = { light: 'dark', dark: 'auto', auto: 'light' };
+
+    const read = () => {
+      try {
+        const stored = localStorage.getItem('theme');
+        return stored === 'light' || stored === 'dark' ? stored : 'auto';
+      } catch {
+        return 'auto';
+      }
+    };
+
+    const apply = (choice) => {
+      const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const theme = choice === 'auto' ? (dark ? 'dark' : 'light') : choice;
+      document.documentElement.setAttribute('data-bs-theme', theme);
+      label.textContent = LABELS[choice];
+    };
+
+    apply(read());
+
+    button.addEventListener('click', () => {
+      const choice = NEXT[read()];
+      try {
+        if (choice === 'auto') localStorage.removeItem('theme');
+        else localStorage.setItem('theme', choice);
+      } catch {
+        // Private browsing, or storage disabled: the choice just will not stick.
+      }
+      apply(choice);
+    });
+
+    // Follow the system while the reader has not chosen for themselves.
+    window
+      .matchMedia('(prefers-color-scheme: dark)')
+      .addEventListener('change', () => {
+        if (read() === 'auto') apply('auto');
+      });
+  })();
+</script>
