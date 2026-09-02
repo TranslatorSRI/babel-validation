@@ -1,5 +1,13 @@
-# Runs the full validation suite against every environment daily, then builds
-# and deploys the dashboard website to GitHub Pages.
+# Runs the full validation suite against every environment daily, refreshes the
+# cross-repository milestones data, then builds and deploys the dashboard
+# website to GitHub Pages.
+#
+# Three jobs, because the two data products have nothing to do with each other
+# and should not be able to take each other down: `validate` is 26 minutes of
+# pytest against six deployments, `milestones` is a handful of GitHub API calls.
+# They run in parallel, each uploading its own finished data file, and `publish`
+# assembles whatever arrived, carries forward the last published copy of
+# anything that did not, and makes the one and only write to gh-pages.
 name: Test dashboard
 
 on:
@@ -7,9 +15,11 @@ on:
     - cron: '30 6 * * *'
   workflow_dispatch:
 
+# Read-only by default; only `publish` raises it. The two producer jobs run
+# untrusted input — sheet cells, issue bodies, whatever a deployment returns —
+# and neither has any business being able to push to gh-pages.
 permissions:
-  contents: write   # the deploy action pushes to the gh-pages branch
-  issues: read      # the GitHub issue tests read this repo's issues
+  contents: read
 
 concurrency:
   group: dashboard-deploy
@@ -19,13 +29,25 @@ concurrency:
   # never cancels anything — a cron run must not be able to kill a slower one that
   # is mid-flight, because that is the run that appends the day's history line —
   # and neither does a push, which queues behind whatever is deploying rather than
-  # racing it.
+  # racing it. The group is workflow-level, so all three jobs below live or die
+  # together with the run that started them.
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
-  test-and-deploy:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    permissions:
+      contents: read
+      issues: read    # the GitHub issue tests read this repo's issues
+    outputs:
+      # Set the moment the data files exist, which is several steps before this
+      # job may deliberately fail itself over a broken target. `publish` gates
+      # on this rather than on needs.validate.result for exactly that reason:
+      # "one of six targets broke" is an ordinary day here, and it must still
+      # publish the five that worked. Outputs set before a later step fails are
+      # preserved.
+      data-published: ${{ steps.generate-report.outputs.data-published }}
     steps:
       - uses: actions/checkout@v4
 
@@ -102,11 +124,14 @@ jobs:
             esac
           done
           # Recorded, not raised here: the report is still worth generating and
-          # publishing for the targets that did work. The last step turns this
-          # into a failed job, after the deploy.
+          # publishing for the targets that did work. The last step of this job
+          # turns it into a failure, after the data has been handed to `publish`.
           echo "BROKEN_TARGETS=$broken" >> "$GITHUB_ENV"
 
       - name: Fetch the previous run history
+        # For generate_report to append today's line to. Not the same thing as
+        # publish's carry-forward, which covers this job never getting here.
+        #
         # The published file is the source of truth: the deploy action
         # force-pushes gh-pages as a single commit, so the branch is not an
         # append log. The Pages CDN caches for ~10 minutes, so a manual
@@ -118,14 +143,142 @@ jobs:
             || : > old_history.jsonl
 
       - name: Generate the report
+        id: generate-report
         run: |
           uv run python -m src.babel_validation.tools.generate_report \
             --raw-dir raw --targets-ini tests/targets.ini \
             --history-in old_history.jsonl --out-dir website/public/data
+          # Steps run under `bash -e`, so this line is only reached when the
+          # generator exited 0 — it exits nonzero when every target was
+          # unreachable, which is a run with nothing worth publishing.
+          echo "data-published=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the dashboard data
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-data
+          path: website/public/data
+          retention-days: 14
+
+      - name: Upload raw outcomes for debugging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-jsonl
+          path: raw/
+          retention-days: 14
+
+      - name: Fail if any target's run broke
+        # Last, so the data for the targets that worked has already been handed
+        # to `publish`, which is gated on the output above and not on this job's
+        # result. `all_targets_unreachable` in generate_report already stops a
+        # run where *everything* died; this catches the partial case, which
+        # otherwise renders as "environment unreachable" and reads as someone
+        # else's fault. Expect a red `validate` beside a green `publish` on
+        # those days: the site is up to date and a target still needs looking at.
+        if: env.BROKEN_TARGETS != ''
+        run: |
+          echo "These targets produced no usable results:${BROKEN_TARGETS}" >&2
+          echo "See the annotations above for each one's pytest exit code." >&2
+          exit 1
+
+  milestones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # For this repository's own milestones. The other four in targets.ini's
+      # Repositories list are public repositories in another organization, which
+      # any valid token reads regardless of what is declared here — that is the
+      # whole reason this needs no PAT. See docs/milestones-page.md.
+      issues: read
+    outputs:
+      data-published: ${{ steps.generate-milestones.outputs.data-published }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Generate the milestones data
+        id: generate-milestones
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run python -m src.babel_validation.tools.generate_milestones \
+            --targets-ini tests/targets.ini \
+            --output milestones-data/milestones.json
+          echo "data-published=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the milestones data
+        uses: actions/upload-artifact@v4
+        with:
+          name: milestones-data
+          path: milestones-data
+          retention-days: 14
+
+  publish:
+    needs: [validate, milestones]
+    # always(), or GitHub skips this the moment either producer fails — and
+    # `validate` failing over one broken target is an ordinary day. The
+    # condition is on the jobs' outputs rather than their results for the same
+    # reason: what matters is whether usable data exists, not whether the job
+    # that made it went on to raise a finding about a deployment.
+    if: always() && (needs.validate.outputs.data-published == 'true' || needs.milestones.outputs.data-published == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write   # the deploy action pushes to the gh-pages branch
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the dashboard data
+        if: needs.validate.outputs.data-published == 'true'
+        continue-on-error: true   # the carry-forward below is the real backstop
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-data
+          path: website/public/data
+
+      - name: Download the milestones data
+        if: needs.milestones.outputs.data-published == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: milestones-data
+          path: website/public/data
+
+      - name: Carry forward the last published copy of anything missing
+        # The deploy below force-pushes gh-pages as a single commit and cleans
+        # by default, so a file missing from website/dist is a file *deleted*
+        # from the live site. One producer failing would therefore take down a
+        # page that has nothing to do with it.
+        #
+        # So anything this run did not produce is refetched from the live site
+        # and republished unchanged. Each page renders its own generated_at, so
+        # a carried-forward file reads as stale rather than as current. If even
+        # the live copy is gone — the first run of a new data file — the page
+        # falls back to its own load-error state, which is why every component
+        # has one; the build does not read these files, so nothing else breaks.
+        run: |
+          mkdir -p website/public/data
+          for name in report.json history.jsonl milestones.json; do
+            path="website/public/data/$name"
+            # An explicit `if`, not `[ -s "$path" ] && continue`: steps run under
+            # `bash -e`, where a bare test that fails is a coin flip on whether
+            # the step aborts. The whole point of this step is to survive things
+            # being missing.
+            if [ -s "$path" ]; then
+              continue
+            fi
+            url="https://translatorsri.github.io/babel-validation/data/$name"
+            echo "::warning title=Carrying forward stale data::$name was not regenerated by this run; refetching the published copy"
+            curl -fsSL -o "$path" "$url" \
+              || echo "::warning title=Nothing to carry forward::$url is unavailable too; $name will be missing from the site"
+          done
 
       # Node 24 for npm 11 — see the note in tests.yaml. Without this the job
-      # gets the runner's default Node and fails at npm ci, four hours into the
-      # run, after every test has already been paid for.
+      # gets the runner's default Node and fails at npm ci.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -143,22 +296,3 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: website/dist
-
-      - name: Fail if any target's run broke
-        # Last, so the report for the targets that worked is already published.
-        # `all_targets_unreachable` in generate_report already stops a run where
-        # *everything* died; this catches the partial case, which otherwise
-        # renders as "environment unreachable" and reads as someone else's fault.
-        if: env.BROKEN_TARGETS != ''
-        run: |
-          echo "These targets produced no usable results:${BROKEN_TARGETS}" >&2
-          echo "See the annotations above for each one's pytest exit code." >&2
-          exit 1
-
-      - name: Upload raw outcomes for debugging
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: raw-jsonl
-          path: raw/
-          retention-days: 14

@@ -9,7 +9,7 @@
     "test": "vitest run",
     "preview": "astro preview",
     "astro": "astro",
-    "fetch-data": "mkdir -p public/data && curl -fsSL -o public/data/report.json https://translatorsri.github.io/babel-validation/data/report.json -o public/data/history.jsonl https://translatorsri.github.io/babel-validation/data/history.jsonl"
+    "fetch-data": "mkdir -p public/data && curl -fsSL -o public/data/report.json https://translatorsri.github.io/babel-validation/data/report.json -o public/data/history.jsonl https://translatorsri.github.io/babel-validation/data/history.jsonl -o public/data/milestones.json https://translatorsri.github.io/babel-validation/data/milestones.json"
   },
   "dependencies": {
     "@astrojs/check": "^0.4.1",

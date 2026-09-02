@@ -65,6 +65,19 @@ Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* dir
 `lib`, including under `website/src/` — a file there builds locally but never reaches CI.
 Check `git status` shows new frontend files as tracked.
 
+**Exactly one workflow writes `gh-pages`, and it must stay that way.** `dashboard.yaml` deploys
+`website/dist` to the *root* of that branch with `github-pages-deploy-action`, which cleans by
+default — it force-pushes the branch as a single commit. So a second publisher does not coexist
+with it: whichever ran last deletes the other's output, and a `clean-exclude` plus a shared
+`concurrency` group is two things to keep in step forever. This was a real near-miss — the
+milestones page was originally published by its own workflow into `gh-pages:milestones/`, which
+the dashboard's deploy would have silently deleted on the next daily run.
+
+A new page therefore joins the existing pipeline rather than adding a publisher: a generator
+writing one more JSON file into `website/public/data/`, an Astro route mounting a Vue island, and
+a job in `dashboard.yaml` feeding the one deploy. See [docs/milestones-page.md](docs/milestones-page.md)
+for the worked example.
+
 ## Architecture
 
 ### Library (`src/babel_validation/`)
@@ -98,16 +111,31 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 ### Dashboard Website
 
 - **`website/`** — Astro + Vue site deployed to GitHub Pages
-  (https://translatorsri.github.io/babel-validation/). Three pages under one `Layout.astro`
+  (https://translatorsri.github.io/babel-validation/). Four pages under one `Layout.astro`
   shell (nav bar, cards on a tinted page, `data-bs-theme` dark mode, all custom CSS in
   `src/styles/theme.css`): `/` renders the environment cards, the promotion-drift panel and
   the `/status` matrix from `report.json`; `/results/` renders the tests-by-environment
   matrix behind a sticky filter bar; `/history/` renders `history.jsonl` plus a diff against
-  the previous run. Everything about the report that is not markup — link builders, labels,
-  the interestingness predicate — lives in `src/reportData.js`. Regenerated daily by `.github/workflows/dashboard.yaml`: pytest per target with
-  `--report-jsonl` (a `pytest_runtest_logreport` hook in `tests/conftest.py`), then
-  `src/babel_validation/tools/generate_report.py` aggregates the raw outcomes, fetches each
-  target's `/status`, and writes both data files into `website/public/data/`.
+  the previous run; `/milestones/` renders `milestones.json`. Each is a thin `.astro` route
+  mounting one Vue island with `client:only="vue"`. Everything about the report that is not
+  markup — link builders, labels, the interestingness predicate — lives in `src/reportData.js`.
+- **`.github/workflows/dashboard.yaml`** regenerates all three data files daily and makes the
+  only write to `gh-pages`. Three jobs: `validate` runs pytest per target with `--report-jsonl`
+  (a `pytest_runtest_logreport` hook in `tests/conftest.py`) and then
+  `src/babel_validation/tools/generate_report.py`, which aggregates the raw outcomes and fetches
+  each target's `/status`; `milestones` runs
+  `src/babel_validation/tools/generate_milestones.py` against the GitHub API, in parallel and
+  independently, so the milestones page does not inherit a 26-minute test run's failure modes;
+  `publish` assembles both, carries forward the last published copy of anything this run did not
+  produce, builds and deploys.
+
+  Two things there are load-bearing and easy to undo. **`publish` gates on job outputs, not
+  `needs.<job>.result`**: `validate` deliberately fails itself when a target's run broke, which
+  happens on ordinary days, so a result-based condition would skip a report that generated
+  perfectly well. And **the deploy cleans the branch**, so a data file missing from
+  `website/dist` is a file deleted from the live site — which is why `publish` refetches rather
+  than publishing a gap, and why nothing else may write `gh-pages`. See
+  [docs/milestones-page.md](docs/milestones-page.md).
 - **`scala-validation/`** — Legacy, unmaintained
 
 ## Untrusted Input

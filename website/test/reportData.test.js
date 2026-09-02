@@ -1,7 +1,14 @@
 // The link builders turn untrusted report text into URLs, so they are the one
 // piece of reportData.js worth testing directly.
 import { describe, it, expect } from 'vitest';
-import { explorerLink, isInteresting, issueLink, rowLabel, runLink } from '../src/reportData.js';
+import {
+  explorerLink,
+  isInteresting,
+  issueLink,
+  milestoneLink,
+  rowLabel,
+  runLink,
+} from '../src/reportData.js';
 
 describe('link builders', () => {
   it('only links an issue id shaped like org/repo#N', () => {
@@ -10,6 +17,18 @@ describe('link builders', () => {
     );
     for (const issue of ['evil/repo#1);drop', '../../etc#1', 'no-slash#1', 'a/b#x', undefined]) {
       expect(issueLink({ issue })).toBeNull();
+    }
+  });
+
+  it('only links a milestone id shaped like org/repo#N', () => {
+    // Same validation as issueLink, different path. The milestones page would
+    // otherwise be tempted to build this from milestone.repo, which is
+    // sanitized for display but never checked against the allowlist.
+    expect(milestoneLink({ milestone: 'NCATSTranslator/Babel#12' })).toBe(
+      'https://github.com/NCATSTranslator/Babel/milestone/12'
+    );
+    for (const milestone of ['evil/repo#1);drop', '../../etc#1', 'no-slash#1', 'a/b#x', undefined]) {
+      expect(milestoneLink({ milestone })).toBeNull();
     }
   });
 

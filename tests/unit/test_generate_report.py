@@ -14,6 +14,7 @@ from src.babel_validation.tools.generate_report import (
     fetch_status,
     parse_nodeid,
     read_raw_records,
+    read_repositories,
     read_targets,
     sanitize,
     split_target,
@@ -495,10 +496,41 @@ class TestReadTargets:
     def test_it_keeps_the_order_the_file_gives(self, tmp_path):
         # The site sorts by DEPLOYMENT_ORDER, but the workflow runs them in this
         # order, and a report is easier to read against the file it came from.
-        path = self._ini(tmp_path, "".join(f"[{name}]\nNodeNormURL = https://{name}.example/\n\n"
-                                           for name in ("exp", "dev", "ci", "prod")))
+        path = self._ini(
+            tmp_path,
+            "".join(
+                f"[{name}]\nNodeNormURL = https://{name}.example/\n\n"
+                for name in ("exp", "dev", "ci", "prod")
+            ),
+        )
 
         assert read_targets(path)[0] == ["exp", "dev", "ci", "prod"]
+
+    def test_read_repositories_keeps_the_case_the_allowlist_drops(self, tmp_path):
+        # The whole reason read_repositories exists: read_targets lowercases,
+        # because an allowlist is only ever asked "is this in you?", but these
+        # names are what the GitHub API is called with and what the site
+        # renders. github.com resolves a lowercased name fine, so the bug would
+        # be a wrongly-cased label rather than a failure — the kind nobody files.
+        path = self._ini(
+            tmp_path,
+            "[DEFAULT]\nRepositories =\n"
+            "    NCATSTranslator/Babel\n"
+            "      TranslatorSRI/babel-validation  \n\n"
+            "[prod]\nNodeNormURL = https://prod.example/\n",
+        )
+
+        _, allowlist, config = read_targets(path)
+
+        assert allowlist == ["ncatstranslator/babel", "translatorsri/babel-validation"]
+        assert read_repositories(config) == [
+            "NCATSTranslator/Babel",
+            "TranslatorSRI/babel-validation",
+        ]
+
+    def test_read_repositories_is_empty_when_the_key_is_absent(self, tmp_path):
+        path = self._ini(tmp_path, "[prod]\nNodeNormURL = https://prod.example/\n")
+        assert read_repositories(read_targets(path)[2]) == []
 
     def test_the_repository_allowlist_is_lowercased_and_stripped(self, tmp_path):
         path = self._ini(
@@ -507,7 +539,10 @@ class TestReadTargets:
             "[prod]\nNodeNormURL = https://prod.example/\n",
         )
 
-        assert read_targets(path)[1] == ["ncatstranslator/babel", "translatorsri/babel-explorer"]
+        assert read_targets(path)[1] == [
+            "ncatstranslator/babel",
+            "translatorsri/babel-explorer",
+        ]
 
     def test_the_checked_in_targets_ini_has_no_localhost_and_is_not_empty(self):
         targets, _, _ = read_targets("tests/targets.ini")
