@@ -7,7 +7,7 @@ benchmark/
 # Generated CSV exports — regenerated from the (uncommitted) logs.
 output/
 
-# Shareable exports (marimo export html/ipynb). Generated, never edited by hand,
-# and they embed rendered cell outputs — which include Kubernetes pod names and
-# container image tags. Share them out of band, not through this repo.
+# Shareable exports (marimo export html/ipynb). Generated, never edited by hand.
+# They embed rendered cell outputs, which include every query string users typed.
+# Share them out of band, not through this repo.
 exports/
