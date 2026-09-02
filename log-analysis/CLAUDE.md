@@ -114,8 +114,14 @@ one notebook to export.
 - **`marimo export html` runs the notebook**, so it needs the log exports on
   disk. Nobody without a populated `data/log-analysis/` can regenerate one.
 - **`exports/` is gitignored, and must stay that way.** The rendered outputs
-  embed Kubernetes pod names and container image tags from the log records.
-  Share exports out of band (e.g. a shared Drive), not through this repo.
+  embed every query string real users typed. Share exports out of band (e.g. a
+  shared Drive), not through this repo.
+- **Keep infrastructure identifiers out of any frame that gets rendered whole.**
+  `df` is displayed in full, so it is the one place a parsed field reaches the
+  export; every other displayed table names its columns explicitly. `pod_name`
+  and `image_tag` are parsed onto `entries` and dropped from `df` for exactly
+  this reason. After changing what a rendered frame contains, re-export and grep
+  it before sharing.
 
 ## Data & git hygiene
 

@@ -330,7 +330,13 @@ def loader(
 
 @app.cell
 def dataframe(asdict, entries: "list[QueryLogEntry]", np, pd):
-    df = pd.DataFrame([asdict(e) for e in entries])
+    # `pod_name` and `image_tag` are parsed onto every QueryLogEntry but deliberately
+    # kept out of `df`. Nothing in this notebook analyses them, and `df` is the one
+    # frame rendered in full — so it is the only place they reach the shared HTML
+    # export (every other displayed table names its columns explicitly). They remain
+    # on `entries` for a future notebook comparing NameRes versions or Solr
+    # instances; rebuild from `entries` there rather than adding them back here.
+    df = pd.DataFrame([asdict(e) for e in entries]).drop(columns=["pod_name", "image_tag"])
     df["time"] = pd.to_datetime(df["time"])
 
     # This notebook is autocomplete-only; a stray exact lookup means the export was
@@ -1041,8 +1047,12 @@ def next_steps(mo):
        `pod_name`, log line).
 
     7. **Extra breakdowns.** Latency by `biolink_types` filter set, by prefix/taxa
-       filters, and by pod / image tag (`pod_name`, `image_tag` are already parsed)
-       to check for per-instance or per-version effects.
+       filters, and by pod / image tag, to check for per-instance or per-version
+       effects. `pod_name` and `image_tag` are parsed onto `entries` but kept off
+       `df`, since `df` is rendered in full into the shared HTML export and nothing
+       here analyses them — start from `entries`. Comparing NameRes releases (say
+       v1.5.2 against v1.7.0) is the case that would make `image_tag` earn its
+       place.
     """)
     return
 
