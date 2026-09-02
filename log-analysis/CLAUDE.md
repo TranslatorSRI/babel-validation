@@ -87,6 +87,36 @@ that loads or transforms the data — `span_helpers` and `chain_helpers` in
 `nameres/analyze_nameres_logs.py` exist for exactly this reason. Tests live in
 `tests/log_analysis/`.
 
+## Sharing a notebook (exports)
+
+The notebook `.py` is the **only** editable source. Everything below is a
+generated snapshot: regenerate it, never edit it, and never treat an edit made
+to an export as work to merge back.
+
+Export to a single self-contained HTML file, into the notebook's `exports/`
+directory, with a `.generated.` infix in the filename:
+
+```bash
+uv run marimo export html log-analysis/nameres/analyze_nameres_logs.py \
+  -o log-analysis/nameres/exports/analyze_nameres_logs.generated.html -f
+```
+
+That is enough for current needs; wrap it in a script when there is more than
+one notebook to export.
+
+- **HTML is the default format**, because it opens in any browser with nothing
+  installed and cannot be forked by accident. `marimo export ipynb
+  --include-outputs --sort top-down` also produces a genuinely readable Jupyter
+  notebook (`mo.md` cells become real markdown cells), but hand it out only when
+  someone has said they want to run the numbers themselves — an `.ipynb` invites
+  editing, and edits to it are lost work. Use `--sort top-down`, not the default
+  `topological`, so the title cell stays first.
+- **`marimo export html` runs the notebook**, so it needs the log exports on
+  disk. Nobody without a populated `data/log-analysis/` can regenerate one.
+- **`exports/` is gitignored, and must stay that way.** The rendered outputs
+  embed Kubernetes pod names and container image tags from the log records.
+  Share exports out of band (e.g. a shared Drive), not through this repo.
+
 ## Data & git hygiene
 
 - **Raw log exports and generated artifacts are not committed.** gitignore the
