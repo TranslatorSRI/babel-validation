@@ -40,21 +40,27 @@ class SearchByNameHandler(NameResTest):
 
         expected_curie = expected_curie_result['id']['identifier']
         expected_curie_label = expected_curie_result['id'].get('label', '')
-        expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
+        expected_curie_string = (
+            f"Expected CURIE {expected_curie_from_test!r}, normalized to "
+            f"{expected_curie!r} {expected_curie_label!r}"
+        )
 
         results = nameres.lookup(search_query, autocomplete='false', limit=pass_if_found_in_top)
         if not results:
-            yield self.failed(f"No results found for '{search_query}' on NameRes {nameres} ({expected_curie_string})")
+            yield self.failed(
+                f"No results found for {search_query!r} on NameRes {nameres} ({expected_curie_string})")
             return
 
         curies = [result['curie'] for result in results]
         if expected_curie not in curies:
             logging.getLogger(__name__).debug(
-                "%s not found in top %d results for '%s' in NameRes %s: %s",
+                "%s not found in top %d results for %r in NameRes %s: %s",
                 expected_curie_string, pass_if_found_in_top, search_query, nameres,
                 json.dumps(results, indent=2, sort_keys=True)
             )
-            yield self.failed(f"{expected_curie_string} not found in top {pass_if_found_in_top} results for '{search_query}' in NameRes {nameres}")
+            yield self.failed(
+                f"{expected_curie_string} not found in top {pass_if_found_in_top} results for "
+                f"{search_query!r} in NameRes {nameres}")
             return
 
         yield self.passed(f"{expected_curie_string} found at index {curies.index(expected_curie) + 1} on NameRes {nameres}")
@@ -184,7 +190,7 @@ class DoesNotSearchByNameHandler(NameResTest):
 
         index = curies.index(rejected_curie)
         logging.getLogger(__name__).debug(
-            "%s was returned at rank %d for '%s' in NameRes %s: %s",
+            "%s was returned at rank %d for %r in NameRes %s: %s",
             rejected_curie_string, index + 1, search_query, nameres,
             json.dumps(results, indent=2, sort_keys=True)
         )
