@@ -230,6 +230,52 @@ babel_tests:
 
 ---
 
+### SearchByNameTopResult
+
+**Applies to:** NameRes
+
+Each params_list must have exactly two elements: a search query string and an expected CURIE. The test passes only if the CURIE's normalized identifier is the very first result when NameRes looks up the search query. Use this rather than SearchByName when the point is that the concept must win, not merely appear: SearchByName accepts anything in the top N.
+
+**Parameters:** Each params_list: the **search query string** and the **expected CURIE**. The CURIE is normalized via NodeNorm before matching.
+
+**Wiki syntax:**
+```
+{{BabelTest|SearchByNameTopResult|water|CHEBI:15377}}
+```
+
+**YAML syntax:**
+```yaml
+babel_tests:
+  SearchByNameTopResult:
+    - [water, CHEBI:15377]
+    - [diabetes, MONDO:0005015]
+```
+
+---
+
+### DoesNotSearchByName
+
+**Applies to:** NameRes
+
+Each params_list must have exactly two elements: a search query string and a CURIE that must not be returned. The test passes if the CURIE's normalized identifier is absent from the top N results (default N=5) when NameRes looks up the search query. This is how a blocklisted term is asserted: the term is searchable, but the concept must not come back.
+
+**Parameters:** Each params_list: the **search query string** and the **CURIE that must not be returned**. The CURIE is normalized via NodeNorm before matching.
+
+**Wiki syntax:**
+```
+{{BabelTest|DoesNotSearchByName|mongoloid|HP:0000582}}
+```
+
+**YAML syntax:**
+```yaml
+babel_tests:
+  DoesNotSearchByName:
+    - [mongoloid, HP:0000582]
+    - [retard, HP:0006887]
+```
+
+---
+
 ## Special Assertions
 
 ### Needed

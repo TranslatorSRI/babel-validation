@@ -362,7 +362,9 @@ from src.babel_validation.assertions.nodenorm import (  # noqa: E402
     ResolvesHandler, DoesNotResolveHandler, ResolvesWithHandler,
     ResolvesWithTypeHandler, DoesNotResolveWithHandler, HasLabelHandler,
 )
-from src.babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
+from src.babel_validation.assertions.nameres import (  # noqa: E402
+    SearchByNameHandler, SearchByNameTopResultHandler, DoesNotSearchByNameHandler,
+)
 from src.babel_validation.assertions.common import NeededHandler  # noqa: E402
 
 def _register(handlers: list[AssertionHandler]) -> dict[str, AssertionHandler]:
@@ -400,5 +402,7 @@ ASSERTION_HANDLERS: dict[str, AssertionHandler] = _register([
     HasLabelHandler(),
     ResolvesWithTypeHandler(),
     SearchByNameHandler(),
+    SearchByNameTopResultHandler(),
+    DoesNotSearchByNameHandler(),
     NeededHandler(),
 ])
