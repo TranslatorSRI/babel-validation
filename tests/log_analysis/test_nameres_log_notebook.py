@@ -19,6 +19,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+# Without this the only pytest job in CI (`pytest -m unit`) deselects the whole
+# file, and it looks like passing coverage while testing nothing.
+pytestmark = pytest.mark.unit
+
 NOTEBOOK = (
     Path(__file__).parents[2] / "log-analysis" / "nameres" / "analyze_nameres_logs.py"
 )
