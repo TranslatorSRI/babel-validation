@@ -3,6 +3,8 @@
 
 # Ignore all data files.
 data/
+# But committed test fixtures in tests/data/ should be tracked.
+!tests/data/
 
 # From GitHub
 *.class

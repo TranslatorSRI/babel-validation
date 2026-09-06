@@ -1,0 +1,11 @@
+OutputID,Label,Type,Equiv,Notes
+CHEBI:15365,aspirin,biolink:SmallMolecule,PUBCHEM.COMPOUND:2244,basic case
+MONDO:0005015,type 2 diabetes mellitus,biolink:Disease,,no equiv CURIE
+HGNC:11998,TP53,biolink:Gene,NCBIGene:7157,gene with numeric NCBIGene equiv
+CHEBI:6801,"metformin",biolink:SmallMolecule,,quoted label
+CHEBI:27732,"caffeine, anhydrous",biolink:SmallMolecule,,label with comma (must stay quoted)
+DRUGBANK:DB00001,"Adenosine 5'-phosphosulfate",biolink:SmallMolecule,,apostrophe in label
+CHEBI:1,"foo [bar] (baz)",biolink:SmallMolecule,,brackets and parens in label
+,missing curie,biolink:Disease,,empty OutputID — should be skipped with a warning
+CHEBI:15365,aspirin,biolink:SmallMolecule,PUBCHEM.COMPOUND:2244,exact duplicate of row 2 — deduped when --dedupe
+CHEBI:17968,butyric acid,,CHEBI:17968,no type column value — ResolvesWithType should be skipped
