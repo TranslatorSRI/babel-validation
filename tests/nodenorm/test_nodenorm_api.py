@@ -2,8 +2,6 @@
 # Tests for the NodeNorm API
 # These tests are intended to ensure that all the API endpoints on NodeNorm are working as intended.
 #
-import datetime
-import re
 import urllib.parse
 
 import pytest
@@ -11,19 +9,16 @@ import requests
 from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
-from tests._service_helpers import assert_backend, assert_x_translator, openapi_url, truncated_repr
+from tests._service_helpers import (
+    assert_backend,
+    assert_x_translator,
+    openapi_url,
+    parse_babel_version,
+    truncated_repr,
+)
 
 # The backends a NodeNorm deployment can report in /status.
 KNOWN_BACKENDS = {'redis', 'elasticsearch'}
-
-# Babel releases are named for the day they were made, e.g. '2026sep24', optionally with an
-# alphanumeric suffix after a hyphen, e.g. '2026sep24-dev'. Each part is a fixed width or a
-# disjoint character class, so there is nothing here to backtrack over.
-BABEL_MONTHS = ('jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec')
-BABEL_VERSION_RE = re.compile(
-    r'(?P<year>\d{4})(?P<month>' + '|'.join(BABEL_MONTHS) + r')(?P<day>\d{1,2})(?:-[A-Za-z0-9]+)?'
-)
-BABEL_VERSION_MAX_LENGTH = 64
 
 # Where each Babel release's notes are published. NodeNorm links to them on `master`,
 # which GitHub redirects now that Babel's default branch is `main`; either is correct.
@@ -98,35 +93,6 @@ def get_status(target_info):
     return url, status_json
 
 
-def parse_babel_version(url, status_json):
-    """
-    Assert that /status reports a well-formed babel_version, and return it.
-
-    :param url: The URL the status was retrieved from, for the error messages.
-    :param status_json: The parsed /status response.
-    :return: The babel_version, which is safe to build a URL from.
-    """
-    assert 'babel_version' in status_json, f"{url} does not report a babel_version."
-    babel_version = status_json['babel_version']
-
-    match = None
-    if isinstance(babel_version, str) and len(babel_version) <= BABEL_VERSION_MAX_LENGTH:
-        match = BABEL_VERSION_RE.fullmatch(babel_version)
-    assert match, (
-        f"{url} reports babel_version {truncated_repr(babel_version)}, which is not a Babel "
-        f"release name such as '2026sep24' or '2026sep24-dev'."
-    )
-
-    try:
-        datetime.date(
-            int(match['year']), BABEL_MONTHS.index(match['month']) + 1, int(match['day'])
-        )
-    except ValueError:
-        pytest.fail(f"{url} reports babel_version {babel_version!r}, which is not a real date.")
-
-    return babel_version
-
-
 def test_status_backend_is_known(target_info):
     """
     Test that /status reports its backend, and that it is one NodeNorm has.
@@ -151,6 +117,11 @@ def test_status_backend_is_known(target_info):
 def test_status_babel_version(target_info):
     """
     Test that /status reports the Babel release it is serving, by its release name.
+
+    ORION and DINGO read babel_version to decide when their normalization is out of date,
+    so a malformed one is not cosmetic. NodeNorm ES has reported one twice: '1.9'
+    (biothings/NodeNormalizationAPI#24, fixed in biothings/NodeNormalizationAPI#30), and
+    later 'VERSION.txt' on nodenorm-es.ci.
 
     :param target_info: The target information for this set of tests.
     """

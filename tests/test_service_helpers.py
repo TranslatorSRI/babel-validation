@@ -15,6 +15,7 @@ from tests._service_helpers import (
     assert_backend,
     assert_x_translator,
     openapi_url,
+    parse_babel_version,
     truncated_keys_repr,
     truncated_repr,
 )
@@ -151,3 +152,35 @@ class TestBackend:
         message = str(excinfo.value)
         assert '\x1b' not in message
         assert '\\x1b[2Jredis' in message
+
+
+STATUS_URL = 'https://example.org/status'
+
+
+@pytest.mark.parametrize('babel_version', ['2026sep24', '2025sep1', '2026sep24-dev', '2026feb28-rc1'])
+def test_a_babel_release_name_is_accepted(babel_version):
+    assert parse_babel_version(STATUS_URL, {'babel_version': babel_version}) == babel_version
+
+
+@pytest.mark.parametrize('status_json, expected_message', [
+    # What NodeNorm ES has actually reported: biothings/NodeNormalizationAPI#24, and later
+    # nodenorm-es.ci. These are the regressions this check exists to catch.
+    ({'babel_version': '1.9'}, 'not a Babel release name'),
+    ({'babel_version': 'VERSION.txt'}, 'not a Babel release name'),
+    # Near misses on the name itself.
+    ({'babel_version': '2026SEP24'}, 'not a Babel release name'),
+    ({'babel_version': '2026sept24'}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24-'}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24-dev-2'}, 'not a Babel release name'),
+    ({'babel_version': ' 2026sep24'}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24\n'}, 'not a Babel release name'),
+    ({'babel_version': '2026feb30'}, 'not a real date'),
+    # Not a string at all, or too long to be one.
+    ({'babel_version': None}, 'not a Babel release name'),
+    ({'babel_version': 20260924}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24-' + 'x' * 100}, 'not a Babel release name'),
+    ({}, 'does not report a babel_version'),
+])
+def test_a_malformed_babel_version_names_the_problem(status_json, expected_message):
+    with pytest.raises(AssertionError, match=expected_message):
+        parse_babel_version(STATUS_URL, status_json)
