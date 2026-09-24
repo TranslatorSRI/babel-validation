@@ -11,7 +11,7 @@ def test_nodenorm_229(target_info):
     query_url = urllib.parse.urljoin(nodenorm_url, "query")
     response = requests.head(query_url)
     if response.status_code == 404:
-        pytest.skip(f"NodeNorm {nodenorm_url} not have a /query endpoint, cannot test issue #229")
+        pytest.skip(f"NodeNorm {nodenorm_url} does not have a /query endpoint, cannot test issue #229")
         return
 
     input_json = {
@@ -506,7 +506,7 @@ def test_nodenorm_229(target_info):
     }
 
     response = requests.post(query_url, json=input_json)
-    assert response.ok, f"Could not POST test content to {url}: {response.json()}"
+    assert response.ok, f"Could not POST test content to {query_url}: {response.json()}"
     actual_output = response.json()
 
     # For this issue, we are primarily interested in the results.
