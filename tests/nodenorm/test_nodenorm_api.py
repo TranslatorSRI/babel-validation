@@ -9,7 +9,10 @@ import requests
 from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
-from tests._service_helpers import assert_backend, assert_x_translator, openapi_url
+from tests._service_helpers import assert_backend, assert_x_translator, openapi_url, truncated_repr
+
+# The backends a NodeNorm deployment can report in /status.
+KNOWN_BACKENDS = {'redis', 'elasticsearch'}
 
 
 def test_openapi_json(target_info):
@@ -59,3 +62,42 @@ def test_status_backend(target_info):
         )
 
     assert_backend(url, status_json, expected_backend)
+
+
+def get_status(target_info):
+    """
+    GET a target's /status, and return its URL and the JSON object it returned.
+
+    :param target_info: The target information for this set of tests.
+    :return: A tuple of the /status URL and its parsed response.
+    """
+    url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
+    response = requests.get(url)
+    assert response.ok, f"Could not GET {url}: {response}"
+
+    status_json = response.json()
+    assert isinstance(status_json, dict), (
+        f"{url} did not return a JSON object: {truncated_repr(status_json)}"
+    )
+    return url, status_json
+
+
+def test_status_backend_is_known(target_info):
+    """
+    Test that /status reports its backend, and that it is one NodeNorm has.
+
+    Unlike test_status_backend, which skips a deployment that does not report a backend
+    because it cannot be checked against targets.ini, this fails it: every current
+    NodeNorm release reports one, so a deployment that doesn't is out of date.
+
+    :param target_info: The target information for this set of tests.
+    """
+    url, status_json = get_status(target_info)
+
+    assert 'backend' in status_json, (
+        f"{url} does not report a backend: it should be one of {sorted(KNOWN_BACKENDS)}."
+    )
+    assert status_json['backend'] in KNOWN_BACKENDS, (
+        f"{url} reports backend {truncated_repr(status_json['backend'])}, which is not one of "
+        f"{sorted(KNOWN_BACKENDS)}."
+    )
