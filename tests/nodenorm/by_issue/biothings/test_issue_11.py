@@ -17,10 +17,12 @@ CURIES = [
     "PUBCHEM.COMPOUND:222284",
 ]
 
-# Expected number of unique CURIEs in equivalent_identifiers for each setting,
-# taken from the issue (17 without conflate on both backends, 32 with conflate
-# on ES, and 32 unique on Redis once the duplicates are removed).
-EXPECTED_UNIQUE_COUNTS = {False: 17, True: 32}
+# This deliberately does not check how many identifiers come back. The issue
+# reported 17 unique without drug_chemical_conflate and 32 with it, but those
+# were Babel 2025sep1's cliques: by 2026jul22 PUBCHEM.COMPOUND:222284 had become
+# a clique of its own, and the counts changed with it. A pinned count fails on
+# every Babel release that reshapes these cliques, which says nothing about
+# whether duplicates are back.
 
 
 def _post(nodenorm_url, curie, drug_chemical_conflate):
@@ -46,8 +48,7 @@ def _format_identifier_list(counts: dict[str, int]) -> str:
 @pytest.mark.parametrize("curie", CURIES)
 @pytest.mark.parametrize("drug_chemical_conflate", [False, True])
 def test_equivalent_identifiers(target_info, curie, drug_chemical_conflate):
-    """equivalent_identifiers must contain each identifier at most once,
-    and the unique count must match the values reported in the issue."""
+    """equivalent_identifiers must contain each identifier at most once."""
     nodenorm_url = target_info["NodeNormURL"]
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
 
@@ -84,10 +85,4 @@ def test_equivalent_identifiers(target_info, curie, drug_chemical_conflate):
         f"{curie} (drug_chemical_conflate={drug_chemical_conflate}) returned "
         f"{len(identifiers)} equivalent_identifiers with {len(duplicates)} duplicated "
         f"identifiers: {duplicates}\n{context}"
-    )
-
-    expected_unique = EXPECTED_UNIQUE_COUNTS[drug_chemical_conflate]
-    assert len(counts) == expected_unique, (
-        f"{curie} (drug_chemical_conflate={drug_chemical_conflate}) returned "
-        f"{len(counts)} unique equivalent_identifiers, expected {expected_unique}\n{context}"
     )
