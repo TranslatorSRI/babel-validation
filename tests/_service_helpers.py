@@ -13,6 +13,8 @@ The one trusted input here is the URL we ask for, which comes from the checked-i
 ``targets.ini``.
 """
 
+import datetime
+import re
 import urllib.parse
 
 # The longest repr() we will put into an assertion message, and the most keys we
@@ -20,6 +22,15 @@ import urllib.parse
 # pathological cannot blow up the pytest report.
 MAX_REPR_LENGTH = 200
 MAX_KEYS_LISTED = 20
+
+# Babel releases are named for the day they were made, e.g. '2026sep24', optionally with an
+# alphanumeric suffix after a hyphen, e.g. '2026sep24-dev'. Each part is a fixed width or a
+# disjoint character class, so there is nothing here to backtrack over.
+BABEL_MONTHS = ('jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec')
+BABEL_VERSION_RE = re.compile(
+    r'(?P<year>\d{4})(?P<month>' + '|'.join(BABEL_MONTHS) + r')(?P<day>\d{1,2})(?:-[A-Za-z0-9]+)?'
+)
+BABEL_VERSION_MAX_LENGTH = 64
 
 
 def openapi_url(target_info, url_key, path_key):
@@ -138,3 +149,32 @@ def assert_backend(url, status_json, expected_backend):
         f"backend, in which case targets.ini needs to follow it (including the path to its "
         f"OpenAPI document), or it is answering from somewhere unexpected."
     )
+
+
+def parse_babel_version(url, status_json):
+    """
+    Assert that /status reports a well-formed babel_version, and return it.
+
+    :param url: The URL the status was retrieved from, for the error messages.
+    :param status_json: The parsed /status response.
+    :return: The babel_version, which is safe to build a URL from.
+    """
+    assert 'babel_version' in status_json, f"{url} does not report a babel_version."
+    babel_version = status_json['babel_version']
+
+    match = None
+    if isinstance(babel_version, str) and len(babel_version) <= BABEL_VERSION_MAX_LENGTH:
+        match = BABEL_VERSION_RE.fullmatch(babel_version)
+    assert match, (
+        f"{url} reports babel_version {truncated_repr(babel_version)}, which is not a Babel "
+        f"release name such as '2026sep24' or '2026sep24-dev'."
+    )
+
+    try:
+        datetime.date(int(match['year']), BABEL_MONTHS.index(match['month']) + 1, int(match['day']))
+        is_real_date = True
+    except ValueError:
+        is_real_date = False
+    assert is_real_date, f"{url} reports babel_version {babel_version!r}, which is not a real date."
+
+    return babel_version
