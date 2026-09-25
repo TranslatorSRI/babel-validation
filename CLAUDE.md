@@ -93,7 +93,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
-- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
+- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written); `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
 
 ### Dashboard Website
 
@@ -233,6 +233,10 @@ When writing new tests:
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- **Don't pin clique sizes or identifier counts in a regression test.** Assert the property the
+  bug broke (no duplicates, no HTTP 500, not null) instead. `test_issue_11` once asserted the 17/32
+  identifiers from its issue, which were one Babel release's cliques, and failed on every target
+  running the next release with nothing actually wrong.
 - **`pytest tests/github_issues` is expected to be red, and that is the tool working.** An open
   issue whose assertions all pass is a strict XPASS, meaning it looks closeable; a closed issue
   with failing assertions means it looks like it should be reopened. Those results are findings
