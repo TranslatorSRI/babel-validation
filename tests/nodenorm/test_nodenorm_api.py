@@ -56,20 +56,17 @@ def test_status_backend(target_info):
 
     :param target_info: The target information for this set of tests.
     """
-    url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
-    response = requests.get(url)
-    assert response.ok, f"Could not GET {url}: {response}"
-
-    status_json = response.json()
+    url, status_json = get_status(target_info)
     expected_backend = target_info.get('NodeNormBackend', 'redis')
 
-    if isinstance(status_json, dict) and 'backend' not in status_json:
-        # Only the newer releases report one. Skipping is honest here — the service
-        # genuinely cannot answer — but it does mean a green run has not checked this
-        # target, so say which one and why.
+    if 'backend' not in status_json:
+        # There is nothing to compare with targets.ini. The missing field is itself a
+        # failure, but test_status_backend_is_known reports it, so failing here too would
+        # only report the same problem twice.
         pytest.skip(
             f"{url} does not report a backend, so this target cannot be checked against its "
-            f"configured backend of {expected_backend!r}. Only newer NodeNorm releases report it."
+            f"configured backend of {expected_backend!r}. test_status_backend_is_known fails "
+            f"for the missing field."
         )
 
     assert_backend(url, status_json, expected_backend)
