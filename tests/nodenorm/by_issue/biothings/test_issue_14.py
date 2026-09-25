@@ -111,6 +111,14 @@ def test_all_curies_except_failing_pair(target_info):
     _assert_ok(response, url, REMAINING_CURIES)
 
 
+def test_original_request(target_info):
+    """The full list from the original report, including the failing pair, should succeed."""
+    nodenorm_url = target_info["NodeNormURL"]
+    url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
+    response = _post(nodenorm_url, ALL_CURIES)
+    _assert_ok(response, url, ALL_CURIES)
+
+
 def test_failing_pair(target_info):
     """CHEBI:17310 and DRUGBANK:DB00058 together trigger HTTP 500 — minimal reproducer."""
     nodenorm_url = target_info["NodeNormURL"]
@@ -119,9 +127,13 @@ def test_failing_pair(target_info):
     _assert_ok(response, url, FAILING_PAIR)
 
 
-@pytest.mark.parametrize("curie", ALL_CURIES)
+# Only the pair is queried one CURIE at a time: that each succeeds alone is the other half of
+# the bisection result. Querying all ~330 CURIEs singly was how the pair was found, but it
+# is ~330 requests per target, and test_all_curies_except_failing_pair already covers the
+# rest in one.
+@pytest.mark.parametrize("curie", FAILING_PAIR)
 def test_individual_curie(target_info, curie):
-    """Every CURIE from the original report should succeed when queried on its own."""
+    """Each CURIE in the failing pair should succeed when queried on its own."""
     nodenorm_url = target_info["NodeNormURL"]
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
     response = _post(nodenorm_url, [curie])
