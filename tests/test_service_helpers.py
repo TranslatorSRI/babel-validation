@@ -11,6 +11,7 @@ import datetime
 
 import pytest
 
+import tests._service_helpers as service_helpers
 from tests._service_helpers import (
     MAX_KEYS_LISTED,
     MAX_REPR_LENGTH,
@@ -19,6 +20,7 @@ from tests._service_helpers import (
     babel_release_date,
     openapi_url,
     parse_babel_version,
+    require_babel_release,
     truncated_keys_repr,
     truncated_repr,
 )
@@ -204,3 +206,39 @@ def test_babel_release_date_orders_releases(babel_version, expected):
 def test_babel_release_dates_compare_across_releases():
     assert babel_release_date('2025sep1') < babel_release_date('2026jul22')
     assert babel_release_date('2026jul22-dev') == babel_release_date('2026jul22')
+
+
+class TestRequireBabelRelease:
+    """require_babel_release() skips on an older, unreported or malformed release, and only then."""
+
+    TARGET = {'NodeNormURL': 'https://example.org/'}
+
+    def _status(self, monkeypatch, status_json):
+        monkeypatch.setattr(service_helpers, '_status_json', lambda status_url: status_json)
+
+    @pytest.mark.parametrize('babel_version', ['2026jul22', '2026jul22-dev', '2026sep24'])
+    def test_the_minimum_release_or_a_later_one_runs(self, monkeypatch, babel_version):
+        self._status(monkeypatch, {'babel_version': babel_version})
+        require_babel_release(self.TARGET, '2026jul22')
+
+    @pytest.mark.parametrize('status_json, expected_reason', [
+        ({'babel_version': '2025sep1'}, 'serves Babel 2025sep1'),
+        ({'status': 'running'}, 'does not report a babel_version'),
+        ({'babel_version': 'VERSION.txt'}, 'not a release name'),
+        (None, 'does not report a babel_version'),
+    ])
+    def test_an_older_or_unknown_release_skips(self, monkeypatch, status_json, expected_reason):
+        self._status(monkeypatch, status_json)
+        with pytest.raises(pytest.skip.Exception, match=expected_reason):
+            require_babel_release(self.TARGET, '2026jul22')
+
+    def test_the_skip_reason_escapes_what_the_service_said(self, monkeypatch):
+        self._status(monkeypatch, {'babel_version': '\x1b[2Jnope'})
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            require_babel_release(self.TARGET, '2026jul22')
+        assert '\x1b' not in str(excinfo.value)
+
+    def test_a_malformed_minimum_is_a_test_bug(self, monkeypatch):
+        self._status(monkeypatch, {'babel_version': '2026jul22'})
+        with pytest.raises(AssertionError, match='not a Babel release name'):
+            require_babel_release(self.TARGET, 'latest')
