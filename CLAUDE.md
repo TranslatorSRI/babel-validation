@@ -37,6 +37,10 @@ black tests/    # Format Python test code
 Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
 ~30 files it would reformat. Running `black` across the tree would bury a real change in
 unrelated churn, so format only the files you touch, or match the surrounding style.
+"Files you touch" means files that are already black-clean: `tests/_service_helpers.py`,
+`tests/test_service_helpers.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
+and running `black` on them after a ten-line edit rewrote every string in the file. Check
+`black --check <file>` on the committed version first; if it is not clean, edit by hand.
 
 ### Dashboard Website (website/)
 
