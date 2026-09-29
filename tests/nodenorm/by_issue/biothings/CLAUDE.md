@@ -61,7 +61,9 @@ endpoint, so what the index holds has to be inferred from API output. Two signat
   *leader* in two or more compendia, with `filenames`, `biolink_types` and the size of each
   clique. This is exactly the #41 case (a duplicate `_id` in the ES upload): 7,571 rows in
   2026jul22, 6,600 of them yeast ENSEMBL Gene+Protein and 891 MeSH ChemicalEntity+Protein.
-  Start here, not with the wider file below.
+  Start here, not with the wider file below. The Babel issues per slice: #276 is the
+  umbrella, #39 the yeast ENSEMBL ids (singletons in both compendia), #308 protein versus
+  chemical, #1123 taxon versus anatomy or chemical.
 - `reports/duckdb/duplicate_curies.tsv` (2.4 MB) — every CURIE in more than one compendium,
   leader or not, with `clique_leaders` and `filenames` columns. A CURIE that is a member of
   two cliques but leads at most one becomes two ES documents, and the API returns the first
