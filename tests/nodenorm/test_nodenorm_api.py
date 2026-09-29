@@ -22,7 +22,14 @@ KNOWN_BACKENDS = {'redis', 'elasticsearch'}
 
 # Where each Babel release's notes are published. NodeNorm links to them on `master`,
 # which GitHub redirects now that Babel's default branch is `main`; either is correct.
-BABEL_RELEASE_NOTES_URL = 'https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}.md'
+# The notes are moving from `releases/<version>.md` into `releases/<version>/README.md`
+# (NCATSTranslator/Babel#1021); the old path is a redirect stub until every deployment
+# links to the new one, so both are correct for now. Drop the old shape once Babel
+# deletes the stubs.
+BABEL_RELEASE_NOTES_URLS = (
+    'https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}/README.md',
+    'https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}.md',
+)
 BABEL_RELEASE_NOTES_BRANCHES = ('main', 'master')
 
 
@@ -131,29 +138,32 @@ def test_status_babel_version_url(target_info):
     Test that /status links to the release notes for the Babel release it is serving.
 
     We never fetch the babel_version_url as given, since it comes off the network: we
-    build the URL we expect from the (validated) babel_version, check that that is the
-    one reported, and fetch ours. The notes are sometimes written after a release is
-    deployed, so a brand-new release fails here until they are published.
+    build the URLs we would accept from the (validated) babel_version, check that the one
+    reported is among them, and fetch our own copy of it. The notes are sometimes written
+    after a release is deployed, so a brand-new release fails here until they are published.
 
     :param target_info: The target information for this set of tests.
     """
     url, status_json = get_status(target_info)
     babel_version = parse_babel_version(url, status_json)
     expected_urls = [
-        BABEL_RELEASE_NOTES_URL.format(branch=branch, version=babel_version)
+        template.format(branch=branch, version=babel_version)
+        for template in BABEL_RELEASE_NOTES_URLS
         for branch in BABEL_RELEASE_NOTES_BRANCHES
     ]
-    expected_url = expected_urls[0]
 
     assert 'babel_version_url' in status_json, f"{url} does not report a babel_version_url."
     babel_version_url = status_json['babel_version_url']
-    assert isinstance(babel_version_url, str) and babel_version_url.casefold() in [
-        u.casefold() for u in expected_urls
-    ], (
+    matching_urls = [
+        u for u in expected_urls
+        if isinstance(babel_version_url, str) and u.casefold() == babel_version_url.casefold()
+    ]
+    assert matching_urls, (
         f"{url} reports babel_version_url {truncated_repr(babel_version_url)}, but the release "
-        f"notes for {babel_version!r} are at {expected_url}."
+        f"notes for {babel_version!r} are at {expected_urls[0]}."
     )
 
+    expected_url = matching_urls[0]
     response = requests.get(expected_url)
     assert response.ok, (
         f"{url} links to the release notes for Babel {babel_version!r}, but GET {expected_url} "
