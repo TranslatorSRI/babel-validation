@@ -92,7 +92,10 @@ NodeNorm calls Protein is itself evidence of a duplicate, not a NameRes bug.
 `uv run python -m src.babel_validation.tools.compare_nodenorm dev ci CURIE...` (or
 `--nameres 'string=virus&biolink_type=biolink:OrganismTaxon&only_prefixes=MESH'`) normalizes
 a batch on two targets and tabulates how they differ, which is how the counts in #40 and #41
-were produced.
+were produced. `--leaders-tsv <path or URL of duplicate_clique_leaders.tsv>` sweeps every
+duplicate leader in a release; on 2026-09-29 it took about a minute for 2026jul22's 7,571
+rows and every one of them came back from ES with extra types. Zero "same" is the expected
+result until #41 is fixed, so a non-zero "same" count is what a fix looks like.
 
 ## Reading an ORION schema diff
 

@@ -5,8 +5,10 @@
         --nameres 'string=virus&biolink_type=biolink:OrganismTaxon&only_prefixes=MESH&limit=100'
 
 Targets are section names from tests/targets.ini (or full NodeNorm base URLs). CURIEs come
-from the command line, from `--curies-file` (one per line), or from one or more NameRes
-`lookup` query strings, which is the quickest way to get a batch of a given type and prefix.
+from the command line, from `--curies-file` (one per line), from `--leaders-tsv` (Babel's
+`reports/duckdb/duplicate_clique_leaders.tsv`, a path or a URL: every CURIE that leads a
+clique in two compendia, i.e. every #41 candidate), or from one or more NameRes `lookup`
+query strings, which is the quickest way to get a batch of a given type and prefix.
 
 Each CURIE is classified as: same; missing on one side; a different preferred identifier; or
 the same identifier with extra types on the right. The last two are the signatures of
@@ -17,6 +19,8 @@ tests/nodenorm/by_issue/biothings/CLAUDE.md.
 import argparse
 import collections
 import configparser
+import csv
+import io
 import sys
 import urllib.parse
 from pathlib import Path
@@ -47,6 +51,20 @@ def nameres_curies(query: str) -> list[str]:
     if not isinstance(hits, list):
         sys.exit(f"NameRes did not return a list for {query!r}: {str(hits)[:300]!r}")
     return [hit["curie"] for hit in hits]
+
+
+def leaders_tsv_curies(path_or_url: str) -> list[str]:
+    """The clique_leader column of Babel's duplicate_clique_leaders.tsv, from disk or the web."""
+    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+        response = requests.get(path_or_url, timeout=300)
+        response.raise_for_status()
+        text = response.text
+    else:
+        text = Path(path_or_url).read_text()
+    rows = csv.DictReader(io.StringIO(text), delimiter="\t")
+    if "clique_leader" not in (rows.fieldnames or []):
+        sys.exit(f"{path_or_url!r} has no clique_leader column: {rows.fieldnames!r}")
+    return [row["clique_leader"] for row in rows if row["clique_leader"]]
 
 
 def normalize(base_url: str, curies: list[str], conflate: bool) -> dict:
@@ -87,6 +105,11 @@ def main(argv=None) -> None:
     parser.add_argument("curies", nargs="*")
     parser.add_argument("--curies-file", type=Path, help="one CURIE per line")
     parser.add_argument(
+        "--leaders-tsv",
+        metavar="PATH_OR_URL",
+        help="Babel's reports/duckdb/duplicate_clique_leaders.tsv; its clique_leader column",
+    )
+    parser.add_argument(
         "--nameres",
         action="append",
         default=[],
@@ -110,6 +133,8 @@ def main(argv=None) -> None:
             for line in args.curies_file.read_text().splitlines()
             if line.strip()
         ]
+    if args.leaders_tsv:
+        curies += leaders_tsv_curies(args.leaders_tsv)
     for query in args.nameres:
         curies += nameres_curies(query)
     curies = list(dict.fromkeys(curies))
