@@ -37,6 +37,10 @@ black tests/    # Format Python test code
 Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
 ~30 files it would reformat. Running `black` across the tree would bury a real change in
 unrelated churn, so format only the files you touch, or match the surrounding style.
+"Files you touch" means files that are already black-clean: `tests/_service_helpers.py`,
+`tests/test_service_helpers.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
+and running `black` on them after a ten-line edit rewrote every string in the file. Check
+`black --check <file>` on the committed version first; if it is not clean, edit by hand.
 
 ### Dashboard Website (website/)
 
@@ -93,7 +97,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
-- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
+- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written); `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
 
 ### Dashboard Website
 
@@ -109,6 +113,16 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
   `src/babel_validation/tools/generate_report.py` aggregates the raw outcomes, fetches each
   target's `/status`, and writes both data files into `website/public/data/`.
 - **`scala-validation/`** — Legacy, unmaintained
+
+### Scratch space
+
+`data/` is gitignored scratch space for investigations: files people send us (an ORION
+schema diff, a colleague's message describing a discrepancy), downloaded Babel compendia,
+one-off comparison output. Name a subdirectory for the investigation and date
+(`data/nodenorm-discrepency-2026sep29/`). Nothing there survives a fresh clone, so anything
+worth keeping — what was learned, how to reproduce it — goes into a tracked file: a
+regression test, a directory `CLAUDE.md` (see `tests/nodenorm/by_issue/biothings/CLAUDE.md`
+for the NodeNorm ES-vs-Redis investigation notes), or the issue itself.
 
 ## Untrusted Input
 
@@ -233,6 +247,16 @@ When writing new tests:
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- **A test whose expectations are only true from one Babel release on** (a compendium that
+  did not exist before it, a clique it rearranged) calls
+  `require_babel_release(target_info, "2026jul22")` from `tests/_service_helpers.py` first. It
+  skips targets serving an older release, and targets too old to report a `babel_version` at
+  all (prod). Without it the test fails on prod for the wrong reason, and a strict xfail
+  turns into an XPASS failure on an ES deployment that is simply one release behind.
+- **Don't pin clique sizes or identifier counts in a regression test.** Assert the property the
+  bug broke (no duplicates, no HTTP 500, not null) instead. `test_issue_11` once asserted the 17/32
+  identifiers from its issue, which were one Babel release's cliques, and failed on every target
+  running the next release with nothing actually wrong.
 - **`pytest tests/github_issues` is expected to be red, and that is the tool working.** An open
   issue whose assertions all pass is a strict XPASS, meaning it looks closeable; a closed issue
   with failing assertions means it looks like it should be reopened. Those results are findings
