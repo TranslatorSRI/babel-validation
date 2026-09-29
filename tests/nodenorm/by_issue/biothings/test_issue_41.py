@@ -16,7 +16,7 @@ import pytest
 import requests
 
 # CURIE -> (label, the two Babel types it leads a clique as, per
-# reports/duckdb/duplicate_curies.tsv for 2026jul22). A well-formed answer
+# reports/duckdb/duplicate_clique_leaders.tsv for 2026jul22). A well-formed answer
 # has exactly one of the pair.
 DUPLICATE_LEADERS = {
     "MESH:C469385": (

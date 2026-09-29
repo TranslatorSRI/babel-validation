@@ -57,10 +57,16 @@ endpoint, so what the index holds has to be inferred from API output. Two signat
   SmallMolecule, MolecularMixture and Publication downloads in seconds;
   `grep '"i": "MESH:C469385"' ChemicalEntity.txt` then answers "is this CURIE in that
   compendium, and does it lead the clique".
+- `reports/duckdb/duplicate_clique_leaders.tsv` (600 KB) — every CURIE that is the clique
+  *leader* in two or more compendia, with `filenames`, `biolink_types` and the size of each
+  clique. This is exactly the #41 case (a duplicate `_id` in the ES upload): 7,571 rows in
+  2026jul22, 6,600 of them yeast ENSEMBL Gene+Protein and 891 MeSH ChemicalEntity+Protein.
+  Start here, not with the wider file below.
 - `reports/duckdb/duplicate_curies.tsv` (2.4 MB) — every CURIE in more than one compendium,
-  with `clique_leaders` and `filenames` columns. A CURIE that is its own clique leader in
-  two files is exactly the #41 case; 7,571 of them in 2026jul22. Note the `filenames` column
-  is an unquoted `[A, B]` list, so `ast.literal_eval` fails on it; split on commas.
+  leader or not, with `clique_leaders` and `filenames` columns. A CURIE that is a member of
+  two cliques but leads at most one becomes two ES documents, and the API returns the first
+  hit. Note the `filenames` column in both files is an unquoted `[A, B]` list, so
+  `ast.literal_eval` fails on it; split on commas.
 - `reports/umls/duplicate-curies.csv` — the UMLS subset, analysed in Babel #308.
 - The Babel repo's `releases/<release>/` keeps the release notes and summary tables, not
   the compendia or these reports.
@@ -96,5 +102,5 @@ per *category combination* (the set of leaf Biolink categories ORION derived fro
 `type` list) with old/new counts and `id_prefixes` deltas. A combination that is new in the
 ES build and whose prefixes are all `MESH` is the #41 signature; a combination that dropped
 to zero is a compendium that was not loaded (#40). The counts per combination matched the
-compendium pairs in Babel's `duplicate_curies.tsv` almost one for one, which is what tied
+compendium pairs in Babel's `duplicate_clique_leaders.tsv` almost one for one, which is what tied
 the two together.
