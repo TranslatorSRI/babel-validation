@@ -41,7 +41,7 @@ def pytest_generate_tests(metafunc):
         # but exact mode does not" (or the reverse); a row whose expected ID is not the clique
         # CURIE NameRes returns fails both, but a row marked "n" for a ranking problem the exact
         # search does not have is a strict XPASS here. The sheet is being replaced by a file in
-        # this repository, which should be able to express the difference.
+        # this repository (#149), which should be able to express the difference.
         metafunc.parametrize(
             "exact_test_row",
             _get_gsheet().test_rows(

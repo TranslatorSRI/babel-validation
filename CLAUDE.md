@@ -92,7 +92,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
-- `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
+- `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag, `exact` mode in `test_nameres_exact.py` plus `test_label_exact` over the sheet rows; `tests/_nameres_exact.py` defines what counts as an exact match)
 - `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
 
 ### Dashboard Website
@@ -187,8 +187,9 @@ and repository secrets in Actions), resolved through
 `src/babel_validation/sources/google_sheets/resolve_sheet_id()`. Refer to it as the
 "Babel Validation Google Sheet"; sheet *content* (row numbers, queried/expected CURIEs and
 labels, category, source — often a GitHub issue link) is fine to publish once it passes the
-generator's validation. The sheet is expected to be fully replaced by the GitHub issue
-system over the next few months, at which point it can be removed from this repo entirely.
+generator's validation. The sheet is to be replaced by a YAML file in this repository
+(#149), at which point it can be removed from this repo entirely — so extend it as little as
+possible.
 
 **Do not read `.env`, and do not print the variables it sets.** Everything a coding agent
 reads goes into a transcript that is stored, replayed and pasted into issues, so `cat .env`,
@@ -262,6 +263,19 @@ When writing new tests:
   `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
   perfectly valid. The spurious error is also first, so it masks the real one further down the
   document.
+- **Gate a test of a new NameRes parameter on the version `/status` reports, never on a probe.**
+  NameRes does not reject a query parameter it doesn't know: FastAPI drops it and answers 200,
+  so a pre-v1.7.1 server given `exact=label` silently runs the ordinary search, and a "does it
+  work?" probe passes. Call `require_nameres_version()` (`tests/_service_helpers.py`), which
+  skips with the reported version named, treats a missing `nameres_version` (old releases, the
+  Elasticsearch NameLookup) as too old, and fails on an unparseable one. To check a new test
+  really detects an old server, lower its minimum and run it against one: the exact-mode tests
+  fail 54 of 57 against dev (v1.7.0) that way.
+- **Sheet xfail marks are per service, not per search.** `Passes in NameRes` applies strictly to
+  both `test_label` and `test_label_exact`, so a row marked `n` for the tokenized search that
+  exact mode gets right is a strict XPASS (92 rows on exp at v1.7.1). That is a limit of the
+  sheet, not a bug in either test — the file replacing it (#149) should record expectations per
+  search mode. Don't work around it by relaxing the marks.
 - **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
   job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
   like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
