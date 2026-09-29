@@ -2,7 +2,9 @@ import urllib.parse
 import requests
 import pytest
 from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
+from tests._nameres_exact import assert_exact_results, require_exact_mode
 from tests._pytest_helpers import deselected_by_markexpr
+from tests._service_helpers import truncated_repr
 
 # Configuration options
 NAMERES_TIMEOUT = 10 # If we don't get a response in 10 seconds, that's a fail.
@@ -20,17 +22,32 @@ def _get_gsheet() -> GoogleSheetTestCases:
 
 
 def pytest_generate_tests(metafunc):
-    if "test_row" not in metafunc.fixturenames:
-        return
-    if deselected_by_markexpr(metafunc):
-        metafunc.parametrize("test_row", [])
-        return
-    metafunc.parametrize(
-        "test_row",
-        _get_gsheet().test_rows(
-            'test_nameres_from_gsheet.test_label', test_nodenorm=False, test_nameres=True
-        ),
-    )
+    if "test_row" in metafunc.fixturenames:
+        if deselected_by_markexpr(metafunc):
+            metafunc.parametrize("test_row", [])
+            return
+        metafunc.parametrize(
+            "test_row",
+            _get_gsheet().test_rows(
+                'test_nameres_from_gsheet.test_label', test_nodenorm=False, test_nameres=True
+            ),
+        )
+    elif "exact_test_row" in metafunc.fixturenames:
+        if deselected_by_markexpr(metafunc):
+            metafunc.parametrize("exact_test_row", [])
+            return
+        # The same rows, with the same strict xfail marks. "Passes in NameRes" is one column for
+        # both the tokenized and the exact search, so it cannot say "the default search works
+        # but exact mode does not" (or the reverse); a row whose expected ID is not the clique
+        # CURIE NameRes returns fails both, but a row marked "n" for a ranking problem the exact
+        # search does not have is a strict XPASS here. The sheet is being replaced by a file in
+        # this repository, which should be able to express the difference.
+        metafunc.parametrize(
+            "exact_test_row",
+            _get_gsheet().test_rows(
+                'test_nameres_from_gsheet.test_label_exact', test_nodenorm=False, test_nameres=True
+            ),
+        )
 
 
 def test_label(target_info, test_row, test_category, record_property):
@@ -163,3 +180,69 @@ def test_label(target_info, test_row, test_category, record_property):
 
     if count_tested_labels == 0:
         pytest.fail(f"No labels were tested for test row: {test_row}")
+
+
+# Exact matches are ranked by clique size, not by relevance, so a gene symbol's human gene can sit
+# behind dozens of orthologues. Exact lookups are cheap -- a filter query, with nothing to score --
+# so ask for as many as NameRes will return rather than the NameResLimit the tokenized test uses.
+# They are needed: P-Selectin's UNII is the 634th and last exact match for its name. A thousand
+# results with all their synonyms can run to megabytes, hence the longer timeout.
+NAMERES_EXACT_LIMIT = 1000
+NAMERES_EXACT_TIMEOUT = 30
+
+
+def test_label_exact(target_info, exact_test_row, test_category, record_property):
+    """
+    Check each sheet row's labels with NameRes exact mode (NameRes v1.7.1 and later).
+
+    Every label is looked up with exact=any, and whatever comes back must be an exact match.
+    The preferred label must also find the preferred ID. exact=any rather than exact=label,
+    because the sheet's "preferred label" is often a synonym rather than the name Babel chose
+    (GO:0005634 is `nucleus` in Babel, `cell nucleus` in the sheet).
+    """
+    test_row = exact_test_row
+    record_property("category", test_row.Category)
+    record_property("source", test_row.Source)
+    record_property("source_url", test_row.SourceURL)
+    record_property("query_id", test_row.QueryID)
+    record_property("query_label", test_row.QueryLabel)
+
+    category = test_row.Category
+    if not test_category(category):
+        pytest.skip(f"Skipping category {category} because of the category filter.")
+
+    require_exact_mode(target_info)
+
+    if 'negative' in test_row.Flags:
+        pytest.skip("Negative rows say what the tokenized search must not return, which exact mode does not test.")
+    if 'autocomplete' in test_row.Flags:
+        pytest.skip("Autocomplete rows search for deliberate fragments, and exact mode cannot autocomplete.")
+
+    nameres_url_lookup = urllib.parse.urljoin(target_info['NameResURL'], 'lookup')
+
+    def lookup(label):
+        request = {"string": label, "exact": "any", "limit": NAMERES_EXACT_LIMIT}
+        if test_row.Prefixes:
+            request['only_prefixes'] = "|".join(p for p in test_row.Prefixes if not p.startswith('^'))
+            request['exclude_prefixes'] = "|".join(p[1:] for p in test_row.Prefixes if p.startswith('^'))
+        response = requests.get(nameres_url_lookup, params=request, timeout=NAMERES_EXACT_TIMEOUT)
+        assert response.ok, f"Could not send request {request} to GET {nameres_url_lookup}: {response}"
+        results = response.json()
+        assert_exact_results(nameres_url_lookup, label, 'any', results)
+        return results
+
+    preferred_label = test_row.PreferredLabel.strip()
+    labels = {preferred_label, test_row.QueryLabel.strip()} | {label.strip() for label in test_row.AdditionalLabels}
+    labels.discard('')
+    if not labels:
+        pytest.skip("This row has no labels to look up.")
+
+    for label in sorted(labels):
+        results = lookup(label)
+        if label == preferred_label and test_row.PreferredID:
+            all_curies = [result['curie'] for result in results]
+            assert test_row.PreferredID in all_curies, (
+                f"Querying {nameres_url_lookup} with exact=any for preferred label "
+                f"{truncated_repr(preferred_label)} did not return {test_row.PreferredID} in the top "
+                f"{NAMERES_EXACT_LIMIT}: {truncated_repr(all_curies)}"
+            )
