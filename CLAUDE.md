@@ -243,6 +243,12 @@ When writing new tests:
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- **A test whose expectations are only true from one Babel release on** (a compendium that
+  did not exist before it, a clique it rearranged) calls
+  `require_babel_release(target_info, "2026jul22")` from `tests/_service_helpers.py` first. It
+  skips targets serving an older release, and targets too old to report a `babel_version` at
+  all (prod). Without it the test fails on prod for the wrong reason, and a strict xfail
+  turns into an XPASS failure on an ES deployment that is simply one release behind.
 - **Don't pin clique sizes or identifier counts in a regression test.** Assert the property the
   bug broke (no duplicates, no HTTP 500, not null) instead. `test_issue_11` once asserted the 17/32
   identifiers from its issue, which were one Babel release's cliques, and failed on every target

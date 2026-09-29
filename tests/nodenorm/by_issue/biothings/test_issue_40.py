@@ -9,6 +9,12 @@ import urllib.parse
 import pytest
 import requests
 
+from tests._service_helpers import require_babel_release
+
+# Food.txt first appeared in this release; CLO cell lines resolve on it too. Older
+# deployments (prod, and any that cannot say what it serves) are skipped.
+BABEL_RELEASE = "2026jul22"
+
 # CURIE -> (label, Babel type). Food.txt cliques are DrugBank/UNII/CHEBI-led; the
 # UMLS-led "Food" cliques live in umls.txt, which *is* loaded, so they would not
 # catch this. CellLine.txt cliques are CLO-led.
@@ -36,6 +42,7 @@ def _xfail_on_elasticsearch(request, target_info):
 
 @pytest.mark.parametrize("curie", sorted(CURIES))
 def test_compendium_is_loaded(request, target_info, curie):
+    require_babel_release(target_info, BABEL_RELEASE)
     _xfail_on_elasticsearch(request, target_info)
     label, expected_type = CURIES[curie]
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_normalized_nodes")

@@ -7,6 +7,8 @@ any of them without checking raises AttributeError or TypeError, which is exactl
 unreadable failure these helpers exist to replace.
 """
 
+import datetime
+
 import pytest
 
 from tests._service_helpers import (
@@ -14,6 +16,7 @@ from tests._service_helpers import (
     MAX_REPR_LENGTH,
     assert_backend,
     assert_x_translator,
+    babel_release_date,
     openapi_url,
     parse_babel_version,
     truncated_keys_repr,
@@ -184,3 +187,20 @@ def test_a_babel_release_name_is_accepted(babel_version):
 def test_a_malformed_babel_version_names_the_problem(status_json, expected_message):
     with pytest.raises(AssertionError, match=expected_message):
         parse_babel_version(STATUS_URL, status_json)
+
+
+@pytest.mark.parametrize('babel_version, expected', [
+    ('2026jul22', datetime.date(2026, 7, 22)),
+    ('2025sep1', datetime.date(2025, 9, 1)),
+    ('2026jul22-dev', datetime.date(2026, 7, 22)),
+    ('2026feb30', None),
+    ('VERSION.txt', None),
+    (None, None),
+])
+def test_babel_release_date_orders_releases(babel_version, expected):
+    assert babel_release_date(babel_version) == expected
+
+
+def test_babel_release_dates_compare_across_releases():
+    assert babel_release_date('2025sep1') < babel_release_date('2026jul22')
+    assert babel_release_date('2026jul22-dev') == babel_release_date('2026jul22')

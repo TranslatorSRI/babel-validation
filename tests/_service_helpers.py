@@ -14,8 +14,12 @@ The one trusted input here is the URL we ask for, which comes from the checked-i
 """
 
 import datetime
+import functools
 import re
 import urllib.parse
+
+import pytest
+import requests
 
 # The longest repr() we will put into an assertion message, and the most keys we
 # will list from an object, so that a service returning something enormous or
@@ -170,11 +174,83 @@ def parse_babel_version(url, status_json):
         f"release name such as '2026sep24' or '2026sep24-dev'."
     )
 
-    try:
-        datetime.date(int(match['year']), BABEL_MONTHS.index(match['month']) + 1, int(match['day']))
-        is_real_date = True
-    except ValueError:
-        is_real_date = False
-    assert is_real_date, f"{url} reports babel_version {babel_version!r}, which is not a real date."
+    assert babel_release_date(babel_version) is not None, (
+        f"{url} reports babel_version {babel_version!r}, which is not a real date."
+    )
 
     return babel_version
+
+
+def babel_release_date(babel_version):
+    """
+    Return the date a Babel release name stands for, or None if it is not a release name.
+
+    Babel releases are named for the day they were built, so their dates order them: a
+    deployment reporting '2025sep1' predates one reporting '2026jul22', and the suffix
+    ('-dev', '-rc1') does not change that.
+
+    :param babel_version: The babel_version as /status reported it, or any string.
+    :return: The release date, or None if babel_version is not a well-formed release name
+        for a real date.
+    """
+    match = None
+    if isinstance(babel_version, str) and len(babel_version) <= BABEL_VERSION_MAX_LENGTH:
+        match = BABEL_VERSION_RE.fullmatch(babel_version)
+    if not match:
+        return None
+    try:
+        return datetime.date(
+            int(match['year']), BABEL_MONTHS.index(match['month']) + 1, int(match['day'])
+        )
+    except ValueError:
+        return None
+
+
+@functools.lru_cache(maxsize=None)
+def _status_json(status_url):
+    response = requests.get(status_url)
+    if not response.ok:
+        return None
+    try:
+        status_json = response.json()
+    except ValueError:
+        return None
+    return status_json if isinstance(status_json, dict) else None
+
+
+def require_babel_release(target_info, minimum_version):
+    """
+    Skip the calling test unless the target serves Babel ``minimum_version`` or later.
+
+    For a test whose expectations are only true of the data from one Babel release on
+    (a compendium that did not exist before it, a clique that was rearranged by it).
+    A deployment too old to report a babel_version at all is skipped too, since it cannot
+    say what it serves; the /status tests are where an unreported or malformed
+    babel_version is a failure. The /status fetch is cached per URL for the process, so
+    calling this from every parametrized case costs one request per target.
+
+    :param target_info: The target information for this set of tests.
+    :param minimum_version: The earliest Babel release name the test is valid for.
+    """
+    minimum_date = babel_release_date(minimum_version)
+    assert minimum_date is not None, f"{minimum_version!r} is not a Babel release name"
+
+    status_url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
+    status_json = _status_json(status_url)
+    if status_json is None or 'babel_version' not in status_json:
+        pytest.skip(
+            f"{status_url} does not report a babel_version; this test needs Babel "
+            f"{minimum_version} or later"
+        )
+
+    babel_version = status_json['babel_version']
+    release_date = babel_release_date(babel_version)
+    if release_date is None:
+        pytest.skip(
+            f"{status_url} reports babel_version {truncated_repr(babel_version)}, which is not a "
+            f"release name; this test needs Babel {minimum_version} or later"
+        )
+    if release_date < minimum_date:
+        pytest.skip(
+            f"{status_url} serves Babel {babel_version}; this test needs {minimum_version} or later"
+        )

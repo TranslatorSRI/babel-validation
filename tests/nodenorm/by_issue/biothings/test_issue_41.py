@@ -15,6 +15,12 @@ import urllib.parse
 import pytest
 import requests
 
+from tests._service_helpers import require_babel_release
+
+# The duplicate leaders below are 2026jul22's; each release rearranges them. Older
+# deployments (prod, the ES `test` instance on 2025sep1) are skipped.
+BABEL_RELEASE = "2026jul22"
+
 # CURIE -> (label, the two Babel types it leads a clique as, per
 # reports/duckdb/duplicate_clique_leaders.tsv for 2026jul22). A well-formed answer
 # has exactly one of the pair.
@@ -72,6 +78,7 @@ def _assert_well_formed_types(curie, types):
 
 @pytest.mark.parametrize("curie", sorted(DUPLICATE_LEADERS))
 def test_one_clique_one_type(request, target_info, curie):
+    require_babel_release(target_info, BABEL_RELEASE)
     _xfail_on_elasticsearch(request, target_info)
     label, pair = DUPLICATE_LEADERS[curie]
     types = _normalize(target_info, curie)["type"]
@@ -86,6 +93,7 @@ def test_one_clique_one_type(request, target_info, curie):
 def test_individual_types_are_strings(request, target_info, curie):
     """With individual_types=true the merged document's per-identifier type is a list of
     lists on ES, where every other identifier gets a single CURIE string."""
+    require_babel_release(target_info, BABEL_RELEASE)
     _xfail_on_elasticsearch(request, target_info)
     node = _normalize(target_info, curie, individual_types=True)
     for eqid in node["equivalent_identifiers"]:
@@ -97,6 +105,7 @@ def test_individual_types_are_strings(request, target_info, curie):
 
 def test_single_leader_is_well_formed(target_info):
     """Positive control: a CURIE that leads one clique is fine on every backend."""
+    require_babel_release(target_info, BABEL_RELEASE)
     types = _normalize(target_info, SINGLE_LEADER)["type"]
     _assert_well_formed_types(SINGLE_LEADER, types)
     assert types[0] == "biolink:Protein"
