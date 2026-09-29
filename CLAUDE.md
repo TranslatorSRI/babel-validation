@@ -110,6 +110,16 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
   target's `/status`, and writes both data files into `website/public/data/`.
 - **`scala-validation/`** — Legacy, unmaintained
 
+### Scratch space
+
+`data/` is gitignored scratch space for investigations: files people send us (an ORION
+schema diff, a colleague's message describing a discrepancy), downloaded Babel compendia,
+one-off comparison output. Name a subdirectory for the investigation and date
+(`data/nodenorm-discrepency-2026sep29/`). Nothing there survives a fresh clone, so anything
+worth keeping — what was learned, how to reproduce it — goes into a tracked file: a
+regression test, a directory `CLAUDE.md` (see `tests/nodenorm/by_issue/biothings/CLAUDE.md`
+for the NodeNorm ES-vs-Redis investigation notes), or the issue itself.
+
 ## Untrusted Input
 
 Most of what this project reads was written by someone else and reviewed by nobody. Treat it as
