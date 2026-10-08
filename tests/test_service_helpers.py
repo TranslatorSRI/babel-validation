@@ -7,14 +7,20 @@ any of them without checking raises AttributeError or TypeError, which is exactl
 unreadable failure these helpers exist to replace.
 """
 
+import datetime
+
 import pytest
 
+import tests._service_helpers as service_helpers
 from tests._service_helpers import (
     MAX_KEYS_LISTED,
     MAX_REPR_LENGTH,
     assert_backend,
     assert_x_translator,
+    babel_release_date,
     openapi_url,
+    parse_babel_version,
+    require_babel_release,
     truncated_keys_repr,
     truncated_repr,
 )
@@ -151,3 +157,88 @@ class TestBackend:
         message = str(excinfo.value)
         assert '\x1b' not in message
         assert '\\x1b[2Jredis' in message
+
+
+STATUS_URL = 'https://example.org/status'
+
+
+@pytest.mark.parametrize('babel_version', ['2026sep24', '2025sep1', '2026sep24-dev', '2026feb28-rc1'])
+def test_a_babel_release_name_is_accepted(babel_version):
+    assert parse_babel_version(STATUS_URL, {'babel_version': babel_version}) == babel_version
+
+
+@pytest.mark.parametrize('status_json, expected_message', [
+    # What NodeNorm ES has actually reported: biothings/NodeNormalizationAPI#24, and later
+    # nodenorm-es.ci. These are the regressions this check exists to catch.
+    ({'babel_version': '1.9'}, 'not a Babel release name'),
+    ({'babel_version': 'VERSION.txt'}, 'not a Babel release name'),
+    # Near misses on the name itself.
+    ({'babel_version': '2026SEP24'}, 'not a Babel release name'),
+    ({'babel_version': '2026sept24'}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24-'}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24-dev-2'}, 'not a Babel release name'),
+    ({'babel_version': ' 2026sep24'}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24\n'}, 'not a Babel release name'),
+    ({'babel_version': '2026feb30'}, 'not a real date'),
+    # Not a string at all, or too long to be one.
+    ({'babel_version': None}, 'not a Babel release name'),
+    ({'babel_version': 20260924}, 'not a Babel release name'),
+    ({'babel_version': '2026sep24-' + 'x' * 100}, 'not a Babel release name'),
+    ({}, 'does not report a babel_version'),
+])
+def test_a_malformed_babel_version_names_the_problem(status_json, expected_message):
+    with pytest.raises(AssertionError, match=expected_message):
+        parse_babel_version(STATUS_URL, status_json)
+
+
+@pytest.mark.parametrize('babel_version, expected', [
+    ('2026jul22', datetime.date(2026, 7, 22)),
+    ('2025sep1', datetime.date(2025, 9, 1)),
+    ('2026jul22-dev', datetime.date(2026, 7, 22)),
+    ('2026feb30', None),
+    ('VERSION.txt', None),
+    (None, None),
+])
+def test_babel_release_date_orders_releases(babel_version, expected):
+    assert babel_release_date(babel_version) == expected
+
+
+def test_babel_release_dates_compare_across_releases():
+    assert babel_release_date('2025sep1') < babel_release_date('2026jul22')
+    assert babel_release_date('2026jul22-dev') == babel_release_date('2026jul22')
+
+
+class TestRequireBabelRelease:
+    """require_babel_release() skips on an older, unreported or malformed release, and only then."""
+
+    TARGET = {'NodeNormURL': 'https://example.org/'}
+
+    def _status(self, monkeypatch, status_json):
+        monkeypatch.setattr(service_helpers, '_status_json', lambda status_url: status_json)
+
+    @pytest.mark.parametrize('babel_version', ['2026jul22', '2026jul22-dev', '2026sep24'])
+    def test_the_minimum_release_or_a_later_one_runs(self, monkeypatch, babel_version):
+        self._status(monkeypatch, {'babel_version': babel_version})
+        require_babel_release(self.TARGET, '2026jul22')
+
+    @pytest.mark.parametrize('status_json, expected_reason', [
+        ({'babel_version': '2025sep1'}, 'serves Babel 2025sep1'),
+        ({'status': 'running'}, 'does not report a babel_version'),
+        ({'babel_version': 'VERSION.txt'}, 'not a release name'),
+        (None, 'does not report a babel_version'),
+    ])
+    def test_an_older_or_unknown_release_skips(self, monkeypatch, status_json, expected_reason):
+        self._status(monkeypatch, status_json)
+        with pytest.raises(pytest.skip.Exception, match=expected_reason):
+            require_babel_release(self.TARGET, '2026jul22')
+
+    def test_the_skip_reason_escapes_what_the_service_said(self, monkeypatch):
+        self._status(monkeypatch, {'babel_version': '\x1b[2Jnope'})
+        with pytest.raises(pytest.skip.Exception) as excinfo:
+            require_babel_release(self.TARGET, '2026jul22')
+        assert '\x1b' not in str(excinfo.value)
+
+    def test_a_malformed_minimum_is_a_test_bug(self, monkeypatch):
+        self._status(monkeypatch, {'babel_version': '2026jul22'})
+        with pytest.raises(AssertionError, match='not a Babel release name'):
+            require_babel_release(self.TARGET, 'latest')
