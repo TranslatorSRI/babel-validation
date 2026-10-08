@@ -233,6 +233,9 @@ When writing new tests:
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- Checks that an endpoint's *response shape* matches what NodeNorm's OpenAPI document and its Redis
+  implementation promise go in `tests/nodenorm/test_nodenorm_endpoints.py`, which runs against every
+  target; per-CURIE data regressions go in `by_issue/`
 - **`pytest tests/github_issues` is expected to be red, and that is the tool working.** An open
   issue whose assertions all pass is a strict XPASS, meaning it looks closeable; a closed issue
   with failing assertions means it looks like it should be reopened. Those results are findings
