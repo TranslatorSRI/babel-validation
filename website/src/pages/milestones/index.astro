@@ -1,0 +1,19 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Milestones from '../../components/Milestones.vue';
+---
+
+<Layout
+  title="Babel Validation: milestones"
+  description="Open milestones across the Babel repositories, by due date, with their open issues."
+  active="milestones"
+>
+  <h1 class="h3 mt-4 mb-2">Milestones</h1>
+  <p class="text-body-secondary mb-4" style="max-width: 60rem">
+    Every open milestone across the Babel repositories in one chronological list, because GitHub
+    milestones cannot span repositories. Derived from the milestones themselves on every run, so
+    unlike a project board there is nothing to keep in sync.
+  </p>
+
+  <Milestones client:only="vue" dataUrl={import.meta.env.BASE_URL + 'data/milestones.json'} />
+</Layout>

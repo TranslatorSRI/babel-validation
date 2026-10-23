@@ -215,6 +215,17 @@ describe('FilterBar', () => {
     expect(window.location.search).not.toContain('has=');
   });
 
+  it('takes --filterbar-h off the root element when it unmounts', async () => {
+    // The property lives on documentElement, which outlives the component, so
+    // stopping the ResizeObserver is not enough: Results.vue unmounts the bar
+    // on a load error, and a stale height would hold the table header's sticky
+    // offset down a page that no longer has a bar.
+    const wrapper = await mountAt('/');
+    expect(document.documentElement.style.getPropertyValue('--filterbar-h')).not.toBe('');
+    wrapper.unmount();
+    expect(document.documentElement.style.getPropertyValue('--filterbar-h')).toBe('');
+  });
+
   it('clears every filter at once, and empties the query string with them', async () => {
     const wrapper = await mountAt('/?all=1&q=row&kinds=gsheet&cat=Genes&env=dev&page=2');
     const reset = wrapper.findAll('button').find((button) => button.text() === 'Reset');
