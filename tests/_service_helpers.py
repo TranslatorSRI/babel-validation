@@ -13,7 +13,12 @@ The one trusted input here is the URL we ask for, which comes from the checked-i
 ``targets.ini``.
 """
 
+import functools
+import re
 import urllib.parse
+
+import pytest
+import requests
 
 # The longest repr() we will put into an assertion message, and the most keys we
 # will list from an object, so that a service returning something enormous or
@@ -138,3 +143,105 @@ def assert_backend(url, status_json, expected_backend):
         f"backend, in which case targets.ini needs to follow it (including the path to its "
         f"OpenAPI document), or it is answering from somewhere unexpected."
     )
+
+
+# A release tag as NameRes reports it in /status, e.g. `v1.7.1`. A pre-release or build
+# suffix (`v1.7.1-rc1`) is accepted and ignored, so a release candidate counts as the
+# release it leads up to. The digit runs and the dots cannot match each other's
+# characters, so this cannot backtrack badly on a hostile string -- which is also
+# bounded before we try it.
+VERSION_PATTERN = re.compile(r"v?(\d+(?:\.\d+)*)(?:[-+][0-9A-Za-z.-]*)?")
+MAX_VERSION_LENGTH = 64
+
+
+def parse_version(text):
+    """
+    Parse a release tag like ``v1.7.1`` into a tuple of integers, such as ``(1, 7, 1)``.
+
+    :param text: The version string, as reported by a service.
+    :return: The tuple of version components, or None if text is not a version.
+    """
+    if not isinstance(text, str) or len(text) > MAX_VERSION_LENGTH:
+        return None
+    match = VERSION_PATTERN.fullmatch(text.strip())
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group(1).split('.'))
+
+
+def nameres_version_shortfall(url, status_json, minimum, feature):
+    """
+    Explain why a NameRes /status shows a deployment too old for a feature, if it does.
+
+    A NameRes that predates a query parameter does not reject it: FastAPI drops
+    parameters it doesn't know, and answers with a 200 as though it had never been
+    sent. So a feature cannot be detected by trying it -- an old server "supports" it
+    and silently searches without it -- and must be gated on the version the server
+    reports instead. A deployment that reports no version at all (older releases, and
+    the Elasticsearch-backed NameLookup) is treated as too old.
+
+    :param url: The URL the status was retrieved from, for the messages.
+    :param status_json: The parsed /status response.
+    :param minimum: The first version with the feature, as a tuple such as (1, 7, 1).
+    :param feature: What needs that version, for the messages.
+    :return: None if the deployment is new enough, otherwise a reason to skip.
+    :raises AssertionError: If the status is malformed or its version unparseable:
+        that is a broken deployment, and skipping would make it look like a pass.
+    """
+    minimum_text = 'v' + '.'.join(str(part) for part in minimum)
+    assert isinstance(status_json, dict), (
+        f"{url} did not return a JSON object: {truncated_repr(status_json)}"
+    )
+
+    reported = status_json.get('nameres_version')
+    if reported is None:
+        return (
+            f"{url} does not report a nameres_version, so it cannot be relied on to support "
+            f"{feature}, which needs NameRes {minimum_text} or later."
+        )
+
+    version = parse_version(reported)
+    assert version is not None, (
+        f"{url} reports a nameres_version of {truncated_repr(reported)}, which is not a "
+        f"version, so we cannot tell whether it supports {feature}."
+    )
+
+    if version < tuple(minimum):
+        return (
+            f"{url} reports NameRes {truncated_repr(reported)}, but {feature} needs "
+            f"{minimum_text} or later."
+        )
+    return None
+
+
+@functools.cache
+def fetch_status(status_url):
+    """
+    Return a service's parsed /status response, fetched once per URL per process.
+
+    Every test gated on a version asks for this, so without the cache a gated module
+    would fetch /status once per test (and per parametrized row).
+
+    :param status_url: The URL of the /status endpoint, from targets.ini.
+    :return: The parsed JSON response.
+    """
+    response = requests.get(status_url, timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
+def require_nameres_version(target_info, minimum, feature):
+    """
+    Skip the calling test unless this target's NameRes is at least version *minimum*.
+
+    See nameres_version_shortfall() for why this checks the reported version rather
+    than probing for the feature.
+
+    :param target_info: The target information for this set of tests.
+    :param minimum: The first version with the feature, as a tuple such as (1, 7, 1).
+    :param feature: What needs that version, for the skip message.
+    """
+    url = urllib.parse.urljoin(target_info['NameResURL'], 'status')
+    reason = nameres_version_shortfall(url, fetch_status(url), minimum, feature)
+    if reason:
+        pytest.skip(reason)

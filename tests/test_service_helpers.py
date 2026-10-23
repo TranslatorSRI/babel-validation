@@ -14,7 +14,9 @@ from tests._service_helpers import (
     MAX_REPR_LENGTH,
     assert_backend,
     assert_x_translator,
+    nameres_version_shortfall,
     openapi_url,
+    parse_version,
     truncated_keys_repr,
     truncated_repr,
 )
@@ -151,3 +153,55 @@ class TestBackend:
         message = str(excinfo.value)
         assert '\x1b' not in message
         assert '\\x1b[2Jredis' in message
+
+
+@pytest.mark.parametrize("text, expected", [
+    ('v1.7.1', (1, 7, 1)),
+    ('1.7.1', (1, 7, 1)),
+    (' v1.7.1 ', (1, 7, 1)),
+    ('v1.7', (1, 7)),
+    ('v1.7.1-rc1', (1, 7, 1)),
+    ('v10.0.2', (10, 0, 2)),
+])
+def test_parse_version_reads_release_tags(text, expected):
+    assert parse_version(text) == expected
+
+
+@pytest.mark.parametrize("text", [None, 17, '', 'v', 'latest', 'v1..7', '1.7.1.dev0', 'v1.7.1 extra', '1' * 100])
+def test_parse_version_rejects_anything_else(text):
+    assert parse_version(text) is None
+
+
+STATUS_URL = 'https://example.org/status'
+FEATURE = 'exact matching'
+
+
+def test_a_new_enough_nameres_is_not_skipped():
+    assert nameres_version_shortfall(STATUS_URL, {'nameres_version': 'v1.7.1'}, (1, 7, 1), FEATURE) is None
+    assert nameres_version_shortfall(STATUS_URL, {'nameres_version': 'v1.10.0'}, (1, 7, 1), FEATURE) is None
+
+
+def test_an_older_nameres_is_skipped_with_its_version_named():
+    reason = nameres_version_shortfall(STATUS_URL, {'nameres_version': 'v1.7.0'}, (1, 7, 1), FEATURE)
+    assert "'v1.7.0'" in reason
+    assert 'v1.7.1 or later' in reason
+    assert FEATURE in reason
+
+
+def test_a_nameres_without_a_version_is_skipped():
+    # Older releases, and the Elasticsearch-backed NameLookup, do not report one.
+    reason = nameres_version_shortfall(STATUS_URL, {'status': 'ok'}, (1, 7, 1), FEATURE)
+    assert 'does not report a nameres_version' in reason
+
+
+@pytest.mark.parametrize("status_json", [['not', 'an', 'object'], {'nameres_version': 'latest'}])
+def test_a_malformed_status_fails_rather_than_skips(status_json):
+    with pytest.raises(AssertionError):
+        nameres_version_shortfall(STATUS_URL, status_json, (1, 7, 1), FEATURE)
+
+
+def test_an_unparseable_version_is_escaped_in_the_failure():
+    with pytest.raises(AssertionError) as excinfo:
+        nameres_version_shortfall(STATUS_URL, {'nameres_version': '\x1b[31mv1'}, (1, 7, 1), FEATURE)
+    assert '\x1b' not in str(excinfo.value)
+    assert '\\x1b' in str(excinfo.value)
