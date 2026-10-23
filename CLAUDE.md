@@ -82,6 +82,13 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 
 **Target system:** `tests/targets.ini` defines endpoints for each environment (dev, prod, test, ci, exp, localhost). Tests use `target_info` fixture to get URLs. The `conftest.py` parametrizes tests across targets via `--target` CLI option; default is `dev`.
 
+It also declares per-target *capabilities* — `NodeNormBackend`, `NameResHasBlocklist` —
+so that a deployment which has not implemented something skips rather than failing the
+same way every day. Read them with `target_info.get`/`.getboolean` and default to the
+majority behaviour, so a target that forgets to declare one keeps its coverage instead of
+silently losing it. Such a skip has to live in the *test body*: `target_info` is
+parametrized by the root conftest and does not exist yet in `pytest_generate_tests`.
+
 **Google Sheet integration:** ~2000+ test cases are pulled from the shared Babel Validation
 Google Sheet. Its ID comes from the `BABEL_VALIDATION_SHEET_ID` environment variable (`.env`
 locally, a repository secret in Actions) and is deliberately not checked in.
@@ -276,4 +283,20 @@ When writing new tests:
   `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
   mode reappears if a cache's TTL can expire *during* a run, which is why
   `pytest_configure` deletes `gsheet_*.csv` before collection starts.
+- **A NameRes gsheet run's failure count understates regressions.** `test_label` calls
+  `pytest.xfail()` *imperatively* when the expected CURIE is inside the top
+  `NameResXFailIfInTop` (5) but not first, so a demotion from rank 1 to rank 2 is reported
+  as an `xfail` and never counted. Validating namelookup-es, that hid the largest
+  regression there was: 46 rows demoted, against 32 failing outright. To compare two
+  deployments, run both with `--report-jsonl` and classify each row rather than reading the
+  summary line — `passed`; `failed` with a msg starting `[XPASS(strict)]` is the sheet's
+  xfail passing; `wasxfail` with a msg starting `_pytest.outcomes.XFailed` is the
+  imperative rank-2-6 xfail; `wasxfail` otherwise is the sheet's own xfail; anything else
+  is a real failure. The rank itself is recorded as the `expected_rank` user property.
+- **Compare an -es target against `ci`, not against `dev` or `exp`.** `ci` and `ci-es` run
+  the same Babel data with different backends, which is what separates "the backend ranks
+  this differently" from "the data changed". `dev` and `exp` are newer Babel releases, so a
+  difference against them proves nothing. Note that NameRes ES `/status` reports
+  `babel_version: null`, so "same data" is currently an assumption the services cannot
+  confirm (issue #135).
 - Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)

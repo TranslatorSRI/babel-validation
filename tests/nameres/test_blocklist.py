@@ -37,6 +37,17 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
     nameres_url = target_info['NameResURL']
     nameres_synonyms_url = nameres_url + 'synonyms'
 
+    # Some deployments have not implemented a blocklist at all (namelookup-es, at the
+    # time of writing). Every entry then fails identically, which drowns the sheet's
+    # real findings, so the target declares the capability in targets.ini instead.
+    # The skip is here rather than in pytest_generate_tests because target_info is
+    # parametrized by the root conftest and is not available at generation time.
+    if not target_info.getboolean('NameResHasBlocklist', True):
+        pytest.skip(
+            f"Skipping blocklist entry: {nameres_url} declares no blocklist "
+            f"(NameResHasBlocklist) in targets.ini."
+        )
+
     # If there is any test category provided, this test is not relevant and we can skip it.
     if categories_include:
         pytest.skip(f"Skipping blocklist entry as it is not part of any category and the category filter is set to include {categories_include}.")
