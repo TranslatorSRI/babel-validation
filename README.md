@@ -125,6 +125,15 @@ resets every 60 seconds, so its counter is often back at zero by the time you lo
 $ curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
 ```
 
+## Design notes
+
+Proposals that are not decisions yet live under [`docs/`](./docs/). They are written to be
+argued with, and a directory there may be revised or left as the record of why something was
+not done. Currently:
+
+- [`docs/external/`](./docs/external/README.md) — where test cases contributed by other teams
+  should live, and how someone with a lot of them brings them in at once.
+
 ## Log Analysis
 
 The Jupyter Notebook in `log-analysis/` contains some basic analysis of the
