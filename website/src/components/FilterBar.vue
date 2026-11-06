@@ -44,6 +44,11 @@ export default {
   },
   beforeUnmount() {
     this.observer?.disconnect();
+    // And remove the property, not just stop updating it: it lives on
+    // documentElement, which outlives this component. Results.vue unmounts the
+    // bar on a load error, and the stale height then holds the table header's
+    // sticky offset down the page with no bar there to justify it.
+    document.documentElement.style.removeProperty('--filterbar-h');
   },
   methods: {
     publishHeight() {

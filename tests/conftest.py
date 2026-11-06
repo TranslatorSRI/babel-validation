@@ -130,6 +130,17 @@ def pytest_runtest_logreport(report):
     _report_file.flush()
 
 
+def pytest_unconfigure(config):
+    # Closed explicitly rather than left to interpreter shutdown. Every line is
+    # flushed as it is written, so nothing is lost today — but that makes this a
+    # bug that only appears if someone ever drops the flush() for speed, which is
+    # the obvious optimisation to reach for on a file written once per test phase.
+    global _report_file
+    if _report_file is not None:
+        _report_file.close()
+        _report_file = None
+
+
 def pytest_addoption(parser):
     # The target environment(s) to target.
     parser.addoption(

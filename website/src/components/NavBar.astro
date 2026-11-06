@@ -6,7 +6,7 @@
 // sets <base href="/babel-validation/">, so "#" resolves against the base and
 // navigates away from the page.
 interface Props {
-  active?: 'dashboard' | 'results' | 'history';
+  active?: 'dashboard' | 'results' | 'history' | 'milestones';
 }
 
 const { active } = Astro.props;
@@ -16,6 +16,7 @@ const pages = [
   { id: 'dashboard', label: 'Dashboard', href: base },
   { id: 'results', label: 'Results', href: `${base}results/` },
   { id: 'history', label: 'History', href: `${base}history/` },
+  { id: 'milestones', label: 'Milestones', href: `${base}milestones/` },
 ];
 
 const external = [
