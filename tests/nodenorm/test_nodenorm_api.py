@@ -32,6 +32,12 @@ BABEL_RELEASE_NOTES_URLS = (
 )
 BABEL_RELEASE_NOTES_BRANCHES = ('main', 'master')
 
+# Each backend is its own information resource, per biolink/information-resource-registry#140.
+INFORES_BY_BACKEND = {
+    'redis': 'infores:sri-node-normalizer',
+    'elasticsearch': 'infores:nodenorm',
+}
+
 
 def test_openapi_json(target_info):
     url = openapi_url(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath')
@@ -39,7 +45,9 @@ def test_openapi_json(target_info):
     assert response.ok, f"Could not GET {url}: {response}"
 
     openapi_json = response.json()
-    assert_x_translator(url, openapi_json, 'infores:sri-node-normalizer')
+    assert_x_translator(
+        url, openapi_json, INFORES_BY_BACKEND[target_info.get('NodeNormBackend', 'redis')]
+    )
 
     try:
         # Validate the document we already parsed as JSON, rather than validate_url(url),
