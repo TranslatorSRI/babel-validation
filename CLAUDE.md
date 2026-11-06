@@ -97,7 +97,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
-- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written); `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
+- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm, one or more GitHub issues each; `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
 
 ### Dashboard Website
 
@@ -246,7 +246,11 @@ When writing new tests:
 - Use the `target_info` fixture to get NodeNorm/NameRes URLs from targets.ini
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
-- Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+- **`tests/nodenorm/by_issue/` holds tests written for one particular bug**, each tied to the
+  GitHub issue(s) that describe it, whoever or whatever wrote them. A test there catches the bug
+  returning and shows when the specific problem in its issue has been fixed. If the bug turns
+  out to be broader than its issue, the general check goes elsewhere in `tests/` (or into the
+  GitHub issue tests); the per-issue test stays here.
 - **A test whose expectations are only true from one Babel release on** (a compendium that
   did not exist before it, a clique it rearranged) calls
   `require_babel_release(target_info, "2026jul22")` from `tests/_service_helpers.py` first. It
