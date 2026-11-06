@@ -7,6 +7,15 @@ comparison starts from here rather than from scratch. The 2026-09-29 investigati
 ORION build on ITRB against ES normalized differently from his RENCI build against Redis;
 issues #40 and #41) is the worked example.
 
+**A test that passes while its issue is still open means the issue looks fixed.** That
+includes a strict-xfail test reporting XPASS on an ES target. Recommend to the operator that
+they close the issue, citing the passing run: the targets, their `/status` `version` and
+`babel_version`, and the commit tested. Don't close it yourself; the issue belongs to the
+biothings maintainers. Closing is not the same as deploying: #40 and #41 were closed while
+`ci` still served the old code, so their xfail markers stay until the XPASS shows the fix
+has reached every ES target. Then take the marker out and keep the test as a regression
+guard, as `test_issue_10.py` and `test_issue_14.py` are.
+
 ## Which deployment is which
 
 `/status` says everything you need: `backend`, `babel_version`, `version`. Check it first,
