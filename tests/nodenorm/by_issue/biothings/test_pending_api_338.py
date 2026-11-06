@@ -2,10 +2,13 @@
 # NodeNorm returns null for NCBITaxon:2 when queried alongside MESH:C029371,
 # but returns it correctly alongside MESH:D008795. The bug triggers only when
 # the two CURIEs are in the same request; each CURIE succeeds on its own.
+# Fixed upstream (the issue is closed); kept as a regression test, so no xfail.
 import urllib.parse
 
 import pytest
 import requests
+
+from tests._service_helpers import truncated_repr
 
 TRIGGERING_PAIR = ["MESH:C029371", "NCBITaxon:2"]
 WORKING_PAIR = ["MESH:D008795", "NCBITaxon:2"]
@@ -21,11 +24,11 @@ def _assert_ok(response, nodenorm_url, curies):
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
     assert response.ok, (
         f"POST {url} returned HTTP {response.status_code} for {curies}: "
-        f"{response.text[:500]}"
+        f"{truncated_repr(response.text)}"
     )
     result = response.json()
     assert isinstance(result, dict), (
-        f"Expected a dict response, got {type(result).__name__}: {str(result)[:500]}"
+        f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
     )
     null_curies = [c for c in curies if result.get(c) is None]
     assert not null_curies, f"CURIEs returned as null: {null_curies}"

@@ -3,10 +3,13 @@
 # drug_chemical_conflate=True for a list that contains both CHEBI:17310 and
 # DRUGBANK:DB00058. Bisection confirmed this pair is the minimal reproducer;
 # neither CURIE fails on its own.
+# Fixed upstream (the issue is closed); kept as a regression test, so no xfail.
 import urllib.parse
 
 import pytest
 import requests
+
+from tests._service_helpers import truncated_repr
 
 # The two CURIEs that together trigger the 500 under drug_chemical_conflate=True.
 FAILING_PAIR = ["CHEBI:17310", "DRUGBANK:DB00058"]
@@ -93,11 +96,11 @@ def _post(nodenorm_url, curies):
 def _assert_ok(response, url, curies):
     assert response.ok, (
         f"POST {url} returned HTTP {response.status_code} for {curies}: "
-        f"{response.text[:500]}"
+        f"{truncated_repr(response.text)}"
     )
     result = response.json()
     assert isinstance(result, dict), (
-        f"Expected a dict response, got {type(result).__name__}: {str(result)[:500]}"
+        f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
     )
     missing = [c for c in curies if c not in result]
     assert not missing, f"{len(missing)} CURIEs missing from response: {missing}"

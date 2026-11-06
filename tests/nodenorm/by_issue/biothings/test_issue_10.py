@@ -1,10 +1,13 @@
 # Test for https://github.com/biothings/NodeNormalizationAPI/issues/10
 # Querying UNII:2ZM8CX04RZ with drug_chemical_conflate=True causes HTTP 500.
 # The same query with drug_chemical_conflate=False succeeds.
+# Fixed upstream (the issue is closed); kept as a regression test, so no xfail.
 import urllib.parse
 
 import pytest
 import requests
+
+from tests._service_helpers import truncated_repr
 
 CURIE = "UNII:2ZM8CX04RZ"
 
@@ -21,11 +24,11 @@ def _assert_ok(response, nodenorm_url, drug_chemical_conflate):
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
     assert response.ok, (
         f"POST {url} returned HTTP {response.status_code} for {CURIE} "
-        f"(drug_chemical_conflate={drug_chemical_conflate}): {response.text[:500]}"
+        f"(drug_chemical_conflate={drug_chemical_conflate}): {truncated_repr(response.text)}"
     )
     result = response.json()
     assert isinstance(result, dict), (
-        f"Expected a dict response, got {type(result).__name__}: {str(result)[:500]}"
+        f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
     )
     assert CURIE in result, f"{CURIE} missing from response"
 
