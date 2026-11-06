@@ -1,12 +1,17 @@
 """
 Check that each NodeNorm deployment answers its endpoints the way its OpenAPI document says.
 
-NodeNorm Redis and NodeNorm ES are meant to be interchangeable, and these tests hold each
-deployment to the response shapes clients were written against. They were added for three
-discrepancies found on NodeNorm ES (biothings/NodeNormalizationAPI#42): /get_allowed_conflations
-returned HTTP 500, POST /get_setid returned an index-keyed object instead of a list, and
-/get_semantic_types lower-cased every Biolink class. Those three are strict xfails on the
-Elasticsearch targets until that PR deploys; the unexpected pass is the signal to drop the markers.
+NodeNorm Redis and NodeNorm ES are meant to be interchangeable for the endpoints they share,
+and these tests hold each deployment to the response shapes clients were written against. They
+were added for three discrepancies found on NodeNorm ES: /get_allowed_conflations returned HTTP
+500, POST /get_setid returned an index-keyed object instead of a list, and /get_semantic_types
+lower-cased every Biolink class. biothings/NodeNormalizationAPI#58 fixed the first and most of
+the third; the rest are strict xfails on the Elasticsearch targets, and an unexpected pass is
+the signal to drop the marker.
+
+Everything a deployment returns is untrusted, its OpenAPI document included: it is formatted
+with truncated_repr(), and the document's path keys are validated before any URL is built from
+them.
 """
 
 import re
@@ -17,26 +22,60 @@ import requests
 
 from tests._service_helpers import openapi_url, truncated_repr
 
-NODENORM_ES_PR = "biothings/NodeNormalizationAPI#42"
+# Every request has a timeout, so a stalled endpoint fails with its own URL in the message
+# instead of holding the test until pytest-timeout's limit says nothing more useful.
+REQUEST_TIMEOUT = 30
+
+# The endpoints both backends serve. NodeNorm Redis also has the TRAPI endpoints /query and
+# /asyncquery and /get_curie_prefixes, which NodeNorm ES deliberately leaves out
+# (biothings/NodeNormalizationAPI#36); NodeNorm ES also has /version.
+SHARED_PATHS = {
+    "/status",
+    "/get_normalized_nodes",
+    "/get_setid",
+    "/get_semantic_types",
+    "/get_allowed_conflations",
+}
+
+# The OpenAPI document comes off the network, so its path keys decide nothing about where we
+# send a request until they pass this: plain segments of letters, digits, '_' and '-'. That
+# rules out '//host/x', '/https://host/x' and '..', which urljoin() would otherwise follow off
+# the deployment, and templated paths like '/x/{id}', which we would have no value to fill in.
+SAFE_PATH = re.compile(r"(?:/[A-Za-z0-9_-]+)+")
+# Neither backend documents more than ten paths; this bounds how many requests a document can
+# make us send.
+MAX_DOCUMENTED_PATHS = 50
 
 
-def xfail_on_elasticsearch_until_pr_42(request, target_info, what):
+class KnownElasticsearchDiscrepancy(AssertionError):
+    """
+    Raised only by the one check that a known NodeNorm ES discrepancy fails.
+
+    The strict xfail on the Elasticsearch targets passes ``raises=`` this class rather than
+    AssertionError, so a deployment that is down, a body that isn't JSON, or a shape check
+    before the known one fails the test as it would anywhere else, instead of reading as the
+    discrepancy we expected.
+    """
+
+
+def expect_elasticsearch_discrepancy(request, target_info, reason):
     if target_info.get("NodeNormBackend", "redis") == "elasticsearch":
         request.node.add_marker(
-            pytest.mark.xfail(strict=True, reason=f"{NODENORM_ES_PR}: {what}")
+            pytest.mark.xfail(
+                strict=True, raises=KnownElasticsearchDiscrepancy, reason=reason
+            )
         )
 
 
-def test_get_allowed_conflations(request, target_info):
-    xfail_on_elasticsearch_until_pr_42(
-        request, target_info, "/get_allowed_conflations returns HTTP 500"
-    )
-
-    url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_allowed_conflations")
-    response = requests.get(url)
+def get_json(url, **kwargs):
+    response = requests.get(url, timeout=REQUEST_TIMEOUT, **kwargs)
     assert response.ok, f"Could not GET {url}: {response}"
+    return response.json()
 
-    body = response.json()
+
+def test_get_allowed_conflations(target_info):
+    url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_allowed_conflations")
+    body = get_json(url)
     assert isinstance(body, dict) and isinstance(
         body.get("conflations"), list
     ), f"{url} should return an object with a 'conflations' list, got {truncated_repr(body)}"
@@ -46,25 +85,46 @@ def test_get_allowed_conflations(request, target_info):
 
 
 def test_get_semantic_types_are_biolink_classes(request, target_info):
-    xfail_on_elasticsearch_until_pr_42(
-        request, target_info, "/get_semantic_types lower-cases every class"
+    expect_elasticsearch_discrepancy(
+        request,
+        target_info,
+        "/get_semantic_types lists lower-cased duplicates such as biolink:smallmolecule "
+        "beside biolink:SmallMolecule, even after biothings/NodeNormalizationAPI#58",
     )
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_semantic_types")
-    response = requests.get(url)
-    assert response.ok, f"Could not GET {url}: {response}"
-
-    types = response.json()["semantic_types"]["types"]
+    body = get_json(url)
+    semantic_types = body.get("semantic_types") if isinstance(body, dict) else None
+    types = semantic_types.get("types") if isinstance(semantic_types, dict) else None
+    assert isinstance(
+        types, list
+    ), f"{url} should return {{'semantic_types': {{'types': [...]}}}}, got {truncated_repr(body)}"
     assert types, f"{url} returned no semantic types"
-    not_classes = [t for t in types if not re.fullmatch(r"biolink:[A-Z][A-Za-z]*", t)]
-    assert (
-        not not_classes
-    ), f"{url} returned types that are not Biolink class CURIEs: {truncated_repr(not_classes)}"
+
+    not_classes = [
+        t
+        for t in types
+        if not (isinstance(t, str) and re.fullmatch(r"biolink:[A-Z][A-Za-z]*", t))
+    ]
+    if not_classes:
+        raise KnownElasticsearchDiscrepancy(
+            f"{url} returned {len(not_classes)} types that are not Biolink class CURIEs: "
+            f"{truncated_repr(not_classes)}"
+        )
 
 
 def test_get_setid_post_returns_list(request, target_info):
-    xfail_on_elasticsearch_until_pr_42(
-        request, target_info, "POST /get_setid returns an index-keyed object"
+    """
+    POST /get_setid answers with a list, one set-ID result per input set.
+
+    Only the shape is checked here: test_setid_basic in test_nodenorm_setid.py checks the set
+    IDs themselves, from both GET and POST.
+    """
+    expect_elasticsearch_discrepancy(
+        request,
+        target_info,
+        "POST /get_setid returns an object keyed by input index "
+        "(biothings/NodeNormalizationAPI#48)",
     )
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_setid")
@@ -75,40 +135,62 @@ def test_get_setid_post_returns_list(request, target_info):
             "conflations": ["GeneProtein"],
         },
     ]
-    response = requests.post(url, json=sets)
+    response = requests.post(url, json=sets, timeout=REQUEST_TIMEOUT)
     assert response.ok, f"Could not POST to {url}: {response}"
 
     body = response.json()
+    if isinstance(body, dict):
+        raise KnownElasticsearchDiscrepancy(
+            f"POST {url} should return a list, got an object: {truncated_repr(body)}"
+        )
     assert isinstance(body, list) and len(body) == len(
         sets
     ), f"POST {url} should return one result per input set as a list, got {truncated_repr(body)}"
-    for query, result in zip(sets, body):
-        get_response = requests.get(
-            url,
-            params={
-                "curie": query["curies"],
-                "conflation": query.get("conflations", []),
-            },
-        )
-        assert get_response.ok, f"Could not GET {get_response.url}: {get_response}"
-        assert result["setid"] == get_response.json()["setid"], (
-            f"POST and GET disagree on the set ID for {query}: {truncated_repr(result)} vs "
-            f"{truncated_repr(get_response.json())}"
-        )
+    for result in body:
+        assert isinstance(result, dict) and isinstance(
+            result.get("setid"), str
+        ), f"POST {url} returned a result with no set ID: {truncated_repr(result)}"
 
 
-def test_every_documented_path_exists(target_info):
-    """Every path in the published OpenAPI document is served: anything but a 404 will do."""
+def get_documented_paths(target_info):
     doc_url = openapi_url(target_info, "NodeNormURL", "NodeNormOpenAPIPath")
-    response = requests.get(doc_url)
-    assert response.ok, f"Could not GET {doc_url}: {response}"
+    document = get_json(doc_url)
+    assert isinstance(document, dict) and isinstance(
+        document.get("paths"), dict
+    ), f"{doc_url} has no 'paths' object: {truncated_repr(document)}"
+    return doc_url, set(document["paths"])
 
-    missing = {}
-    for path in response.json()["paths"]:
-        url = urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/"))
-        status = requests.get(url).status_code
-        if status == 404:
-            missing[path] = status
+
+def test_documents_every_shared_endpoint(target_info):
+    """The published OpenAPI document lists every endpoint both backends are meant to serve."""
+    doc_url, paths = get_documented_paths(target_info)
+    missing = sorted(SHARED_PATHS - paths)
     assert (
         not missing
-    ), f"{doc_url} documents paths this deployment does not serve: {missing}"
+    ), f"{doc_url} does not document endpoints every NodeNorm serves: {missing!r}"
+
+
+def test_every_documented_path_is_served(target_info):
+    """Every path in the published OpenAPI document answers a bare GET with neither a 404 nor a
+    5xx. Anything else counts as served: a POST-only endpoint answers 405, and one with required
+    parameters 400 or 422."""
+    doc_url, paths = get_documented_paths(target_info)
+
+    unsafe = sorted(p for p in paths if not SAFE_PATH.fullmatch(p))
+    assert (
+        not unsafe
+    ), f"{doc_url} documents paths we will not build a URL from: {truncated_repr(unsafe)}"
+    assert len(paths) <= MAX_DOCUMENTED_PATHS, (
+        f"{doc_url} documents {len(paths)} paths, more than the {MAX_DOCUMENTED_PATHS} "
+        f"this test will request"
+    )
+
+    not_served = []
+    for path in sorted(paths):
+        url = urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/"))
+        status = requests.get(url, timeout=REQUEST_TIMEOUT).status_code
+        if status == 404 or status >= 500:
+            not_served.append(f"{path} (HTTP {status})")
+    assert (
+        not not_served
+    ), f"{doc_url} documents paths this deployment does not serve: {truncated_repr(not_served)}"
