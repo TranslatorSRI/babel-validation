@@ -12,7 +12,7 @@ def test_nodenorm_229(target_info):
     # Only the Redis-backed NodeNorm has a /query endpoint. Go by the configured backend
     # rather than probing for it, so that a Redis deployment that loses /query fails here
     # instead of skipping.
-    if target_info.get("NodeNormBackend", "redis") == "elasticsearch":
+    if target_info["NodeNormBackend"] == "elasticsearch":
         pytest.skip(f"NodeNorm ES {nodenorm_url} has no /query endpoint, cannot test issue #229")
     query_url = urllib.parse.urljoin(nodenorm_url, "query")
 

@@ -13,13 +13,21 @@ config = configparser.ConfigParser()
 config.read(Path(__file__).parent.parent / "targets.ini")
 
 
+OPENAPI_PATH_BY_BACKEND = {
+    "redis": "openapi.json",
+    "elasticsearch": "webapp/openapi.json",
+}
+
+
 @pytest.mark.parametrize("name", config.sections())
 def test_backend_and_openapi_path_agree(name):
     section = config[name]
-    is_es = section["NodeNormBackend"] == "elasticsearch"
-    uses_default_path = section["NodeNormOpenAPIPath"] == config.defaults()["nodenormopenapipath"]
-    assert is_es != uses_default_path, (
-        f"[{name}] has NodeNormBackend = {section['NodeNormBackend']} but "
+    backend = section["NodeNormBackend"]
+    assert (
+        backend in OPENAPI_PATH_BY_BACKEND
+    ), f"[{name}] has unknown NodeNormBackend = {backend}"
+    assert section["NodeNormOpenAPIPath"] == OPENAPI_PATH_BY_BACKEND[backend], (
+        f"[{name}] has NodeNormBackend = {backend} but "
         f"NodeNormOpenAPIPath = {section['NodeNormOpenAPIPath']}: set both when a target "
         f"changes backend."
     )

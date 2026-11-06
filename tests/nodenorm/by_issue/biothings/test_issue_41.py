@@ -48,7 +48,7 @@ SINGLE_LEADER = "MESH:C088986"
 
 
 def _xfail_on_elasticsearch(request, target_info):
-    if target_info.get("NodeNormBackend", "redis") == "elasticsearch":
+    if target_info["NodeNormBackend"] == "elasticsearch":
         request.node.add_marker(
             pytest.mark.xfail(
                 strict=True,

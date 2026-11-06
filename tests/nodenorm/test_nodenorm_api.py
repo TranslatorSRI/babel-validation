@@ -47,7 +47,7 @@ def test_openapi_json(target_info):
 
     openapi_json = response.json()
     assert_x_translator(
-        url, openapi_json, INFORES_BY_BACKEND[target_info.get('NodeNormBackend', 'redis')]
+        url, openapi_json, INFORES_BY_BACKEND[target_info['NodeNormBackend']]
     )
 
     try:
@@ -73,7 +73,7 @@ def test_status_backend(target_info):
     :param target_info: The target information for this set of tests.
     """
     url, status_json = get_status(target_info)
-    expected_backend = target_info.get('NodeNormBackend', 'redis')
+    expected_backend = target_info['NodeNormBackend']
 
     if 'backend' not in status_json:
         # There is nothing to compare with targets.ini. The missing field is itself a

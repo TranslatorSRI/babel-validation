@@ -32,7 +32,7 @@ CURIES = {
 def _xfail_on_elasticsearch(request, target_info):
     """Strict xfail on the ES-backed targets until the issue is fixed: once the index
     contains these compendia the XPASS will fail the run, and the marker comes out."""
-    if target_info.get("NodeNormBackend", "redis") == "elasticsearch":
+    if target_info["NodeNormBackend"] == "elasticsearch":
         request.node.add_marker(
             pytest.mark.xfail(
                 strict=True,
