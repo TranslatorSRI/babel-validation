@@ -232,6 +232,13 @@ When writing new tests:
 - Use the `target_info` fixture to get NodeNorm/NameRes URLs from targets.ini
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
+- When a known failure is one check inside a test that also makes requests and checks shapes, give
+  the xfail a narrow `raises=`: an `AssertionError` subclass raised only by that check, as
+  `KnownElasticsearchDiscrepancy` does in `tests/nodenorm/test_nodenorm_endpoints.py`. A bare strict
+  xfail — or `raises=AssertionError` — also absorbs a deployment that is down, a body that isn't
+  JSON and every earlier assertion, so a new breakage reads as the old one. Don't swap the marker for
+  an imperative `pytest.xfail()` plus `pytest.fail()` on a pass: that message starts with
+  `Failed: `, so `generate_report.py` counts it as failed rather than xpassed
 - Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
 - Checks that an endpoint's *response shape* matches what NodeNorm's OpenAPI document and its Redis
   implementation promise go in `tests/nodenorm/test_nodenorm_endpoints.py`, which runs against every
