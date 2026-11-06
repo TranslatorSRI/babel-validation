@@ -261,3 +261,27 @@ def require_babel_release(target_info, minimum_version):
             f"{status_url} serves Babel {babel_version}; this test needs {minimum_version} or later"
         )
 
+
+def get_normalized_node(target_info, curie, **params):
+    """
+    POST one CURIE to a target's get_normalized_nodes, and return its node.
+
+    Asserts the response is an object whose entry for curie is itself an object, so that
+    an unexpected shape fails with a readable message rather than an AttributeError.
+
+    :param target_info: The target information for this set of tests.
+    :param curie: The CURIE to normalize.
+    :param params: Further request parameters; conflate defaults to False.
+    :return: The normalized node for curie.
+    """
+    url = urllib.parse.urljoin(target_info['NodeNormURL'], 'get_normalized_nodes')
+    response = requests.post(url, json={'curies': [curie], 'conflate': False, **params})
+    assert response.ok, (
+        f"POST {url} returned HTTP {response.status_code}: {truncated_repr(response.text)}"
+    )
+    result = response.json()
+    assert isinstance(result, dict), f"{url} did not return a JSON object: {truncated_repr(result)}"
+    node = result.get(curie)
+    assert node is not None, f"{curie} is not normalizable on {url}"
+    assert isinstance(node, dict), f"{url} returned a non-object for {curie}: {truncated_repr(node)}"
+    return node

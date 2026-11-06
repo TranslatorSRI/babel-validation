@@ -4,15 +4,16 @@
 # Babel 2026jul22) nor CellLine.txt (present since at least 2025sep1). Any
 # identifier whose clique lives only in one of those files comes back null from
 # the Elasticsearch-backed NodeNorm while the Redis-backed one resolves it.
-import urllib.parse
-
 import pytest
-import requests
 
-from tests._service_helpers import require_babel_release
+from tests._service_helpers import (
+    get_normalized_node,
+    require_babel_release,
+    truncated_repr,
+)
 
 # Food.txt first appeared in this release; CLO cell lines resolve on it too. Older
-# deployments (prod, and any that cannot say what it serves) are skipped.
+# deployments (prod and test, on 2025sep1) are skipped.
 BABEL_RELEASE = "2026jul22"
 
 # CURIE -> (label, Babel type). Food.txt cliques are DrugBank/UNII/CHEBI-led; the
@@ -45,14 +46,8 @@ def test_compendium_is_loaded(request, target_info, curie):
     require_babel_release(target_info, BABEL_RELEASE)
     _xfail_on_elasticsearch(request, target_info)
     label, expected_type = CURIES[curie]
-    url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_normalized_nodes")
-    response = requests.post(url, json={"curies": [curie], "conflate": False})
+    node = get_normalized_node(target_info, curie)
+    types = node.get("type")
     assert (
-        response.ok
-    ), f"POST {url} returned HTTP {response.status_code}: {response.text[:500]}"
-    node = response.json().get(curie)
-    assert node is not None, f"{curie} ({label!r}) is not normalizable on {url}"
-    types = node.get("type", [])
-    assert (
-        types and types[0] == expected_type
-    ), f"{curie} ({label!r}) should be a {expected_type}, got {types[:1]!r}"
+        isinstance(types, list) and types and types[0] == expected_type
+    ), f"{curie} ({label!r}) should be a {expected_type}, got {truncated_repr(types)}"
