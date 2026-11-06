@@ -250,9 +250,11 @@ When writing new tests:
 - **A test whose expectations are only true from one Babel release on** (a compendium that
   did not exist before it, a clique it rearranged) calls
   `require_babel_release(target_info, "2026jul22")` from `tests/_service_helpers.py` first. It
-  skips targets serving an older release, and targets too old to report a `babel_version` at
-  all (prod). Without it the test fails on prod for the wrong reason, and a strict xfail
-  turns into an XPASS failure on an ES deployment that is simply one release behind.
+  skips targets serving an older release (prod and test were on 2025sep1 in 2026-11). Without
+  it the test fails there for the wrong reason, and a strict xfail turns into an XPASS failure
+  on an ES deployment that is simply one release behind. A target whose `/status` fails or
+  reports no well-formed `babel_version` *fails* rather than skips: skipping would turn a
+  broken `/status` into a green run that tested nothing.
 - **Don't pin clique sizes or identifier counts in a regression test.** Assert the property the
   bug broke (no duplicates, no HTTP 500, not null) instead. `test_issue_11` once asserted the 17/32
   identifiers from its issue, which were one Babel release's cliques, and failed on every target

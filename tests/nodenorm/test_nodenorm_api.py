@@ -12,6 +12,7 @@ from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 from tests._service_helpers import (
     assert_backend,
     assert_x_translator,
+    get_status,
     openapi_url,
     parse_babel_version,
     truncated_repr,
@@ -85,24 +86,6 @@ def test_status_backend(target_info):
         )
 
     assert_backend(url, status_json, expected_backend)
-
-
-def get_status(target_info):
-    """
-    GET a target's /status, and return its URL and the JSON object it returned.
-
-    :param target_info: The target information for this set of tests.
-    :return: A tuple of the /status URL and its parsed response.
-    """
-    url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
-    response = requests.get(url)
-    assert response.ok, f"Could not GET {url}: {response}"
-
-    status_json = response.json()
-    assert isinstance(status_json, dict), (
-        f"{url} did not return a JSON object: {truncated_repr(status_json)}"
-    )
-    return url, status_json
 
 
 def test_status_backend_is_known(target_info):

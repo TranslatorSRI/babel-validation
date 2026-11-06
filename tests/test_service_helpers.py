@@ -18,6 +18,7 @@ from tests._service_helpers import (
     assert_backend,
     assert_x_translator,
     babel_release_date,
+    get_status,
     openapi_url,
     parse_babel_version,
     require_babel_release,
@@ -209,32 +210,39 @@ def test_babel_release_dates_compare_across_releases():
 
 
 class TestRequireBabelRelease:
-    """require_babel_release() skips on an older, unreported or malformed release, and only then."""
+    """require_babel_release() skips an older release, and fails one it cannot read."""
 
     TARGET = {'NodeNormURL': 'https://example.org/'}
 
     def _status(self, monkeypatch, status_json):
-        monkeypatch.setattr(service_helpers, '_status_json', lambda status_url: status_json)
+        monkeypatch.setattr(
+            service_helpers, 'get_status', lambda target_info: (STATUS_URL, status_json)
+        )
 
     @pytest.mark.parametrize('babel_version', ['2026jul22', '2026jul22-dev', '2026sep24'])
     def test_the_minimum_release_or_a_later_one_runs(self, monkeypatch, babel_version):
         self._status(monkeypatch, {'babel_version': babel_version})
         require_babel_release(self.TARGET, '2026jul22')
 
-    @pytest.mark.parametrize('status_json, expected_reason', [
-        ({'babel_version': '2025sep1'}, 'serves Babel 2025sep1'),
-        ({'status': 'running'}, 'does not report a babel_version'),
-        ({'babel_version': 'VERSION.txt'}, 'not a release name'),
-        (None, 'does not report a babel_version'),
-    ])
-    def test_an_older_or_unknown_release_skips(self, monkeypatch, status_json, expected_reason):
-        self._status(monkeypatch, status_json)
-        with pytest.raises(pytest.skip.Exception, match=expected_reason):
+    def test_an_older_release_skips(self, monkeypatch):
+        self._status(monkeypatch, {'babel_version': '2025sep1'})
+        with pytest.raises(pytest.skip.Exception, match='serves Babel 2025sep1'):
             require_babel_release(self.TARGET, '2026jul22')
 
-    def test_the_skip_reason_escapes_what_the_service_said(self, monkeypatch):
+    @pytest.mark.parametrize('status_json, expected_message', [
+        # A skip here would make a run green that tested nothing: nodenorm-es.ci has
+        # reported 'VERSION.txt', and it is the one ES target these tests exist for.
+        ({'status': 'running'}, 'does not report a babel_version'),
+        ({'babel_version': 'VERSION.txt'}, 'not a Babel release name'),
+    ])
+    def test_an_unreadable_release_fails(self, monkeypatch, status_json, expected_message):
+        self._status(monkeypatch, status_json)
+        with pytest.raises(AssertionError, match=expected_message):
+            require_babel_release(self.TARGET, '2026jul22')
+
+    def test_the_failure_escapes_what_the_service_said(self, monkeypatch):
         self._status(monkeypatch, {'babel_version': '\x1b[2Jnope'})
-        with pytest.raises(pytest.skip.Exception) as excinfo:
+        with pytest.raises(AssertionError) as excinfo:
             require_babel_release(self.TARGET, '2026jul22')
         assert '\x1b' not in str(excinfo.value)
 
@@ -242,3 +250,55 @@ class TestRequireBabelRelease:
         self._status(monkeypatch, {'babel_version': '2026jul22'})
         with pytest.raises(AssertionError, match='not a Babel release name'):
             require_babel_release(self.TARGET, 'latest')
+
+
+class FakeResponse:
+    def __init__(self, status_code, json_body):
+        self.status_code = status_code
+        self.ok = status_code < 400
+        self._json_body = json_body
+
+    def json(self):
+        return self._json_body
+
+
+class TestGetStatus:
+    """/status is fetched once per URL, but a failure is never remembered."""
+
+    TARGET = {'NodeNormURL': 'https://example.org/'}
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        service_helpers._fetch_status.cache_clear()
+        yield
+        service_helpers._fetch_status.cache_clear()
+
+    def _serve(self, monkeypatch, *responses):
+        calls = []
+
+        def fake_get(url, timeout=None):
+            calls.append(timeout)
+            return responses[len(calls) - 1]
+
+        monkeypatch.setattr(service_helpers.requests, 'get', fake_get)
+        return calls
+
+    def test_a_transient_failure_is_retried_by_the_next_caller(self, monkeypatch):
+        self._serve(monkeypatch, FakeResponse(503, None), FakeResponse(200, {'status': 'ok'}))
+
+        with pytest.raises(AssertionError, match='Could not GET'):
+            get_status(self.TARGET)
+        assert get_status(self.TARGET) == (STATUS_URL, {'status': 'ok'})
+
+    def test_a_success_is_cached_and_the_request_has_a_timeout(self, monkeypatch):
+        calls = self._serve(monkeypatch, FakeResponse(200, {'status': 'ok'}))
+
+        get_status(self.TARGET)
+        get_status(self.TARGET)
+        assert calls == [service_helpers.STATUS_TIMEOUT_SECONDS]
+
+    def test_a_status_that_is_not_an_object_fails(self, monkeypatch):
+        self._serve(monkeypatch, FakeResponse(200, ['running']))
+
+        with pytest.raises(AssertionError, match='did not return a JSON object'):
+            get_status(self.TARGET)

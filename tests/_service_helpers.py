@@ -36,6 +36,9 @@ BABEL_VERSION_RE = re.compile(
 )
 BABEL_VERSION_MAX_LENGTH = 64
 
+# How long to wait for /status, rather than leaving a hung deployment to pytest-timeout's 300s.
+STATUS_TIMEOUT_SECONDS = 30
+
 
 def openapi_url(target_info, url_key, path_key):
     """
@@ -155,6 +158,13 @@ def assert_backend(url, status_json, expected_backend):
     )
 
 
+def _match_babel_version(babel_version):
+    """Return the regex match for a Babel release name, or None if it is not one."""
+    if isinstance(babel_version, str) and len(babel_version) <= BABEL_VERSION_MAX_LENGTH:
+        return BABEL_VERSION_RE.fullmatch(babel_version)
+    return None
+
+
 def parse_babel_version(url, status_json):
     """
     Assert that /status reports a well-formed babel_version, and return it.
@@ -166,14 +176,10 @@ def parse_babel_version(url, status_json):
     assert 'babel_version' in status_json, f"{url} does not report a babel_version."
     babel_version = status_json['babel_version']
 
-    match = None
-    if isinstance(babel_version, str) and len(babel_version) <= BABEL_VERSION_MAX_LENGTH:
-        match = BABEL_VERSION_RE.fullmatch(babel_version)
-    assert match, (
+    assert _match_babel_version(babel_version), (
         f"{url} reports babel_version {truncated_repr(babel_version)}, which is not a Babel "
         f"release name such as '2026sep24' or '2026sep24-dev'."
     )
-
     assert babel_release_date(babel_version) is not None, (
         f"{url} reports babel_version {babel_version!r}, which is not a real date."
     )
@@ -193,9 +199,7 @@ def babel_release_date(babel_version):
     :return: The release date, or None if babel_version is not a well-formed release name
         for a real date.
     """
-    match = None
-    if isinstance(babel_version, str) and len(babel_version) <= BABEL_VERSION_MAX_LENGTH:
-        match = BABEL_VERSION_RE.fullmatch(babel_version)
+    match = _match_babel_version(babel_version)
     if not match:
         return None
     try:
@@ -207,15 +211,31 @@ def babel_release_date(babel_version):
 
 
 @functools.lru_cache(maxsize=None)
-def _status_json(status_url):
-    response = requests.get(status_url)
-    if not response.ok:
-        return None
-    try:
-        status_json = response.json()
-    except ValueError:
-        return None
-    return status_json if isinstance(status_json, dict) else None
+def _fetch_status(status_url):
+    # lru_cache does not cache an exception, so a failed fetch fails this test and is
+    # retried by the next one, rather than being remembered for the rest of the run.
+    response = requests.get(status_url, timeout=STATUS_TIMEOUT_SECONDS)
+    assert response.ok, f"Could not GET {status_url}: {response}"
+    status_json = response.json()
+    assert isinstance(status_json, dict), (
+        f"{status_url} did not return a JSON object: {truncated_repr(status_json)}"
+    )
+    return status_json
+
+
+def get_status(target_info):
+    """
+    GET a target's NodeNorm /status, and return its URL and the JSON object it returned.
+
+    Fails the calling test if /status cannot be fetched or is not a JSON object. A
+    successful response is cached per URL for the process, so every test that asks costs
+    one request per target; callers must not modify the returned dict.
+
+    :param target_info: The target information for this set of tests.
+    :return: A tuple of the /status URL and its parsed response.
+    """
+    status_url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
+    return status_url, _fetch_status(status_url)
 
 
 def require_babel_release(target_info, minimum_version):
@@ -224,10 +244,9 @@ def require_babel_release(target_info, minimum_version):
 
     For a test whose expectations are only true of the data from one Babel release on
     (a compendium that did not exist before it, a clique that was rearranged by it).
-    A deployment too old to report a babel_version at all is skipped too, since it cannot
-    say what it serves; the /status tests are where an unreported or malformed
-    babel_version is a failure. The /status fetch is cached per URL for the process, so
-    calling this from every parametrized case costs one request per target.
+    A target whose /status cannot be fetched, or that does not report a well-formed
+    babel_version, fails rather than skips: we cannot tell whether the test applies, and
+    a skip would make a run look green that had tested nothing.
 
     :param target_info: The target information for this set of tests.
     :param minimum_version: The earliest Babel release name the test is valid for.
@@ -235,22 +254,10 @@ def require_babel_release(target_info, minimum_version):
     minimum_date = babel_release_date(minimum_version)
     assert minimum_date is not None, f"{minimum_version!r} is not a Babel release name"
 
-    status_url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
-    status_json = _status_json(status_url)
-    if status_json is None or 'babel_version' not in status_json:
-        pytest.skip(
-            f"{status_url} does not report a babel_version; this test needs Babel "
-            f"{minimum_version} or later"
-        )
-
-    babel_version = status_json['babel_version']
-    release_date = babel_release_date(babel_version)
-    if release_date is None:
-        pytest.skip(
-            f"{status_url} reports babel_version {truncated_repr(babel_version)}, which is not a "
-            f"release name; this test needs Babel {minimum_version} or later"
-        )
-    if release_date < minimum_date:
+    status_url, status_json = get_status(target_info)
+    babel_version = parse_babel_version(status_url, status_json)
+    if babel_release_date(babel_version) < minimum_date:
         pytest.skip(
             f"{status_url} serves Babel {babel_version}; this test needs {minimum_version} or later"
         )
+
