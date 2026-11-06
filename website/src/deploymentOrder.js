@@ -1,9 +1,12 @@
 // New Babel versions land in exp first and are promoted towards prod, so every
 // table on the site shows environments in deployment order: a value that
 // differs from its left neighbour is a change working its way through.
-// ci-nameres-es is ci's NodeNorm against the NameRes ES under validation: a sibling of ci,
-// not a promotion step, so it sits beside it.
-const DEPLOYMENT_ORDER = ['exp', 'dev', 'ci', 'ci-nameres-es', 'test', 'prod'];
+// That reading holds from exp to prod only. Anything after prod is a side branch
+// rather than a promotion step: ci-nameres-es is ci's NodeNorm against the NameRes ES
+// under validation. Placed between ci and test it became test's left neighbour,
+// so every Solr-vs-ES difference read as a ci→test promotion; at the end it
+// disturbs no pair in the pipeline.
+const DEPLOYMENT_ORDER = ['exp', 'dev', 'ci', 'test', 'prod', 'ci-nameres-es'];
 
 // The environments this list does not know about. It is the third place a target
 // has to be registered — targets.ini defines it, the workflow and generate_report
