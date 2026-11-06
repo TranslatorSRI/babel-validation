@@ -37,8 +37,9 @@ black tests/    # Format Python test code
 Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
 ~30 files it would reformat. Running `black` across the tree would bury a real change in
 unrelated churn, so format only the files you touch, or match the surrounding style.
-"Files you touch" means files that are already black-clean: `tests/_service_helpers.py`,
-`tests/test_service_helpers.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
+"Files you touch" means files that are already black-clean:
+`src/babel_validation/services/service_checks.py`, `src/babel_validation/core/babel_release.py`,
+`tests/unit/test_service_checks.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
 and running `black` on them after a ten-line edit rewrote every string in the file. Check
 `black --check <file>` on the committed version first; if it is not clean, edit by hand.
 
@@ -76,6 +77,8 @@ Check `git status` shows new frontend files as tracked.
 Shared library code used by the tests and potentially other consumers.
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
+- `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
+- `services/service_checks.py` — test-facing checks over NodeNorm/NameRes responses: the cached `/status` fetch, `require_babel_release()`, the OpenAPI `x-translator` and backend checks, `get_normalized_node()`, and `truncated_repr()` for putting service output into an assertion message
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
@@ -244,6 +247,9 @@ the two halves of the codebase disagreed about where the cache was.
 
 When writing new tests:
 - Use the `target_info` fixture to get NodeNorm/NameRes URLs from targets.ini
+- Before writing a `requests` call and its checks, look in `src/babel_validation/services/service_checks.py`:
+  `get_status()`, `get_normalized_node()` and `assert_x_translator()` already check the response's
+  shape and escape what the service returned, and `get_status()` is cached per target
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - **`tests/nodenorm/by_issue/` holds tests written for one particular bug**, each tied to the
@@ -253,7 +259,8 @@ When writing new tests:
   GitHub issue tests); the per-issue test stays here.
 - **A test whose expectations are only true from one Babel release on** (a compendium that
   did not exist before it, a clique it rearranged) calls
-  `require_babel_release(target_info, "2026jul22")` from `tests/_service_helpers.py` first. It
+  `require_babel_release(target_info, "2026jul22")` from
+  `src/babel_validation/services/service_checks.py` first. It
   skips targets serving an older release (prod and test were on 2025sep1 in 2026-11). Without
   it the test fails there for the wrong reason, and a strict xfail turns into an XPASS failure
   on an ES deployment that is simply one release behind. A target whose `/status` fails or

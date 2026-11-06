@@ -11,30 +11,25 @@ truncated before it reaches an assertion message, which pytest keeps in its repo
 
 The one trusted input here is the URL we ask for, which comes from the checked-in
 ``targets.ini``.
+
+These are test-facing: they fail (or skip) the calling test with ``assert`` and
+``pytest.skip``. The release-name parsing they build on needs neither, and is in
+``src.babel_validation.core.babel_release`` for use outside the test suite.
 """
 
-import datetime
 import functools
-import re
 import urllib.parse
 
 import pytest
 import requests
+
+from src.babel_validation.core.babel_release import babel_release_date, match_babel_version
 
 # The longest repr() we will put into an assertion message, and the most keys we
 # will list from an object, so that a service returning something enormous or
 # pathological cannot blow up the pytest report.
 MAX_REPR_LENGTH = 200
 MAX_KEYS_LISTED = 20
-
-# Babel releases are named for the day they were made, e.g. '2026sep24', optionally with an
-# alphanumeric suffix after a hyphen, e.g. '2026sep24-dev'. Each part is a fixed width or a
-# disjoint character class, so there is nothing here to backtrack over.
-BABEL_MONTHS = ('jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec')
-BABEL_VERSION_RE = re.compile(
-    r'(?P<year>\d{4})(?P<month>' + '|'.join(BABEL_MONTHS) + r')(?P<day>\d{1,2})(?:-[A-Za-z0-9]+)?'
-)
-BABEL_VERSION_MAX_LENGTH = 64
 
 # How long to wait for /status, rather than leaving a hung deployment to pytest-timeout's 300s.
 STATUS_TIMEOUT_SECONDS = 30
@@ -158,13 +153,6 @@ def assert_backend(url, status_json, expected_backend):
     )
 
 
-def _match_babel_version(babel_version):
-    """Return the regex match for a Babel release name, or None if it is not one."""
-    if isinstance(babel_version, str) and len(babel_version) <= BABEL_VERSION_MAX_LENGTH:
-        return BABEL_VERSION_RE.fullmatch(babel_version)
-    return None
-
-
 def parse_babel_version(url, status_json):
     """
     Assert that /status reports a well-formed babel_version, and return it.
@@ -176,7 +164,7 @@ def parse_babel_version(url, status_json):
     assert 'babel_version' in status_json, f"{url} does not report a babel_version."
     babel_version = status_json['babel_version']
 
-    assert _match_babel_version(babel_version), (
+    assert match_babel_version(babel_version), (
         f"{url} reports babel_version {truncated_repr(babel_version)}, which is not a Babel "
         f"release name such as '2026sep24' or '2026sep24-dev'."
     )
@@ -185,29 +173,6 @@ def parse_babel_version(url, status_json):
     )
 
     return babel_version
-
-
-def babel_release_date(babel_version):
-    """
-    Return the date a Babel release name stands for, or None if it is not a release name.
-
-    Babel releases are named for the day they were built, so their dates order them: a
-    deployment reporting '2025sep1' predates one reporting '2026jul22', and the suffix
-    ('-dev', '-rc1') does not change that.
-
-    :param babel_version: The babel_version as /status reported it, or any string.
-    :return: The release date, or None if babel_version is not a well-formed release name
-        for a real date.
-    """
-    match = _match_babel_version(babel_version)
-    if not match:
-        return None
-    try:
-        return datetime.date(
-            int(match['year']), BABEL_MONTHS.index(match['month']) + 1, int(match['day'])
-        )
-    except ValueError:
-        return None
 
 
 @functools.lru_cache(maxsize=None)
