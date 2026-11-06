@@ -11,8 +11,8 @@ import datetime
 
 import pytest
 
-import tests._service_helpers as service_helpers
-from tests._service_helpers import (
+import src.babel_validation.services.service_checks as service_checks
+from src.babel_validation.services.service_checks import (
     MAX_KEYS_LISTED,
     MAX_REPR_LENGTH,
     assert_backend,
@@ -216,7 +216,7 @@ class TestRequireBabelRelease:
 
     def _status(self, monkeypatch, status_json):
         monkeypatch.setattr(
-            service_helpers, 'get_status', lambda target_info: (STATUS_URL, status_json)
+            service_checks, 'get_status', lambda target_info: (STATUS_URL, status_json)
         )
 
     @pytest.mark.parametrize('babel_version', ['2026jul22', '2026jul22-dev', '2026sep24'])
@@ -269,9 +269,9 @@ class TestGetStatus:
 
     @pytest.fixture(autouse=True)
     def _clear_cache(self):
-        service_helpers._fetch_status.cache_clear()
+        service_checks._fetch_status.cache_clear()
         yield
-        service_helpers._fetch_status.cache_clear()
+        service_checks._fetch_status.cache_clear()
 
     def _serve(self, monkeypatch, *responses):
         calls = []
@@ -280,7 +280,7 @@ class TestGetStatus:
             calls.append(timeout)
             return responses[len(calls) - 1]
 
-        monkeypatch.setattr(service_helpers.requests, 'get', fake_get)
+        monkeypatch.setattr(service_checks.requests, 'get', fake_get)
         return calls
 
     def test_a_transient_failure_is_retried_by_the_next_caller(self, monkeypatch):
@@ -295,7 +295,7 @@ class TestGetStatus:
 
         get_status(self.TARGET)
         get_status(self.TARGET)
-        assert calls == [service_helpers.STATUS_TIMEOUT_SECONDS]
+        assert calls == [service_checks.STATUS_TIMEOUT_SECONDS]
 
     def test_a_status_that_is_not_an_object_fails(self, monkeypatch):
         self._serve(monkeypatch, FakeResponse(200, ['running']))

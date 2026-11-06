@@ -8,7 +8,7 @@ import urllib.parse
 import pytest
 import requests
 
-from tests._service_helpers import truncated_repr
+from src.babel_validation.services.service_checks import truncated_repr
 
 TRIGGERING_PAIR = ["MESH:C029371", "NCBITaxon:2"]
 WORKING_PAIR = ["MESH:D008795", "NCBITaxon:2"]

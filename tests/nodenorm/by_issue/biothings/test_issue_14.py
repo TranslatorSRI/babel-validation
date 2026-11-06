@@ -9,7 +9,7 @@ import urllib.parse
 import pytest
 import requests
 
-from tests._service_helpers import truncated_repr
+from src.babel_validation.services.service_checks import truncated_repr
 
 # The two CURIEs that together trigger the 500 under drug_chemical_conflate=True.
 FAILING_PAIR = ["CHEBI:17310", "DRUGBANK:DB00058"]

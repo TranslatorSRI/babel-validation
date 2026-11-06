@@ -6,7 +6,7 @@
 # the Elasticsearch-backed NodeNorm while the Redis-backed one resolves it.
 import pytest
 
-from tests._service_helpers import (
+from src.babel_validation.services.service_checks import (
     get_normalized_node,
     require_babel_release,
     truncated_repr,
