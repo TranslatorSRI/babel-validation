@@ -34,49 +34,36 @@ def test_openapi_json(target_info):
         pytest.fail(f"Could not validate OpenAPI at {url}: {e}")
 
 
-def test_reverse_lookup(target_info):
+def test_synonyms(target_info):
     """
-    Test the /reverse_lookup endpoint.
+    Test the /synonyms endpoint, by POST and by GET.
+
+    /synonyms replaced /reverse_lookup (NCATSTranslator/NameResolution#136), which the
+    Elasticsearch-backed NameRes does not serve at all.
 
     :param target_info: The target information for this set of tests.
     """
 
     nameres_url = target_info['NameResURL']
-    reverse_lookup_url = urllib.parse.urljoin(nameres_url, 'reverse_lookup')
+    synonyms_url = urllib.parse.urljoin(nameres_url, 'synonyms')
 
     curies_should_work = ['UBERON:8420000']
     curies_should_not_work = ['ENSEMBL:xarg', 'ENSEMBL:ENSDARG00000111928']
+    preferred_curies = curies_should_not_work + curies_should_work
 
-    # Test POST /reverse_lookup
-    response = requests.post(reverse_lookup_url, json={
-        'curies': curies_should_not_work + curies_should_work
-    })
-    assert response.ok
-    response_json = response.json()
+    for response in [
+        requests.post(synonyms_url, json={'preferred_curies': preferred_curies}),
+        requests.get(synonyms_url, params={'preferred_curies': preferred_curies}),
+    ]:
+        assert response.ok, f"{response.request.method} {synonyms_url} returned {response}"
+        response_json = response.json()
 
-    # Confirm that we have an entry for every working CURIE.
-    for working_curie in curies_should_work:
-        assert response_json[working_curie]['curie'] == working_curie
-        assert response_json[working_curie]['preferred_name'] is not None
-        assert response_json[working_curie]['preferred_name'] != ''
+        # Confirm that we have an entry for every working CURIE.
+        for working_curie in curies_should_work:
+            assert response_json[working_curie]['curie'] == working_curie
+            assert response_json[working_curie]['preferred_name'] is not None
+            assert response_json[working_curie]['preferred_name'] != ''
 
-    # Confirm that every non-working CURIE is represented currently.
-    for not_working_curie in curies_should_not_work:
-        assert response_json[not_working_curie] == {}
-
-    # Test GET /reverse_lookup
-    response = requests.get(reverse_lookup_url, params={
-        'curies': curies_should_not_work + curies_should_work
-    })
-    assert response.ok
-    response_json = response.json()
-
-    # Confirm that we have an entry for every working CURIE.
-    for working_curie in curies_should_work:
-        assert response_json[working_curie]['curie'] == working_curie
-        assert response_json[working_curie]['preferred_name'] is not None
-        assert response_json[working_curie]['preferred_name'] != ''
-
-    # Confirm that every non-working CURIE is represented currently.
-    for not_working_curie in curies_should_not_work:
-        assert response_json[not_working_curie] == {}
+        # Confirm that every non-working CURIE is represented, with an empty entry.
+        for not_working_curie in curies_should_not_work:
+            assert response_json[not_working_curie] == {}
