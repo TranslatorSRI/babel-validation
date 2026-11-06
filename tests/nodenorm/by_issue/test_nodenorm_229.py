@@ -1,18 +1,20 @@
 # This is a test for https://github.com/TranslatorSRI/NodeNormalization/issues/229
 import pytest
 import requests
-import urllib
+import urllib.parse
+
+from tests._service_helpers import truncated_repr
 
 
 def test_nodenorm_229(target_info):
     nodenorm_url = target_info["NodeNormURL"]
 
-    # We can't test this unless NodeNorm has a /query endpoint.
+    # Only the Redis-backed NodeNorm has a /query endpoint. Go by the configured backend
+    # rather than probing for it, so that a Redis deployment that loses /query fails here
+    # instead of skipping.
+    if target_info.get("NodeNormBackend", "redis") == "elasticsearch":
+        pytest.skip(f"NodeNorm ES {nodenorm_url} has no /query endpoint, cannot test issue #229")
     query_url = urllib.parse.urljoin(nodenorm_url, "query")
-    response = requests.head(query_url)
-    if response.status_code == 404:
-        pytest.skip(f"NodeNorm {nodenorm_url} does not have a /query endpoint, cannot test issue #229")
-        return
 
     input_json = {
         "message": {
@@ -506,7 +508,7 @@ def test_nodenorm_229(target_info):
     }
 
     response = requests.post(query_url, json=input_json)
-    assert response.ok, f"Could not POST test content to {query_url}: {response.json()}"
+    assert response.ok, f"Could not POST test content to {query_url}: {truncated_repr(response.text)}"
     actual_output = response.json()
 
     # For this issue, we are primarily interested in the results.
