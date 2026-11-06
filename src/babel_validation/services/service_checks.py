@@ -11,15 +11,28 @@ truncated before it reaches an assertion message, which pytest keeps in its repo
 
 The one trusted input here is the URL we ask for, which comes from the checked-in
 ``targets.ini``.
+
+These are test-facing: they fail (or skip) the calling test with ``assert`` and
+``pytest.skip``. The release-name parsing they build on needs neither, and is in
+``src.babel_validation.core.babel_release`` for use outside the test suite.
 """
 
+import functools
 import urllib.parse
+
+import pytest
+import requests
+
+from src.babel_validation.core.babel_release import babel_release_date, match_babel_version
 
 # The longest repr() we will put into an assertion message, and the most keys we
 # will list from an object, so that a service returning something enormous or
 # pathological cannot blow up the pytest report.
 MAX_REPR_LENGTH = 200
 MAX_KEYS_LISTED = 20
+
+# How long to wait for /status, rather than leaving a hung deployment to pytest-timeout's 300s.
+STATUS_TIMEOUT_SECONDS = 30
 
 
 def openapi_url(target_info, url_key, path_key):
@@ -138,3 +151,102 @@ def assert_backend(url, status_json, expected_backend):
         f"backend, in which case targets.ini needs to follow it (including the path to its "
         f"OpenAPI document), or it is answering from somewhere unexpected."
     )
+
+
+def parse_babel_version(url, status_json):
+    """
+    Assert that /status reports a well-formed babel_version, and return it.
+
+    :param url: The URL the status was retrieved from, for the error messages.
+    :param status_json: The parsed /status response.
+    :return: The babel_version, which is safe to build a URL from.
+    """
+    assert 'babel_version' in status_json, f"{url} does not report a babel_version."
+    babel_version = status_json['babel_version']
+
+    assert match_babel_version(babel_version), (
+        f"{url} reports babel_version {truncated_repr(babel_version)}, which is not a Babel "
+        f"release name such as '2026sep24' or '2026sep24-dev'."
+    )
+    assert babel_release_date(babel_version) is not None, (
+        f"{url} reports babel_version {babel_version!r}, which is not a real date."
+    )
+
+    return babel_version
+
+
+@functools.lru_cache(maxsize=None)
+def _fetch_status(status_url):
+    # lru_cache does not cache an exception, so a failed fetch fails this test and is
+    # retried by the next one, rather than being remembered for the rest of the run.
+    response = requests.get(status_url, timeout=STATUS_TIMEOUT_SECONDS)
+    assert response.ok, f"Could not GET {status_url}: {response}"
+    status_json = response.json()
+    assert isinstance(status_json, dict), (
+        f"{status_url} did not return a JSON object: {truncated_repr(status_json)}"
+    )
+    return status_json
+
+
+def get_status(target_info):
+    """
+    GET a target's NodeNorm /status, and return its URL and the JSON object it returned.
+
+    Fails the calling test if /status cannot be fetched or is not a JSON object. A
+    successful response is cached per URL for the process, so every test that asks costs
+    one request per target; callers must not modify the returned dict.
+
+    :param target_info: The target information for this set of tests.
+    :return: A tuple of the /status URL and its parsed response.
+    """
+    status_url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
+    return status_url, _fetch_status(status_url)
+
+
+def require_babel_release(target_info, minimum_version):
+    """
+    Skip the calling test unless the target serves Babel ``minimum_version`` or later.
+
+    For a test whose expectations are only true of the data from one Babel release on
+    (a compendium that did not exist before it, a clique that was rearranged by it).
+    A target whose /status cannot be fetched, or that does not report a well-formed
+    babel_version, fails rather than skips: we cannot tell whether the test applies, and
+    a skip would make a run look green that had tested nothing.
+
+    :param target_info: The target information for this set of tests.
+    :param minimum_version: The earliest Babel release name the test is valid for.
+    """
+    minimum_date = babel_release_date(minimum_version)
+    assert minimum_date is not None, f"{minimum_version!r} is not a Babel release name"
+
+    status_url, status_json = get_status(target_info)
+    babel_version = parse_babel_version(status_url, status_json)
+    if babel_release_date(babel_version) < minimum_date:
+        pytest.skip(
+            f"{status_url} serves Babel {babel_version}; this test needs {minimum_version} or later"
+        )
+
+
+def get_normalized_node(target_info, curie, **params):
+    """
+    POST one CURIE to a target's get_normalized_nodes, and return its node.
+
+    Asserts the response is an object whose entry for curie is itself an object, so that
+    an unexpected shape fails with a readable message rather than an AttributeError.
+
+    :param target_info: The target information for this set of tests.
+    :param curie: The CURIE to normalize.
+    :param params: Further request parameters; conflate defaults to False.
+    :return: The normalized node for curie.
+    """
+    url = urllib.parse.urljoin(target_info['NodeNormURL'], 'get_normalized_nodes')
+    response = requests.post(url, json={'curies': [curie], 'conflate': False, **params})
+    assert response.ok, (
+        f"POST {url} returned HTTP {response.status_code}: {truncated_repr(response.text)}"
+    )
+    result = response.json()
+    assert isinstance(result, dict), f"{url} did not return a JSON object: {truncated_repr(result)}"
+    node = result.get(curie)
+    assert node is not None, f"{curie} is not normalizable on {url}"
+    assert isinstance(node, dict), f"{url} returned a non-object for {curie}: {truncated_repr(node)}"
+    return node

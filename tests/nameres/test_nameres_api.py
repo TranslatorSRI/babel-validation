@@ -9,7 +9,7 @@ import requests
 from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
-from tests._service_helpers import assert_x_translator, openapi_url
+from src.babel_validation.services.service_checks import assert_x_translator, openapi_url
 
 def test_openapi_json(target_info):
     """
