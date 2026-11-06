@@ -34,36 +34,65 @@ def test_openapi_json(target_info):
         pytest.fail(f"Could not validate OpenAPI at {url}: {e}")
 
 
-def test_synonyms(target_info):
+# Each request gets its own timeout, so a hung service fails here, naming the request,
+# rather than at pytest's 300s limit with nothing to say which call it was stuck on.
+NAMERES_TIMEOUT = 30
+
+CURIES_SHOULD_WORK = ['UBERON:8420000']
+CURIES_SHOULD_NOT_WORK = ['ENSEMBL:xarg', 'ENSEMBL:ENSDARG00000111928']
+
+
+def check_curie_lookup(url, param):
     """
-    Test the /synonyms endpoint, by POST and by GET.
-
-    /synonyms replaced /reverse_lookup (NCATSTranslator/NameResolution#136), which the
-    Elasticsearch-backed NameRes does not serve at all.
-
-    :param target_info: The target information for this set of tests.
+    POST and then GET `url` with every test CURIE under `param`, checking each response
+    before sending the next: a filled entry for every CURIE that resolves, and an empty
+    one for every CURIE that does not.
     """
-
-    nameres_url = target_info['NameResURL']
-    synonyms_url = urllib.parse.urljoin(nameres_url, 'synonyms')
-
-    curies_should_work = ['UBERON:8420000']
-    curies_should_not_work = ['ENSEMBL:xarg', 'ENSEMBL:ENSDARG00000111928']
-    preferred_curies = curies_should_not_work + curies_should_work
-
-    for response in [
-        requests.post(synonyms_url, json={'preferred_curies': preferred_curies}),
-        requests.get(synonyms_url, params={'preferred_curies': preferred_curies}),
+    curies = CURIES_SHOULD_NOT_WORK + CURIES_SHOULD_WORK
+    for method, kwargs in [
+        ('POST', {'json': {param: curies}}),
+        ('GET', {'params': {param: curies}}),
     ]:
-        assert response.ok, f"{response.request.method} {synonyms_url} returned {response}"
+        response = requests.request(method, url, timeout=NAMERES_TIMEOUT, **kwargs)
+        assert response.ok, f"{method} {url} returned {response}"
         response_json = response.json()
 
-        # Confirm that we have an entry for every working CURIE.
-        for working_curie in curies_should_work:
+        for working_curie in CURIES_SHOULD_WORK:
             assert response_json[working_curie]['curie'] == working_curie
             assert response_json[working_curie]['preferred_name'] is not None
             assert response_json[working_curie]['preferred_name'] != ''
 
-        # Confirm that every non-working CURIE is represented, with an empty entry.
-        for not_working_curie in curies_should_not_work:
+        for not_working_curie in CURIES_SHOULD_NOT_WORK:
             assert response_json[not_working_curie] == {}
+
+
+def test_synonyms(target_info):
+    """
+    Test the /synonyms endpoint, by POST and by GET.
+
+    /synonyms replaced /reverse_lookup (NCATSTranslator/NameResolution#136).
+
+    :param target_info: The target information for this set of tests.
+    """
+    check_curie_lookup(urllib.parse.urljoin(target_info['NameResURL'], 'synonyms'), 'preferred_curies')
+
+
+def test_reverse_lookup(target_info, request):
+    """
+    Test the deprecated /reverse_lookup endpoint, by POST and by GET.
+
+    The Solr-backed NameRes still serves it and clients still call it, so a regression
+    there matters. The Elasticsearch-backed NameRes does not serve it at all (a 404):
+    that is a difference between the two flavours, which is exactly what this repo
+    exists to report, so it is a strict xfail rather than a deleted test. If the ES
+    NameRes gains the endpoint, the XPASS says this mark can go.
+
+    :param target_info: The target information for this set of tests.
+    """
+    if target_info.get('NameResBackend', 'solr') == 'elasticsearch':
+        # applymarker, not pytest.xfail(): that stops the test unrun, so it could never XPASS.
+        request.applymarker(pytest.mark.xfail(
+            strict=True,
+            reason="The Elasticsearch-backed NameRes does not serve /reverse_lookup; use /synonyms.",
+        ))
+    check_curie_lookup(urllib.parse.urljoin(target_info['NameResURL'], 'reverse_lookup'), 'curies')
