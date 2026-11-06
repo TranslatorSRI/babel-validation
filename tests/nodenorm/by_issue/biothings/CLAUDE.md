@@ -10,17 +10,17 @@ issues #40 and #41) is the worked example.
 ## Which deployment is which
 
 `/status` says everything you need: `backend`, `babel_version`, `version`. Check it first,
-because the ES deployments do not all track the same Babel release. On 2026-09-29:
+because the ES deployments do not all track the same Babel release. On 2026-11-06:
 
 | target | backend | Babel | notes |
 |---|---|---|---|
-| `ci` | elasticsearch 1.0.0 | 2026jul22 | the ES instance ORION builds against |
-| `test` | elasticsearch 1.0.0 | 2025sep1 | one release behind `ci` |
+| `ci` | elasticsearch 1.2.0 | 2026jul22 | the ES instance ORION builds against |
+| `test` | elasticsearch 1.2.0 | 2025sep1 | one release behind `ci` |
+| `prod` | elasticsearch 1.0.0 | 2025sep1 | moved from Redis in #154 |
 | `dev`, `exp` | redis 2.5.1 | 2026jul22 | the Redis comparison point for `ci` |
-| `prod` | redis | (old `/status`, no versions) | |
 
-So "same Babel release, different backend" is `ci` vs `dev`. NodeNorm Redis's `/status`
-reports `backend`, ES's reports the ES cluster.
+So "same Babel release, different backend" is `ci` vs `dev`. Both backends' `/status`
+report `backend`; ES's also reports the ES cluster.
 
 ## Where the ES code is
 
