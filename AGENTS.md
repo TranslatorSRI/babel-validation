@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents (Claude Code, Codex and the like) when working with code in this repository.
 
 ## Project Overview
 
@@ -124,7 +124,7 @@ schema diff, a colleague's message describing a discrepancy), downloaded Babel c
 one-off comparison output. Name a subdirectory for the investigation and date
 (`data/nodenorm-discrepency-2026sep29/`). Nothing there survives a fresh clone, so anything
 worth keeping — what was learned, how to reproduce it — goes into a tracked file: a
-regression test, a directory `CLAUDE.md` (see `tests/nodenorm/by_issue/biothings/CLAUDE.md`
+regression test, a directory `AGENTS.md` (see `tests/nodenorm/by_issue/biothings/AGENTS.md`
 for the NodeNorm ES-vs-Redis investigation notes), or the issue itself.
 
 ## Untrusted Input
