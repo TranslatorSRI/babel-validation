@@ -20,7 +20,7 @@ import urllib.parse
 import pytest
 import requests
 
-from tests._service_helpers import openapi_url, truncated_repr
+from src.babel_validation.services.service_checks import openapi_url, truncated_repr
 
 # Every request has a timeout, so a stalled endpoint fails with its own URL in the message
 # instead of holding the test until pytest-timeout's limit says nothing more useful.
