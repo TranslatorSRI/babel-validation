@@ -6,6 +6,22 @@ This file provides guidance to coding agents (Claude Code, Codex and the like) w
 
 Babel Validation is a test suite and web tools for validating outputs from [Babel](https://github.com/TranslatorSRI/Babel), which powers the Translator [Node Normalization (NodeNorm)](https://nodenorm.transltr.io/docs) and [Name Resolver (NameRes)](https://name-lookup.transltr.io/docs) services.
 
+## About these files
+
+Agent instructions live in `AGENTS.md` files: this one, `tests/AGENTS.md` (writing tests),
+`website/AGENTS.md` (the dashboard) and `tests/nodenorm/by_issue/biothings/AGENTS.md` (NodeNorm
+ES investigations). Claude Code (v2.1.277 or later) loads this file at the start of a session
+and a subdirectory's file only when it reads a file in that directory; some other agents load
+only the files between the repository root and their working directory.
+
+- **Do not add a `CLAUDE.md` or `CLAUDE.local.md` anywhere in the repository.** In its default
+  mode Claude Code reads `AGENTS.md` only when there is no `CLAUDE.md` in the working directory
+  or above, so a single one — even a one-line `@AGENTS.md` shim — makes it ignore every file
+  listed above. (`~/.claude/CLAUDE.md` does not count.)
+- **Move a rule into a subdirectory's file only if nobody can break it without first reading a
+  file in that directory.** A rule that guards an action (filing an issue, reading `.env`,
+  running pytest) or states a principle that applies to new code anywhere stays here.
+
 ## Commands
 
 ### Python Tests (primary)
