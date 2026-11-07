@@ -6,8 +6,8 @@ and these tests hold each deployment to the response shapes clients were written
 were added for three discrepancies found on NodeNorm ES: /get_allowed_conflations returned HTTP
 500, POST /get_setid returned an index-keyed object instead of a list, and /get_semantic_types
 lower-cased every Biolink class. biothings/NodeNormalizationAPI#58 fixed the first and most of
-the third; the rest are strict xfails on the Elasticsearch targets, and an unexpected pass is
-the signal to drop the marker.
+the third, in NodeNorm ES 1.2.0, which not every ES target runs yet. What is left is a strict
+xfail on the Elasticsearch targets, and an unexpected pass is the signal to drop the marker.
 
 Everything a deployment returns is untrusted, its OpenAPI document included: it is formatted
 with truncated_repr(), and the document's path keys are validated before any URL is built from
@@ -20,7 +20,11 @@ import urllib.parse
 import pytest
 import requests
 
-from src.babel_validation.services.service_checks import openapi_url, truncated_repr
+from src.babel_validation.services.service_checks import (
+    get_status,
+    openapi_url,
+    truncated_repr,
+)
 
 # Every request has a timeout, so a stalled endpoint fails with its own URL in the message
 # instead of holding the test until pytest-timeout's limit says nothing more useful.
@@ -46,6 +50,11 @@ SAFE_PATH = re.compile(r"(?:/[A-Za-z0-9_-]+)+")
 # make us send.
 MAX_DOCUMENTED_PATHS = 50
 
+# The NodeNorm ES release, as /status reports its version, that fixed /get_allowed_conflations
+# answering HTTP 500 (biothings/NodeNormalizationAPI#58). On 2026-11-06 ci and test ran 1.2.0
+# and prod 1.0.0; once every ES target reports 1.2.0 or later, drop the `before=` uses.
+NODENORM_ES_CONFLATIONS_FIX = (1, 2, 0)
+
 
 class KnownElasticsearchDiscrepancy(AssertionError):
     """
@@ -58,8 +67,28 @@ class KnownElasticsearchDiscrepancy(AssertionError):
     """
 
 
-def expect_elasticsearch_discrepancy(request, target_info, reason):
-    if target_info.get("NodeNormBackend", "redis") == "elasticsearch":
+def nodenorm_version(target_info):
+    """Return the version a NodeNorm /status reports, as a tuple of ints, failing if there is none."""
+    status_url, status_json = get_status(target_info)
+    version = status_json.get("version")
+    match = (
+        re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+        if isinstance(version, str)
+        else None
+    )
+    assert match, f"{status_url} reports no x.y.z version: {truncated_repr(version)}"
+    return tuple(int(part) for part in match.groups())
+
+
+def expect_elasticsearch_discrepancy(request, target_info, reason, before=None):
+    """
+    Mark the calling test a strict xfail on NodeNorm ES targets, for KnownElasticsearchDiscrepancy
+    only. With ``before``, only on ES targets whose /status version is older than it: the fix has
+    been released, and the targets already running it must pass.
+    """
+    if target_info.get("NodeNormBackend", "redis") != "elasticsearch":
+        return
+    if before is None or nodenorm_version(target_info) < before:
         request.node.add_marker(
             pytest.mark.xfail(
                 strict=True, raises=KnownElasticsearchDiscrepancy, reason=reason
@@ -73,9 +102,21 @@ def get_json(url, **kwargs):
     return response.json()
 
 
-def test_get_allowed_conflations(target_info):
+def test_get_allowed_conflations(request, target_info):
+    expect_elasticsearch_discrepancy(
+        request,
+        target_info,
+        "/get_allowed_conflations returns HTTP 500 before NodeNorm ES 1.2.0 "
+        "(biothings/NodeNormalizationAPI#58)",
+        before=NODENORM_ES_CONFLATIONS_FIX,
+    )
+
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_allowed_conflations")
-    body = get_json(url)
+    response = requests.get(url, timeout=REQUEST_TIMEOUT)
+    if response.status_code == 500:
+        raise KnownElasticsearchDiscrepancy(f"GET {url} returned HTTP 500")
+    assert response.ok, f"Could not GET {url}: {response}"
+    body = response.json()
     assert isinstance(body, dict) and isinstance(
         body.get("conflations"), list
     ), f"{url} should return an object with a 'conflations' list, got {truncated_repr(body)}"
@@ -88,8 +129,8 @@ def test_get_semantic_types_are_biolink_classes(request, target_info):
     expect_elasticsearch_discrepancy(
         request,
         target_info,
-        "/get_semantic_types lists lower-cased duplicates such as biolink:smallmolecule "
-        "beside biolink:SmallMolecule, even after biothings/NodeNormalizationAPI#58",
+        "/get_semantic_types lists lower-cased classes such as biolink:smallmolecule; "
+        "biothings/NodeNormalizationAPI#58 fixed most of them, but not all",
     )
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_semantic_types")
@@ -170,10 +211,17 @@ def test_documents_every_shared_endpoint(target_info):
     ), f"{doc_url} does not document endpoints every NodeNorm serves: {missing!r}"
 
 
-def test_every_documented_path_is_served(target_info):
+def test_every_documented_path_is_served(request, target_info):
     """Every path in the published OpenAPI document answers a bare GET with neither a 404 nor a
     5xx. Anything else counts as served: a POST-only endpoint answers 405, and one with required
     parameters 400 or 422."""
+    expect_elasticsearch_discrepancy(
+        request,
+        target_info,
+        "/get_allowed_conflations returns HTTP 500 before NodeNorm ES 1.2.0 "
+        "(biothings/NodeNormalizationAPI#58)",
+        before=NODENORM_ES_CONFLATIONS_FIX,
+    )
     doc_url, paths = get_documented_paths(target_info)
 
     unsafe = sorted(p for p in paths if not SAFE_PATH.fullmatch(p))
@@ -191,6 +239,10 @@ def test_every_documented_path_is_served(target_info):
         status = requests.get(url, timeout=REQUEST_TIMEOUT).status_code
         if status == 404 or status >= 500:
             not_served.append(f"{path} (HTTP {status})")
+    if not_served == ["/get_allowed_conflations (HTTP 500)"]:
+        raise KnownElasticsearchDiscrepancy(
+            f"{doc_url} documents /get_allowed_conflations, which returns HTTP 500"
+        )
     assert (
         not not_served
     ), f"{doc_url} documents paths this deployment does not serve: {truncated_repr(not_served)}"
