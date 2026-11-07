@@ -102,6 +102,10 @@ def test_setid_basic(nodenorm_url):
     setid_query = [{'curies': e['curie'], 'conflations': e['conflation']} for e in expected_setids]
     response = requests.post(nodenorm_url + "get_setid", json=setid_query)
     results = response.json()
+    # Iterating an index-keyed object would yield its keys and fail with a TypeError further down;
+    # say what is wrong instead. test_nodenorm_endpoints.py tracks the NodeNorm ES issue for this.
+    assert isinstance(results, list) and len(results) == len(expected_setids), \
+        f"POST get_setid should return one result per input set as a list, got {type(results).__name__}"
     for index, result in enumerate(results):
         expected_setid = expected_setids[index]
 

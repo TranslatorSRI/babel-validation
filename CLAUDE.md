@@ -252,6 +252,16 @@ When writing new tests:
   shape and escape what the service returned, and `get_status()` is cached per target
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
+- When a known failure is one check inside a test that also makes requests and checks shapes, give
+  the xfail a narrow `raises=`: an `AssertionError` subclass raised only by that check, as
+  `KnownElasticsearchDiscrepancy` does in `tests/nodenorm/test_nodenorm_endpoints.py`. A bare strict
+  xfail — or `raises=AssertionError` — also absorbs a deployment that is down, a body that isn't
+  JSON and every earlier assertion, so a new breakage reads as the old one. Don't swap the marker for
+  an imperative `pytest.xfail()` plus `pytest.fail()` on a pass: that message starts with
+  `Failed: `, so `generate_report.py` counts it as failed rather than xpassed
+- Checks that an endpoint's *response shape* matches what NodeNorm's OpenAPI document and its Redis
+  implementation promise go in `tests/nodenorm/test_nodenorm_endpoints.py`, which runs against every
+  target; per-CURIE data regressions go in `by_issue/`
 - **`tests/nodenorm/by_issue/` holds tests written for one particular bug**, each tied to the
   GitHub issue(s) that describe it, whoever or whatever wrote them. A test there catches the bug
   returning and shows when the specific problem in its issue has been fixed. If the bug turns
