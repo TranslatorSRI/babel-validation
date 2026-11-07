@@ -126,11 +126,15 @@ def test_get_allowed_conflations(request, target_info):
 
 
 def test_get_semantic_types_are_biolink_classes(request, target_info):
+    # This requires the Biolink Model's casing. Whether biolink:smallmolecule is an acceptable
+    # spelling of biolink:SmallMolecule, which would make this check wrong rather than NodeNorm
+    # ES, is TranslatorSRI/babel-validation#158; don't relax it before that is decided.
     expect_elasticsearch_discrepancy(
         request,
         target_info,
         "/get_semantic_types lists lower-cased classes such as biolink:smallmolecule; "
-        "biothings/NodeNormalizationAPI#58 fixed most of them, but not all",
+        "biothings/NodeNormalizationAPI#58 fixed most of them, but not all "
+        "(whether that matters: #158)",
     )
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_semantic_types")
