@@ -264,8 +264,8 @@ class FakeResponse:
         return self._json_body
 
 
-class TestGetStatus:
-    """/status is fetched once per URL, but a failure is never remembered."""
+class FetchesJSON:
+    """Clears the shared fetch cache around each test, and fakes the responses it gets."""
 
     TARGET = {'NodeNormURL': 'https://example.org/'}
 
@@ -284,6 +284,10 @@ class TestGetStatus:
 
         monkeypatch.setattr(service_checks.requests, 'get', fake_get)
         return calls
+
+
+class TestGetStatus(FetchesJSON):
+    """/status is fetched once per URL, but a failure is never remembered."""
 
     def test_a_transient_failure_is_retried_by_the_next_caller(self, monkeypatch):
         self._serve(monkeypatch, FakeResponse(503, None), FakeResponse(200, {'status': 'ok'}))
@@ -312,6 +316,8 @@ class TestGetStatus:
             get_status(self.TARGET)
         assert get_status(self.TARGET) == (STATUS_URL, {'status': 'ok'})
 
+
+class TestGetOpenAPI(FetchesJSON):
     def test_an_openapi_document_shares_the_cache(self, monkeypatch):
         document = {'paths': {}}
         calls = self._serve(monkeypatch, FakeResponse(200, document))
@@ -323,14 +329,8 @@ class TestGetStatus:
         assert calls == [service_checks.STATUS_TIMEOUT_SECONDS]
 
 
-class TestNodeNormVersion:
+class TestNodeNormVersion(FetchesJSON):
     """A version gate needs a release number, in whichever of the usual spellings it comes."""
-
-    @pytest.fixture(autouse=True)
-    def _clear_cache(self):
-        service_checks._fetch_json.cache_clear()
-        yield
-        service_checks._fetch_json.cache_clear()
 
     def _version(self, monkeypatch, version):
         monkeypatch.setattr(
