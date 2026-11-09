@@ -218,9 +218,12 @@ def trim_status(raw):
     trimmed = {}
     if "status" in raw:
         trimmed["status"] = sanitize(raw["status"], 50)
-    # The service's own release (NodeNorm 2.5.1, NodeNorm ES 1.0.0); NameRes
-    # reports its own as nameres_version, below.
-    if "version" in raw:
+    # The service's own release (NodeNorm 2.5.1, NodeNorm ES 1.0.0). NameRes
+    # reports its own as nameres_version, below, and from v1.7 lists its Solr
+    # core's stats at the top level, where "version" is the index's version
+    # counter (68618), not a release. So a top-level numDocs means "version"
+    # belongs to the index.
+    if "version" in raw and "numDocs" not in raw:
         trimmed["version"] = sanitize(raw["version"], 50)
     if "babel_version" in raw:
         trimmed["babel_version"] = sanitize(raw["babel_version"], 50)
@@ -283,26 +286,21 @@ def trim_status(raw):
         trimmed["recent_queries"] = {
             key: value for key, value in latencies.items() if value is not None
         }
+    # NameRes's search index: under "solr" before v1.7, at the top level from
+    # v1.7 on, and at the top level in NameRes ES (which reports numDocs and
+    # size, both 0 on ci-nameres-es). One "index" key whichever it was.
     solr = raw.get("solr")
-    if isinstance(solr, dict):
-        trimmed_solr = {}
-        num_docs = _trimmed_int(solr.get("numDocs"))
-        if num_docs is not None:
-            trimmed_solr["numDocs"] = num_docs
-        if "size" in solr:
-            trimmed_solr["size"] = sanitize(solr["size"], 20)
-        for key in ("lastModified", "startTime"):
-            if key in solr:
-                trimmed_solr[key] = sanitize(solr[key], 40)
-        trimmed["solr"] = trimmed_solr
-    # NameRes ES reports its index at the top level rather than under "solr".
-    if "numDocs" in raw or "size" in raw:
+    index = solr if isinstance(solr, dict) else raw
+    if isinstance(solr, dict) or "numDocs" in raw:
         trimmed_index = {}
-        num_docs = _trimmed_int(raw.get("numDocs"))
+        num_docs = _trimmed_int(index.get("numDocs"))
         if num_docs is not None:
             trimmed_index["numDocs"] = num_docs
-        if "size" in raw:
-            trimmed_index["size"] = sanitize(raw["size"], 20)
+        if "size" in index:
+            trimmed_index["size"] = sanitize(index["size"], 20)
+        for key in ("lastModified", "startTime"):
+            if key in index:
+                trimmed_index[key] = sanitize(index[key], 40)
         trimmed["index"] = trimmed_index
     return trimmed
 
@@ -519,14 +517,15 @@ def build_history_line(report):
         nodenorm_status = section["nodenorm_status"]
         nameres_status = section["nameres_status"]
         eq_db = nodenorm_status.get("databases", {}).get("eq_id_to_id_db", {})
-        solr = nameres_status.get("solr", {})
+        index = nameres_status.get("index", {})
         line["targets"][target] = {
             "babel_version": nodenorm_status.get("babel_version"),
             "nameres_version": nameres_status.get("nameres_version"),
             "biolink_version": nodenorm_status.get("biolink_version"),
             "nn_eq_records": eq_db.get("count"),
-            "solr_docs": solr.get("numDocs"),
-            "solr_size": solr.get("size"),
+            # Named for Solr, but read from either backend's index.
+            "solr_docs": index.get("numDocs"),
+            "solr_size": index.get("size"),
             "p95_ms": nameres_status.get("recent_queries", {}).get("p95_ms"),
             "counts": section["counts"],
         }

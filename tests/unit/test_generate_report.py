@@ -353,27 +353,31 @@ class TestTrimStatus:
         )
         assert "weird" not in trimmed["databases"]
         assert trimmed["recent_queries"] == {"p95_ms": 12.5}
-        assert trimmed["solr"] == {"numDocs": 7, "size": "1 GB"}
+        assert trimmed["index"] == {"numDocs": 7, "size": "1 GB"}
         assert trimmed["biolink_version"] == "v4"
 
-    def test_service_version_index_and_solr_dates_kept(self):
-        trimmed = trim_status(
-            {
-                "version": "2.5.1",
-                "solr": {
-                    "numDocs": 7,
-                    "lastModified": "2026-10-08T22:16:21.135Z",
-                    "startTime": "2026-10-14T17:14:16.138Z",
-                },
-                "numDocs": "0",
-                "size": 0,
-            }
-        )
-        assert trimmed["version"] == "2.5.1"
-        assert trimmed["solr"]["lastModified"] == "2026-10-08T22:16:21.135Z"
-        assert trimmed["solr"]["startTime"] == "2026-10-14T17:14:16.138Z"
-        # NameRes ES reports its index at the top level; 0 is a real value there.
-        assert trimmed["index"] == {"numDocs": 0, "size": "0"}
+    def test_nodenorm_version_kept(self):
+        assert trim_status({"version": "2.5.1"})["version"] == "2.5.1"
+
+    def test_nameres_index_read_from_solr_or_top_level(self):
+        dates = {
+            "lastModified": "2026-10-08T22:16:21.135Z",
+            "startTime": "2026-10-14T17:14:16.138Z",
+        }
+        expected = {"numDocs": 7, "size": "1 GB", **dates}
+        # Before NameRes v1.7, the index stats were under "solr".
+        before = trim_status({"solr": {"numDocs": 7, "size": "1 GB", **dates}})
+        assert before["index"] == expected
+        # From v1.7 they are at the top level, including the index's own
+        # "version" counter, which must not pass for the service's version.
+        after = trim_status({"numDocs": "7", "size": "1 GB", "version": 68618, **dates})
+        assert after["index"] == expected
+        assert "version" not in after
+        # NameRes ES reports a top-level index too; 0 is a real value there.
+        assert trim_status({"numDocs": 0, "size": 0})["index"] == {
+            "numDocs": 0,
+            "size": "0",
+        }
 
     def test_elasticsearch_nodes_are_summarised(self):
         nodes = {
@@ -417,7 +421,7 @@ class TestTrimStatus:
         trimmed = trim_status({"recent_queries": {"p95_ms": value}})
         assert trimmed["recent_queries"] == {}
         trimmed = trim_status({"solr": {"numDocs": value, "size": "1 GB"}})
-        assert trimmed["solr"] == {"size": "1 GB"}
+        assert trimmed["index"] == {"size": "1 GB"}
 
 
 class TestAllTargetsUnreachable:
@@ -560,6 +564,21 @@ class TestServiceLinks:
         assert targets["ci"]["nodenorm_docs_url"] == "https://nn-es.example/"
         assert targets["ci"]["nameres_docs_url"] == "https://nr-es.example/"
         assert targets["ci"]["nodenorm_status_url"] == "https://nn-es.example/status"
+
+    def test_history_line_reads_the_nameres_index_from_either_backend(self):
+        report = {
+            "generated_at": "2026-11-09T00:00:00+00:00",
+            "run": {"github_run_id": "1"},
+            "targets": {
+                "ci": {
+                    "nodenorm_status": {},
+                    "nameres_status": trim_status({"numDocs": 5, "size": "2 GB"}),
+                    "counts": {},
+                }
+            },
+        }
+        line = generate_report.build_history_line(report)["targets"]["ci"]
+        assert (line["solr_docs"], line["solr_size"]) == (5, "2 GB")
 
     def test_a_missing_url_has_no_links(self):
         assert generate_report.service_links(None, "redis") == (None, None)
