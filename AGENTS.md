@@ -204,11 +204,9 @@ outcomes and `report.json`: it repr-escapes and truncates all text, passes `/sta
 responses through a key whitelist, only emits issue ids and source URLs that match the
 `targets.ini` `Repositories` allowlist, and withholds blocklist test details entirely (that
 sheet may not be public — do not add `ids=` to the blocklist parametrize or link to it).
-The Vue components must render report values with `{{ }}` interpolation only, never
-`v-html`, build links only from validated parts, and guard every URL-supplied key with
-`Object.hasOwn` before it indexes the report. Anything that aggregates over `results` — a
-filter dropdown as much as a table — must exclude blocklist rows the same way.
-`website/AGENTS.md` has the details and the bugs behind them.
+Anything that aggregates over `results`, in Python or in the website, must exclude blocklist
+rows the same way. The Vue components that render the report have rules of their own, in
+`website/AGENTS.md`.
 
 **Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
 Git commit must not contain the test-case sheet's ID or a link to either sheet — casual

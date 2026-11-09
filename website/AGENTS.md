@@ -32,9 +32,9 @@ undo that:
 
 **Render report values with `{{ }}` interpolation only — never `v-html`** — and construct
 links from validated parts (allowlisted `org/repo#N`, `targets.ini` URLs), never verbatim
-from report text. A facet is as public as a cell: the filter bar's category and source
-dropdowns are built from report values, so they exclude blocklist rows exactly as the table
-does. Anything that aggregates over `results` needs the same check.
+from report text. The root `AGENTS.md`'s rule that anything aggregating over `results`
+excludes blocklist rows covers the filter bar's category and source dropdowns too: a facet is
+as public as a cell.
 
 **A query parameter must never index a JSON-parsed object directly.** `report.results` and
 each result's `outcomes` are plain objects, so they inherit `Object.prototype`: `?test=`,
