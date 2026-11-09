@@ -165,7 +165,9 @@ export const STATUS_SECTIONS = [
     statusUrl: (t) => t.nameres_status_url,
     rows: [
       ...commonRows('nameres'),
-      { label: 'Version', value: (t) => t.nameres_status.nameres_version, compare: true },
+      // Not compared, for the same reason as NodeNorm's: NameRes Solr and NameRes
+      // ES are separate codebases with unrelated version numbers.
+      { label: 'Version', value: (t) => t.nameres_status.nameres_version },
       { label: 'Backend', value: (t) => t.nameres_backend },
       {
         label: 'Documents',
