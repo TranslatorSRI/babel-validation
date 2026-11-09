@@ -21,11 +21,16 @@ function mountWith(targets) {
   });
 }
 
-function babelRow(wrapper) {
-  const row = wrapper
-    .findAll('tbody tr')
-    .find((tr) => tr.find('th').text() === 'Babel version');
-  return row.findAll('td').map((td) => td.classes().join(' '));
+function row(wrapper, section, label) {
+  return wrapper
+    .findAll(`tbody tr[data-section="${section}"]`)
+    .find((tr) => tr.find('th').text() === label);
+}
+
+function babelRow(wrapper, section = 'nodenorm') {
+  return row(wrapper, section, 'Babel version')
+    .findAll('td')
+    .map((td) => td.classes().join(' '));
 }
 
 describe('StatusMatrix', () => {
@@ -52,10 +57,57 @@ describe('StatusMatrix', () => {
       dev: target('2025sep1'),
       prod: target('2025sep1', { nodenorm: { error: 'ConnectionError', status: undefined } }),
     });
-    const row = wrapper
-      .findAll('tbody tr')
-      .find((tr) => tr.find('th').text() === 'NodeNorm status');
-    expect(row.findAll('td')[2].classes()).toContain('table-danger');
+    expect(row(wrapper, 'nodenorm', 'Status').findAll('td')[2].classes()).toContain(
+      'table-danger'
+    );
+  });
+
+  it('gives NodeNorm and NameRes a Babel version each, shaded independently', () => {
+    // On test, NodeNorm was on 2025sep1 while NameRes had moved to 2026jul22:
+    // a single Babel row, read from NodeNorm, hid that entirely.
+    const wrapper = mountWith({
+      exp: target('2026jul22', { nameres: { babel_version: '2026jul22' } }),
+      dev: target('2026jul22', { nameres: { babel_version: '2026jul22' } }),
+      prod: target('2025sep1', { nameres: { babel_version: '2026jul22' } }),
+    });
+    expect(babelRow(wrapper, 'nodenorm')[2]).toContain('table-warning');
+    expect(babelRow(wrapper, 'nameres').join(' ')).not.toContain('table-warning');
+    expect(row(wrapper, 'nameres', 'Babel version').findAll('td')[2].text()).toBe('2026jul22');
+  });
+
+  it('links each service to the docs and /status URLs the generator built', () => {
+    const wrapper = mountWith({
+      exp: {
+        ...target('2026jul22'),
+        nodenorm_docs_url: 'https://nn.example/docs',
+        nodenorm_status_url: 'https://nn.example/status',
+        nameres_docs_url: 'https://nr-es.example/',
+        nameres_status_url: 'https://nr-es.example/status',
+      },
+    });
+    const links = (section) =>
+      wrapper
+        .find(`tbody tr.table-group[data-section="${section}"]`)
+        .findAll('a')
+        .map((a) => [a.text(), a.attributes('href')]);
+    expect(links('nodenorm')).toEqual([
+      ['docs', 'https://nn.example/docs'],
+      ['status', 'https://nn.example/status'],
+    ]);
+    expect(links('nameres')).toEqual([
+      ['docs', 'https://nr-es.example/'],
+      ['status', 'https://nr-es.example/status'],
+    ]);
+  });
+
+  it('hides a row that no environment has a value for', () => {
+    const wrapper = mountWith({
+      exp: target('2026jul22', { nodenorm: { elasticsearch: { nodes: 3, version: '9.3.1' } } }),
+      dev: target('2026jul22'),
+    });
+    expect(row(wrapper, 'nodenorm', 'Elasticsearch').findAll('td')[0].text()).toBe('3 × 9.3.1');
+    // No environment reports a disk percentage, so that row is not shown at all.
+    expect(row(wrapper, 'nodenorm', 'ES disk used')).toBeUndefined();
   });
 });
 

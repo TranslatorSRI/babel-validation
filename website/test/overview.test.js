@@ -52,6 +52,23 @@ describe('Overview', () => {
     expect(wrapper.findAll('a').filter((a) => a.text().includes('errored'))).toHaveLength(1);
   });
 
+  it("shows each card's Babel version once, or both services' when they differ", async () => {
+    const report = {
+      ...REPORT,
+      targets: {
+        dev: target({}, { nameres_status: { status: 'ok', babel_version: '2025sep1' } }),
+        prod: target({}, { nameres_status: { status: 'ok', babel_version: '2026jul22' } }),
+      },
+    };
+    const wrapper = await mountOverview(report);
+    const versions = wrapper.findAll('.col .card-body > .d-flex > .small');
+    expect(versions.map((el) => el.findAll('.d-block').map((line) => line.text()))).toEqual([
+      ['2025sep1'],
+      ['NN 2025sep1', 'NR 2026jul22'],
+    ]);
+    expect(versions[1].attributes('title')).toBe('NodeNorm 2025sep1, NameRes 2026jul22');
+  });
+
   it('orders the environment cards by deployment, not by report order', async () => {
     const wrapper = await mountOverview();
     const names = wrapper.findAll('.col .card-body > .d-flex > .fw-semibold').map((el) => el.text());

@@ -1,15 +1,18 @@
 <!--
   StatusMatrix.vue - the /status of every environment, side by side in
   deployment order, so that a value differing from its neighbours stands out.
+  NodeNorm and NameRes get a section each, since they are loaded separately and
+  can be on different Babel releases; a third section holds the test counts.
 
   Report values are untrusted: render them with {{ }} only, never v-html, and
-  link only to URLs the generator validated (the `href` in STATUS_ROWS).
+  link only to URLs the generator built or validated (a section's `docsUrl` and
+  `statusUrl`, from targets.ini, and a row's `href` in STATUS_SECTIONS).
 -->
 <script>
 import {
   ALL_OUTCOMES,
   OUTCOME_LABELS,
-  STATUS_ROWS,
+  STATUS_SECTIONS,
   formatCount,
 } from '../reportData.js';
 
@@ -18,10 +21,17 @@ export default {
     report: { type: Object, required: true },
     targetNames: { type: Array, required: true },
   },
-  data() {
-    return { statusRows: STATUS_ROWS };
-  },
   computed: {
+    sections() {
+      // Hide a row no environment has a value for: the Elasticsearch rows on a
+      // day with no NodeNorm ES target, say, would otherwise be a line of dashes.
+      return STATUS_SECTIONS.map((section) => ({
+        ...section,
+        rows: section.rows.filter((row) =>
+          this.targetNames.some((t) => this.statusValue(row, t) != null)
+        ),
+      }));
+    },
     countRows() {
       // Always show the outcomes that carry meaning; the rarer ones only when
       // they occurred somewhere.
@@ -58,7 +68,7 @@ export default {
     statusCellClass(statusRow, target) {
       const info = this.report.targets[target];
       if (statusRow.danger?.(info)) return 'table-danger';
-      // Only rows the environments should agree on: see `compare` in STATUS_ROWS.
+      // Only rows the environments should agree on: see `compare` in STATUS_SECTIONS.
       if (!statusRow.compare) return '';
       // Highlight the odd ones out when environments disagree, e.g. every
       // environment on Babel 2025sep1 except exp.
@@ -104,22 +114,41 @@ export default {
       </tr>
     </thead>
     <tbody>
-      <tr v-for="statusRow in statusRows" :key="statusRow.label">
-        <th class="text-nowrap fw-normal text-body-secondary">{{ statusRow.label }}</th>
-        <td
-          v-for="target in targetNames"
-          :key="target"
-          class="text-center text-nowrap"
-          :class="statusCellClass(statusRow, target)"
-        >
-          <a v-if="statusHref(statusRow, target)" :href="statusHref(statusRow, target)">
-            {{ statusValue(statusRow, target) }}
-          </a>
-          <template v-else>{{ statusValue(statusRow, target) ?? '—' }}</template>
-        </td>
+      <template v-for="section in sections" :key="section.key">
+        <tr class="table-group" :data-section="section.key">
+          <th class="text-nowrap">{{ section.title }}</th>
+          <td v-for="target in targetNames" :key="target" class="text-center text-nowrap small">
+            <template v-if="section.docsUrl(report.targets[target])">
+              <a :href="section.docsUrl(report.targets[target])">docs</a>
+              ·
+            </template>
+            <a
+              v-if="section.statusUrl(report.targets[target])"
+              :href="section.statusUrl(report.targets[target])"
+              >status</a
+            >
+          </td>
+        </tr>
+        <tr v-for="statusRow in section.rows" :key="statusRow.label" :data-section="section.key">
+          <th class="text-nowrap fw-normal text-body-secondary ps-3">{{ statusRow.label }}</th>
+          <td
+            v-for="target in targetNames"
+            :key="target"
+            class="text-center text-nowrap"
+            :class="statusCellClass(statusRow, target)"
+          >
+            <a v-if="statusHref(statusRow, target)" :href="statusHref(statusRow, target)">
+              {{ statusValue(statusRow, target) }}
+            </a>
+            <template v-else>{{ statusValue(statusRow, target) ?? '—' }}</template>
+          </td>
+        </tr>
+      </template>
+      <tr class="table-group" data-section="tests">
+        <th class="text-nowrap" :colspan="targetNames.length + 1">Tests</th>
       </tr>
-      <tr v-for="outcome in countRows" :key="outcome">
-        <th class="text-nowrap fw-normal text-body-secondary">{{ outcome }} tests</th>
+      <tr v-for="outcome in countRows" :key="outcome" data-section="tests">
+        <th class="text-nowrap fw-normal text-body-secondary ps-3">{{ outcome }} tests</th>
         <td v-for="target in targetNames" :key="target" class="text-center">
           <span
             v-if="report.targets[target].counts[outcome] > 0"

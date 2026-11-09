@@ -66,8 +66,21 @@ export default {
     counts(target) {
       return this.report.targets[target].counts;
     },
+    // NodeNorm and NameRes are loaded separately, so they can be on different
+    // Babel releases while one is promoted. One version when they agree (or
+    // only one reports any); both, a line each, when they differ.
     babelVersion(target) {
-      return this.report.targets[target].nodenorm_status.babel_version;
+      const { nodenorm_status: nn, nameres_status: nr } = this.report.targets[target];
+      const nodenorm = nn?.babel_version;
+      const nameres = nr?.babel_version;
+      if (nodenorm && nameres && nodenorm !== nameres) {
+        return {
+          lines: [`NN ${nodenorm}`, `NR ${nameres}`],
+          title: `NodeNorm ${nodenorm}, NameRes ${nameres}`,
+        };
+      }
+      const version = nodenorm ?? nameres;
+      return { lines: [version ?? '—'], title: version ? `Babel ${version}` : null };
     },
     resultsLink(params) {
       return `${this.resultsUrl}?${new URLSearchParams(params).toString()}`;
@@ -129,9 +142,13 @@ export default {
       <div v-for="target in targetNames" :key="target" class="col">
         <div class="card h-100">
           <div class="card-body py-2 px-3">
-            <div class="d-flex justify-content-between align-items-baseline">
+            <div class="d-flex justify-content-between align-items-baseline gap-2">
               <span class="fw-semibold">{{ target }}</span>
-              <span class="small text-body-secondary">{{ babelVersion(target) ?? '—' }}</span>
+              <span class="small text-body-secondary text-end" :title="babelVersion(target).title">
+                <span v-for="line in babelVersion(target).lines" :key="line" class="d-block">
+                  {{ line }}
+                </span>
+              </span>
             </div>
             <template v-if="report.targets[target].unreachable">
               <div class="fs-5 fw-semibold text-body-secondary">no results</div>

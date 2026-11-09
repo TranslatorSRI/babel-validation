@@ -57,6 +57,13 @@ html {
   padding: 0.3rem 0.5rem;
 }
 
+/* A row that opens a section of a table (NodeNorm, NameRes, Tests in the
+   Environments table). Bootstrap paints cells from --bs-table-bg, so set that
+   rather than background, and from a variable that flips with the theme. */
+.table-group > * {
+  --bs-table-bg: var(--bs-tertiary-bg);
+}
+
 /* A sticky <th> needs its own background: table cells are transparent by
    default, so rows would show through as they scroll under it.
 
