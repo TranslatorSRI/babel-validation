@@ -18,6 +18,7 @@ These are test-facing: they fail (or skip) the calling test with ``assert`` and
 """
 
 import functools
+import re
 import urllib.parse
 
 import pytest
@@ -31,8 +32,40 @@ from src.babel_validation.core.babel_release import babel_release_date, match_ba
 MAX_REPR_LENGTH = 200
 MAX_KEYS_LISTED = 20
 
-# How long to wait for /status, rather than leaving a hung deployment to pytest-timeout's 300s.
+# How long to wait for /status or an OpenAPI document, rather than leaving a hung deployment
+# to pytest-timeout's 300s.
 STATUS_TIMEOUT_SECONDS = 30
+
+# A NodeNorm /status version: a release number, with an optional 'v' and anything after it
+# ('1.2.0', 'v1.2.1', '1.3', '1.3.0-rc1').
+NODENORM_VERSION = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?(?![\d.])')
+
+
+@functools.lru_cache(maxsize=None)
+def _fetch_json(url):
+    # lru_cache does not cache an exception, so a failed fetch fails this test and is
+    # retried by the next one, rather than being remembered for the rest of the run.
+    response = requests.get(url, timeout=STATUS_TIMEOUT_SECONDS)
+    assert response.ok, f"Could not GET {url}: {response}"
+    return response.json()
+
+
+def get_openapi(target_info, url_key, path_key):
+    """
+    GET a target's OpenAPI document, and return its URL and the parsed JSON.
+
+    A successful response is cached per URL for the process, so every test that reads
+    the document costs one request per target; callers must not modify what is returned.
+    The JSON is not checked here, because it is untrusted and each caller says what it
+    needs from it.
+
+    :param target_info: The target information for this set of tests.
+    :param url_key: The targets.ini key giving the service's base URL.
+    :param path_key: The targets.ini key giving the path to the OpenAPI document.
+    :return: A tuple of the document's URL and its parsed JSON.
+    """
+    url = openapi_url(target_info, url_key, path_key)
+    return url, _fetch_json(url)
 
 
 def openapi_url(target_info, url_key, path_key):
@@ -175,13 +208,8 @@ def parse_babel_version(url, status_json):
     return babel_version
 
 
-@functools.lru_cache(maxsize=None)
 def _fetch_status(status_url):
-    # lru_cache does not cache an exception, so a failed fetch fails this test and is
-    # retried by the next one, rather than being remembered for the rest of the run.
-    response = requests.get(status_url, timeout=STATUS_TIMEOUT_SECONDS)
-    assert response.ok, f"Could not GET {status_url}: {response}"
-    status_json = response.json()
+    status_json = _fetch_json(status_url)
     assert isinstance(status_json, dict), (
         f"{status_url} did not return a JSON object: {truncated_repr(status_json)}"
     )
@@ -201,6 +229,29 @@ def get_status(target_info):
     """
     status_url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
     return status_url, _fetch_status(status_url)
+
+
+def nodenorm_version(target_info):
+    """
+    Return the NodeNorm release a target's /status reports, as a tuple of three ints.
+
+    Accepts '1.2.0', 'v1.2.0', '1.2' (as (1, 2, 0)) and a suffixed '1.3.0-rc1'. The suffix
+    is ignored, so a pre-release of 1.3.0 compares as 1.3.0: a version gate is asking
+    whether a fix is in, and a release candidate for the release that fixed it normally has
+    it. A target that reports no version we can read fails rather than guessing which side
+    of a gate it is on.
+
+    :param target_info: The target information for this set of tests.
+    :return: The version as (major, minor, patch).
+    """
+    status_url, status_json = get_status(target_info)
+    version = status_json.get('version')
+    match = NODENORM_VERSION.match(version) if isinstance(version, str) else None
+    assert match, (
+        f"{status_url} reports no NodeNorm release number such as '1.2.0': "
+        f"{truncated_repr(version)}"
+    )
+    return tuple(int(part or 0) for part in match.groups())
 
 
 def require_babel_release(target_info, minimum_version):

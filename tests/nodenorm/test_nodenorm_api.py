@@ -12,8 +12,8 @@ from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 from src.babel_validation.services.service_checks import (
     assert_backend,
     assert_x_translator,
+    get_openapi,
     get_status,
-    openapi_url,
     parse_babel_version,
     truncated_repr,
 )
@@ -41,11 +41,7 @@ INFORES_BY_BACKEND = {
 
 
 def test_openapi_json(target_info):
-    url = openapi_url(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath')
-    response = requests.get(url)
-    assert response.ok, f"Could not GET {url}: {response}"
-
-    openapi_json = response.json()
+    url, openapi_json = get_openapi(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath')
     assert_x_translator(
         url, openapi_json, INFORES_BY_BACKEND[target_info['NodeNormBackend']]
     )

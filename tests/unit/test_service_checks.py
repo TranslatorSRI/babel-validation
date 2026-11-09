@@ -18,7 +18,9 @@ from src.babel_validation.services.service_checks import (
     MAX_REPR_LENGTH,
     assert_backend,
     assert_x_translator,
+    get_openapi,
     get_status,
+    nodenorm_version,
     openapi_url,
     parse_babel_version,
     require_babel_release,
@@ -269,9 +271,9 @@ class TestGetStatus:
 
     @pytest.fixture(autouse=True)
     def _clear_cache(self):
-        service_checks._fetch_status.cache_clear()
+        service_checks._fetch_json.cache_clear()
         yield
-        service_checks._fetch_status.cache_clear()
+        service_checks._fetch_json.cache_clear()
 
     def _serve(self, monkeypatch, *responses):
         calls = []
@@ -302,3 +304,46 @@ class TestGetStatus:
 
         with pytest.raises(AssertionError, match='did not return a JSON object'):
             get_status(self.TARGET)
+
+
+    def test_an_openapi_document_shares_the_cache(self, monkeypatch):
+        document = {'paths': {}}
+        calls = self._serve(monkeypatch, FakeResponse(200, document))
+
+        assert get_openapi(self.TARGET, 'NodeNormURL', 'NodeNormOpenAPIPath') == (
+            'https://example.org/openapi.json', document
+        )
+        get_openapi(self.TARGET, 'NodeNormURL', 'NodeNormOpenAPIPath')
+        assert calls == [service_checks.STATUS_TIMEOUT_SECONDS]
+
+
+class TestNodeNormVersion:
+    """A version gate needs a release number, in whichever of the usual spellings it comes."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        service_checks._fetch_json.cache_clear()
+        yield
+        service_checks._fetch_json.cache_clear()
+
+    def _version(self, monkeypatch, version):
+        monkeypatch.setattr(
+            service_checks.requests, 'get',
+            lambda url, timeout=None: FakeResponse(200, {'version': version}),
+        )
+        return nodenorm_version({'NodeNormURL': 'https://example.org/'})
+
+    @pytest.mark.parametrize('version, expected', [
+        ('1.2.0', (1, 2, 0)),
+        ('v1.2.1', (1, 2, 1)),
+        ('1.3', (1, 3, 0)),
+        ('1.3.0-rc1', (1, 3, 0)),
+        ('10.0.12', (10, 0, 12)),
+    ])
+    def test_a_release_number_is_read(self, monkeypatch, version, expected):
+        assert self._version(monkeypatch, version) == expected
+
+    @pytest.mark.parametrize('version', [None, 3, '', 'latest', '1', '1.2.3.4', 'x1.2.0'])
+    def test_anything_else_fails(self, monkeypatch, version):
+        with pytest.raises(AssertionError, match='no NodeNorm release number'):
+            self._version(monkeypatch, version)

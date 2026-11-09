@@ -78,7 +78,7 @@ Shared library code used by the tests and potentially other consumers.
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
 - `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
-- `services/service_checks.py` — test-facing checks over NodeNorm/NameRes responses: the cached `/status` fetch, `require_babel_release()`, the OpenAPI `x-translator` and backend checks, `get_normalized_node()`, and `truncated_repr()` for putting service output into an assertion message
+- `services/service_checks.py` — test-facing checks over NodeNorm/NameRes responses: the cached `/status` and OpenAPI document fetches (`get_status()`, `get_openapi()`), `nodenorm_version()` and `require_babel_release()` for gating a test on a release, the OpenAPI `x-translator` and backend checks, `get_normalized_node()`, and `truncated_repr()` for putting service output into an assertion message
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
