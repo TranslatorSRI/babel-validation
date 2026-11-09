@@ -1,7 +1,9 @@
 """Unit tests for the dashboard report generator. No network: everything is fed
 literal JSONL records and hostile inline payloads."""
 
+import collections
 import configparser
+import datetime
 import json
 
 import pytest
@@ -354,6 +356,50 @@ class TestTrimStatus:
         assert trimmed["solr"] == {"numDocs": 7, "size": "1 GB"}
         assert trimmed["biolink_version"] == "v4"
 
+    def test_service_version_index_and_solr_dates_kept(self):
+        trimmed = trim_status(
+            {
+                "version": "2.5.1",
+                "solr": {
+                    "numDocs": 7,
+                    "lastModified": "2026-10-08T22:16:21.135Z",
+                    "startTime": "2026-10-14T17:14:16.138Z",
+                },
+                "numDocs": "0",
+                "size": 0,
+            }
+        )
+        assert trimmed["version"] == "2.5.1"
+        assert trimmed["solr"]["lastModified"] == "2026-10-08T22:16:21.135Z"
+        assert trimmed["solr"]["startTime"] == "2026-10-14T17:14:16.138Z"
+        # NameRes ES reports its index at the top level; 0 is a real value there.
+        assert trimmed["index"] == {"numDocs": 0, "size": "0"}
+
+    def test_elasticsearch_nodes_are_summarised(self):
+        nodes = {
+            "es-0": {"version": "9.3.1", "disk.used_percent": "69.93"},
+            "es-1": {"version": "9.3.1", "disk.used_percent": "71.5"},
+            "es-2": {"version": "9.3.1", "disk.used_percent": "NaN"},
+            "bad": "not a dict",
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}})
+        assert trimmed["elasticsearch"] == {
+            "nodes": 3,
+            "version": "9.3.1",
+            "max_disk_used_percent": 71.5,
+        }
+
+    def test_elasticsearch_summary_is_bounded_and_escaped(self):
+        nodes = {
+            f"es-{i}": {"version": "\x1b[2J9" * 20, "disk.used_percent": "1"}
+            for i in range(1000)
+        }
+        nodes["es-0"]["version"] = "\x1b[2J" + "9" * 100
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}})["elasticsearch"]
+        assert trimmed["nodes"] == 50
+        assert "\x1b" not in trimmed["version"]
+        assert len(trimmed["version"]) < 50
+
     def test_valid_babel_version_url_kept(self):
         trimmed = trim_status(
             {"babel_version_url": "https://github.com/ncatstranslator/Babel/blob/x.md"}
@@ -466,6 +512,57 @@ class TestBadInputIsSkippedNotFatal:
 
     def test_missing_url_does_not_reach_the_network(self):
         assert fetch_status(None) == {"error": "NoURL"}
+
+    def test_response_time_is_recorded(self, monkeypatch):
+        class Response:
+            elapsed = datetime.timedelta(milliseconds=1234.4)
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"status": "ok"}
+
+        urls = []
+
+        def fake_get(url, timeout):
+            urls.append(url)
+            return Response()
+
+        monkeypatch.setattr(generate_report.requests, "get", fake_get)
+        assert fetch_status("https://nn.example/") == {
+            "status": "ok",
+            "response_ms": 1234,
+        }
+        assert urls == ["https://nn.example/status"]
+
+
+class TestServiceLinks:
+    def test_build_report_links_each_service_by_its_backend(self, monkeypatch):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n"
+            "[ci]\nNodeNormURL = https://nn-es.example/\nNodeNormBackend = elasticsearch\n"
+            "NameResURL = https://nr-es.example/\nNameResBackend = elasticsearch\n"
+        )
+        counts = collections.defaultdict(collections.Counter)
+        targets = generate_report.build_report(
+            {}, counts, True, ["dev", "ci"], ALLOWLIST, config
+        )["targets"]
+        assert targets["dev"]["nodenorm_backend"] == "redis"
+        assert targets["dev"]["nameres_backend"] == "solr"
+        assert targets["dev"]["nodenorm_docs_url"] == "https://nn.example/docs"
+        assert targets["dev"]["nameres_status_url"] == "https://nr.example/status"
+        # The Elasticsearch services serve Swagger UI at their root, not /docs.
+        assert targets["ci"]["nodenorm_docs_url"] == "https://nn-es.example/"
+        assert targets["ci"]["nameres_docs_url"] == "https://nr-es.example/"
+        assert targets["ci"]["nodenorm_status_url"] == "https://nn-es.example/status"
+
+    def test_a_missing_url_has_no_links(self):
+        assert generate_report.service_links(None, "redis") == (None, None)
 
 
 # read_targets is the single source of truth for which environments exist: as of

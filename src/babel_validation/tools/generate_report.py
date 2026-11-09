@@ -218,6 +218,10 @@ def trim_status(raw):
     trimmed = {}
     if "status" in raw:
         trimmed["status"] = sanitize(raw["status"], 50)
+    # The service's own release (NodeNorm 2.5.1, NodeNorm ES 1.0.0); NameRes
+    # reports its own as nameres_version, below.
+    if "version" in raw:
+        trimmed["version"] = sanitize(raw["version"], 50)
     if "babel_version" in raw:
         trimmed["babel_version"] = sanitize(raw["babel_version"], 50)
     url = raw.get("babel_version_url")
@@ -246,6 +250,22 @@ def trim_status(raw):
             trimmed_dbs[sanitize(name, 50)] = entry
         trimmed["databases"] = trimmed_dbs
 
+    # NodeNorm ES: its Elasticsearch nodes, reduced to what says whether the
+    # cluster is healthy. Only the first 50 nodes are read, however many the
+    # response lists.
+    elasticsearch = raw.get("elasticsearch")
+    nodes = elasticsearch.get("nodes") if isinstance(elasticsearch, dict) else None
+    if isinstance(nodes, dict):
+        node_list = [n for n in list(nodes.values())[:50] if isinstance(n, dict)]
+        disk = [_trimmed_float(n.get("disk.used_percent")) for n in node_list]
+        disk = [d for d in disk if d is not None]
+        trimmed_es = {"nodes": len(node_list)}
+        if node_list and "version" in node_list[0]:
+            trimmed_es["version"] = sanitize(node_list[0]["version"], 20)
+        if disk:
+            trimmed_es["max_disk_used_percent"] = max(disk)
+        trimmed["elasticsearch"] = trimmed_es
+
     # NameRes-only fields.
     if "nameres_version" in raw:
         trimmed["nameres_version"] = sanitize(raw["nameres_version"], 50)
@@ -271,23 +291,51 @@ def trim_status(raw):
             trimmed_solr["numDocs"] = num_docs
         if "size" in solr:
             trimmed_solr["size"] = sanitize(solr["size"], 20)
+        for key in ("lastModified", "startTime"):
+            if key in solr:
+                trimmed_solr[key] = sanitize(solr[key], 40)
         trimmed["solr"] = trimmed_solr
+    # NameRes ES reports its index at the top level rather than under "solr".
+    if "numDocs" in raw or "size" in raw:
+        trimmed_index = {}
+        num_docs = _trimmed_int(raw.get("numDocs"))
+        if num_docs is not None:
+            trimmed_index["numDocs"] = num_docs
+        if "size" in raw:
+            trimmed_index["size"] = sanitize(raw["size"], 20)
+        trimmed["index"] = trimmed_index
     return trimmed
 
 
+def service_links(base_url, backend):
+    """
+    The docs and /status URLs of a service, from its targets.ini base URL and
+    backend. The Redis- and Solr-backed services serve Swagger UI at /docs; the
+    Elasticsearch-backed ones serve it at their root and answer /docs with a
+    404. Both URLs come from checked-in config, so the website may link to them.
+    """
+    if not base_url:
+        return None, None
+    docs = base_url if backend == "elasticsearch" else base_url.rstrip("/") + "/docs"
+    return docs, base_url.rstrip("/") + "/status"
+
+
 def fetch_status(base_url):
-    """GET {base_url}status and whitelist it. Errors become just a type name —
-    no message text, since it could echo the URL or response body."""
+    """GET {base_url}status and whitelist it, adding how long it took to answer.
+    Errors become just a type name — no message text, since it could echo the
+    URL or response body."""
     if not base_url:
         # A targets.ini section that defines only one of the two services: one
         # blank card, not a crashed report.
         return {"error": "NoURL"}
     try:
-        response = requests.get(
-            base_url.rstrip("/") + "/status", timeout=STATUS_TIMEOUT_SECONDS
-        )
+        _, status_url = service_links(base_url, None)
+        response = requests.get(status_url, timeout=STATUS_TIMEOUT_SECONDS)
         response.raise_for_status()
-        return trim_status(response.json())
+        status = trim_status(response.json())
+        if "error" not in status:
+            status["response_ms"] = round(response.elapsed.total_seconds() * 1000)
+        return status
     except Exception as e:
         logger.warning("Could not fetch status from %r: %s", base_url, type(e).__name__)
         return {"error": type(e).__name__}
@@ -416,11 +464,28 @@ def build_report(results, counts, github_issues_ran, targets, allowlist, config)
         section = config[target]
         nodenorm_url = section.get("NodeNormURL")
         nameres_url = section.get("NameResURL")
+        # The configured backend rather than the one /status reports: NameRes
+        # /status does not report one, and the NodeNorm tests already check the
+        # configured one against /status.
+        nodenorm_backend = section.get("NodeNormBackend", "redis")
+        nameres_backend = section.get("NameResBackend", "solr")
+        nodenorm_docs_url, nodenorm_status_url = service_links(
+            nodenorm_url, nodenorm_backend
+        )
+        nameres_docs_url, nameres_status_url = service_links(
+            nameres_url, nameres_backend
+        )
         target_counts = counts[target]
         total = sum(target_counts.values())
         target_sections[target] = {
             "nodenorm_url": nodenorm_url,
             "nameres_url": nameres_url,
+            "nodenorm_backend": nodenorm_backend,
+            "nameres_backend": nameres_backend,
+            "nodenorm_docs_url": nodenorm_docs_url,
+            "nodenorm_status_url": nodenorm_status_url,
+            "nameres_docs_url": nameres_docs_url,
+            "nameres_status_url": nameres_status_url,
             "nodenorm_status": fetch_status(nodenorm_url),
             "nameres_status": fetch_status(nameres_url),
             "counts": target_counts,
