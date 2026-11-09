@@ -256,7 +256,11 @@ When writing new tests:
   the xfail a narrow `raises=`: an `AssertionError` subclass raised only by that check, as
   `KnownElasticsearchDiscrepancy` does in `tests/nodenorm/test_nodenorm_endpoints.py`. A bare strict
   xfail — or `raises=AssertionError` — also absorbs a deployment that is down, a body that isn't
-  JSON and every earlier assertion, so a new breakage reads as the old one. Don't swap the marker for
+  JSON and every earlier assertion, so a new breakage reads as the old one. Raise it only on the
+  bug's own signature, and use a plain assert for anything else that check could catch: only
+  lower-cased `biolink:` classes, only an object keyed `"0"`..`"n-1"`, and a 500 only while the
+  rest of the deployment still answers. "Not a list" or "any 500" would absorb an unrelated
+  regression or an outage just the same. Don't swap the marker for
   an imperative `pytest.xfail()` plus `pytest.fail()` on a pass: that message starts with
   `Failed: `, so `generate_report.py` counts it as failed rather than xpassed
 - Checks that an endpoint's *response shape* matches what NodeNorm's OpenAPI document and its Redis
