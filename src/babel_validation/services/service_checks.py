@@ -37,8 +37,9 @@ MAX_KEYS_LISTED = 20
 STATUS_TIMEOUT_SECONDS = 30
 
 # A NodeNorm /status version: a release number, with an optional 'v' and anything after it
-# ('1.2.0', 'v1.2.1', '1.3', '1.3.0-rc1').
-NODENORM_VERSION = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?(?![\d.])')
+# ('1.2.0', 'v1.2.1', '1.3', '1.3.0-rc1', and PEP 440's '1.3.0.dev0' or '1.2.0.post1', since
+# NodeNorm ES is a Python project). A fourth number ('1.2.3.4') is not a suffix: rejected.
+NODENORM_VERSION = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?(?!\d|\.\d)')
 
 
 @functools.lru_cache(maxsize=None)
@@ -232,10 +233,10 @@ def nodenorm_version(target_info):
     """
     Return the NodeNorm release a target's /status reports, as a tuple of three ints.
 
-    Accepts '1.2.0', 'v1.2.0', '1.2' (as (1, 2, 0)) and a suffixed '1.3.0-rc1'. The suffix
-    is ignored, so a pre-release of 1.3.0 compares as 1.3.0: a version gate is asking
-    whether a fix is in, and a release candidate for the release that fixed it normally has
-    it. A target that reports no version we can read fails rather than guessing which side
+    Accepts '1.2.0', 'v1.2.0', '1.2' (as (1, 2, 0)) and a suffixed '1.3.0-rc1', '1.3.0.dev0'
+    or '1.2.0.post1'. The suffix is ignored, so a pre-release of 1.3.0 compares as 1.3.0: a
+    version gate is asking whether a fix is in, and a release candidate for the release that
+    fixed it normally has it. A target that reports no version we can read fails rather than guessing which side
     of a gate it is on.
 
     :param target_info: The target information for this set of tests.

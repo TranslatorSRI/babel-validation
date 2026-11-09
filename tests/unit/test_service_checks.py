@@ -344,6 +344,9 @@ class TestNodeNormVersion:
         ('v1.2.1', (1, 2, 1)),
         ('1.3', (1, 3, 0)),
         ('1.3.0-rc1', (1, 3, 0)),
+        ('1.3.0.dev0', (1, 3, 0)),
+        ('1.2.0.post1', (1, 2, 0)),
+        ('1.3.dev0', (1, 3, 0)),
         ('10.0.12', (10, 0, 12)),
     ])
     def test_a_release_number_is_read(self, monkeypatch, version, expected):
