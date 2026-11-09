@@ -17,6 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Claude Code reads AGENTS.md only while no CLAUDE.md, .claude/CLAUDE.md or
+      # CLAUDE.local.md exists in its working directory or above, so committing one
+      # would silently hide every AGENTS.md from it ("About these files" in AGENTS.md).
+      - name: Check that no CLAUDE.md hides the AGENTS.md files
+        run: |
+          if git ls-files | grep -E '(^|/)CLAUDE(\.local)?\.md$'; then
+            echo "::error::Claude Code ignores AGENTS.md while any file listed above exists; remove it."
+            exit 1
+          fi
+
       - uses: astral-sh/setup-uv@v6
 
       # To run the GitHub issue tests here too — drop the `-m unit` filter, or

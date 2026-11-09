@@ -1,10 +1,39 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents (Claude Code, Codex and the like) when working with code in this repository.
 
 ## Project Overview
 
 Babel Validation is a test suite and web tools for validating outputs from [Babel](https://github.com/TranslatorSRI/Babel), which powers the Translator [Node Normalization (NodeNorm)](https://nodenorm.transltr.io/docs) and [Name Resolver (NameRes)](https://name-lookup.transltr.io/docs) services.
+
+## About these files
+
+Agent instructions live in `AGENTS.md` files: this one, `tests/AGENTS.md` (writing tests),
+`website/AGENTS.md` (the dashboard) and `tests/nodenorm/by_issue/biothings/AGENTS.md` (NodeNorm
+ES investigations). **Before writing or changing anything under `tests/` or `website/`, read
+that directory's `AGENTS.md`**, because not every agent loads it for you. Claude Code loads a
+subdirectory's file only when it opens a file there with the Read tool, so writing a new file
+there does not load it; some other agents load only the files between the repository root and
+their working directory.
+
+Claude Code reads `AGENTS.md` directly from v2.1.277 (v2.1.281 on Amazon Bedrock or with
+telemetry disabled), possibly not until the second session after an upgrade:
+https://code.claude.com/docs/en/memory#agents-md. An interactive session that loaded it shows
+`no CLAUDE.md found; AGENTS.md loaded: …` near its start. If yours does not, update Claude Code
+rather than adding a `CLAUDE.md`.
+
+- **Do not add a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` anywhere in the
+  repository.** By default Claude Code reads `AGENTS.md` only when there is none of those in the
+  working directory or above, so a single one makes it ignore every file listed above. Even a
+  one-line `@AGENTS.md` shim would bring in this file but none of the subdirectory ones.
+  `~/.claude/CLAUDE.md` does not count. `tests.yaml` fails a PR that commits one, but cannot see
+  an untracked `CLAUDE.local.md`: for personal instructions in this repo, set **Project
+  instructions** to `claude-md-and-agents-md` in `/config` first.
+- **Move a rule into a subdirectory's file only if nobody can break it without first opening a
+  file in that directory.** Creating a file there, running a command, or writing code elsewhere
+  does not count. So a rule that guards one of those (a new test file's marker, a new
+  directory's name, a dependency change, filing an issue, reading `.env`), or states a principle
+  that applies to new code anywhere, stays here.
 
 ## Commands
 
@@ -37,21 +66,17 @@ black tests/    # Format Python test code
 Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
 ~30 files it would reformat. Running `black` across the tree would bury a real change in
 unrelated churn, so format only the files you touch, or match the surrounding style.
+"Files you touch" means files that are already black-clean:
+`src/babel_validation/services/service_checks.py`, `src/babel_validation/core/babel_release.py`,
+`tests/unit/test_service_checks.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
+and running `black` on them after a ten-line edit rewrote every string in the file. Check
+`black --check <file>` on the committed version first; if it is not clean, edit by hand.
 
 ### Dashboard Website (website/)
 
-```bash
-cd website && npm install && npm run dev   # Dev server at localhost:4321/babel-validation/
-npm run build                              # astro check + production build
-npm test                                   # vitest: the Vue components' URL/filter/pagination logic
-npm run fetch-data                         # download the published report.json/history.jsonl
-```
-
-The dashboard fetches `data/report.json` and `data/history.jsonl`, which are gitignored.
-`npm run fetch-data` downloads the live site's copies into `website/public/data/` — the
-quickest way to get real data for frontend work. To make them from scratch instead, run
-`pytest --report-jsonl` plus `uv run python -m src.babel_validation.tools.generate_report`
-(see README).
+Commands and the frontend's own security rules are in `website/AGENTS.md`. These two traps
+stay here, because a dependency change or a new directory hits them without opening a file in
+`website/`:
 
 CI installs with `npm ci`, which is far stricter than the `npm install` you run locally: it
 refuses a lockfile that does not match `package.json`, and it fails on platform-specific
@@ -62,8 +87,8 @@ packages that npm 11 writes into the lock without `optional: true` when the runn
 four hours in, at the build step, after every test has been paid for.
 
 Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
-`lib`, including under `website/src/` — a file there builds locally but never reaches CI.
-Check `git status` shows new frontend files as tracked.
+`lib`, anywhere in the tree, including `website/src/lib/` — a file there builds locally but
+never reaches CI. Check `git status` shows new files as tracked.
 
 ## Architecture
 
@@ -72,9 +97,17 @@ Check `git status` shows new frontend files as tracked.
 Shared library code used by the tests and potentially other consumers.
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
+- `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
+- `services/service_checks.py` — test-facing checks over NodeNorm/NameRes responses: the cached `/status` and OpenAPI document fetches (`get_status()`, `get_openapi()`), `nodenorm_version()` and `require_babel_release()` for gating a test on a release, the OpenAPI `x-translator` and backend checks, `get_normalized_node()`, and `truncated_repr()` for putting service output into an assertion message
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
+
+Before writing a `requests` call to NodeNorm or NameRes and its checks — in a test, a tool such
+as `generate_report.py`, or the library itself — look in `services/service_checks.py`:
+`get_status()`, `get_openapi()`, `get_normalized_node()` and `assert_x_translator()` already
+check the response's shape and escape what the service returned, and the `/status` and OpenAPI
+fetches are cached per target.
 
 ### Test Framework (`tests/`)
 
@@ -100,7 +133,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
-- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm (hand-written)
+- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm, one or more GitHub issues each; `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
 
 ### Dashboard Website
 
@@ -116,6 +149,16 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
   `src/babel_validation/tools/generate_report.py` aggregates the raw outcomes, fetches each
   target's `/status`, and writes both data files into `website/public/data/`.
 - **`scala-validation/`** — Legacy, unmaintained
+
+### Scratch space
+
+`data/` is gitignored scratch space for investigations: files people send us (an ORION
+schema diff, a colleague's message describing a discrepancy), downloaded Babel compendia,
+one-off comparison output. Name a subdirectory for the investigation and date
+(`data/nodenorm-discrepency-2026sep29/`). Nothing there survives a fresh clone, so anything
+worth keeping — what was learned, how to reproduce it — goes into a tracked file: a
+regression test, a directory `AGENTS.md` (see `tests/nodenorm/by_issue/biothings/AGENTS.md`
+for the NodeNorm ES-vs-Redis investigation notes), or the issue itself.
 
 ## Untrusted Input
 
@@ -168,21 +211,9 @@ outcomes and `report.json`: it repr-escapes and truncates all text, passes `/sta
 responses through a key whitelist, only emits issue ids and source URLs that match the
 `targets.ini` `Repositories` allowlist, and withholds blocklist test details entirely (that
 sheet may not be public — do not add `ids=` to the blocklist parametrize or link to it).
-The Vue components must render report values with `{{ }}` interpolation only — never
-`v-html` — and construct links from validated parts (allowlisted `org/repo#N`,
-`targets.ini` URLs), never verbatim from report text. A facet is as public as a cell: the
-filter bar's category and source dropdowns are built from report values, so they exclude
-blocklist rows exactly as the table does. Anything that aggregates over `results` needs the
-same check.
-
-**A query parameter must never index a JSON-parsed object directly.** `report.results` and
-each result's `outcomes` are plain objects, so they inherit `Object.prototype`: `?test=`,
-`?env=` or any other URL-supplied key can name `constructor`, `toString` or `valueOf` and
-come back truthy with none of the fields the code expects. This has now been two separate
-bugs in `Results.vue` — one pinned an `Object.prototype` member as a table row, the other
-made the environment filter match *every* row instead of none. Guard with `Object.hasOwn`
-before the lookup. An allowlist is not available here: these parameters are read in
-`readUrl()` before the report has loaded, so the set of valid values is not yet known.
+Anything that aggregates over `results`, in Python or in the website, must exclude blocklist
+rows the same way. The Vue components that render the report have rules of their own, in
+`website/AGENTS.md`.
 
 **Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
 Git commit must not contain the test-case sheet's ID or a link to either sheet — casual
@@ -235,11 +266,21 @@ the two halves of the codebase disagreed about where the cache was.
 
 ## Testing Patterns
 
-When writing new tests:
-- Use the `target_info` fixture to get NodeNorm/NameRes URLs from targets.ini
-- For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
-- Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
-- Hand-written per-issue regression tests go in `tests/nodenorm/by_issue/`
+Rules for *writing* tests — fixtures, xfail markers, where a new test goes, what it may
+assert — are in `tests/AGENTS.md`. These ones apply whenever you create a test file, validate
+an OpenAPI document anywhere in the repo, run the suite, change what it fetches, or file an
+issue, so they stay here:
+
+- **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
+  job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
+  like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
+  in #112 had six tests that had never run.
+- **Validate an OpenAPI document with `validate(parsed_json, base_uri=url)`, never
+  `validate_url(url)`.** `validate_url` re-fetches the URL and reads it as YAML, and YAML 1.1 needs
+  both a `.` and a signed exponent in a float — so NodeNorm's `1e-06` parses as the *string*
+  `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
+  perfectly valid. The spurious error is also first, so it masks the real one further down the
+  document.
 - **`pytest tests/github_issues` is expected to be red, and that is the tool working.** An open
   issue whose assertions all pass is a strict XPASS, meaning it looks closeable; a closed issue
   with failing assertions means it looks like it should be reopened. Those results are findings
@@ -248,9 +289,7 @@ When writing new tests:
 - When checking that a new test really fails without its fix, **clear `__pycache__` between runs**.
   A same-length edit (`%r` for `%s`, say) leaves the source's size unchanged, and if the mtime lands
   in the same granularity the `.pyc` is not invalidated — so the mutation appears to pass a test
-  that never saw it. Also avoid asserting on `caplog.text` for anything about control characters:
-  it does not carry them through, so such a test passes whatever the code does. Read
-  `caplog.records` and `getMessage()` instead.
+  that never saw it.
 - **Never put a complete `{{BabelTest|...}}` marker or a fenced `babel_tests:` block into a GitHub
   issue you file** — not even in prose explaining the syntax. `TranslatorSRI/babel-validation` is
   itself in the scanned `Repositories` list, so the harness collects the marker and runs it: an
@@ -263,16 +302,6 @@ When writing new tests:
 - To check behaviour when no GitHub token is available, run with `GITHUB_TOKEN=` (set but
   empty) rather than unsetting it: `dotenv.load_dotenv()` will not override a key already
   present in `os.environ`, so this defeats the token in the developer's `.env` file
-- **Validate an OpenAPI document with `validate(parsed_json, base_uri=url)`, never
-  `validate_url(url)`.** `validate_url` re-fetches the URL and reads it as YAML, and YAML 1.1 needs
-  both a `.` and a signed exponent in a float — so NodeNorm's `1e-06` parses as the *string*
-  `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
-  perfectly valid. The spurious error is also first, so it masks the real one further down the
-  document.
-- **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
-  job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
-  like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
-  in #112 had six tests that had never run.
 - **Anything fetched at collection time must go through a shared cache.**
   `pytest_generate_tests` runs in *every* xdist worker, so an uncached download is one request
   per worker (8 in `dashboard.yaml`, 14 on a laptop with `-n auto`), fired simultaneously at an
@@ -293,10 +322,9 @@ When writing new tests:
   xfail passing; `wasxfail` with a msg starting `_pytest.outcomes.XFailed` is the
   imperative rank-2-6 xfail; `wasxfail` otherwise is the sheet's own xfail; anything else
   is a real failure. The rank itself is recorded as the `expected_rank` user property.
-- **Compare an -es target against `ci`, not against `dev` or `exp`.** `ci` and `ci-es` run
-  the same Babel data with different backends, which is what separates "the backend ranks
-  this differently" from "the data changed". `dev` and `exp` are newer Babel releases, so a
+- **Compare an -es target against `ci`, not against `dev` or `exp`.** `ci` and
+  `ci-nameres-es` run the same Babel data with different NameRes backends, which is what
+  separates "the backend ranks this differently" from "the data changed". `dev` and `exp` are newer Babel releases, so a
   difference against them proves nothing. Note that NameRes ES `/status` reports
   `babel_version: null`, so "same data" is currently an assumption the services cannot
   confirm (issue #135).
-- Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)

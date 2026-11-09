@@ -38,7 +38,7 @@ def test_only_the_elasticsearch_namelookup_declares_no_blocklist():
         name for name in CHECKED_IN.sections()
         if not CHECKED_IN[name].getboolean("NameResHasBlocklist", True)
     }
-    assert without == {"ci-es"}, "every other deployment applies the Translator blocklist"
+    assert without == {"ci-nameres-es"}, "every other deployment applies the Translator blocklist"
 
 
 def test_a_target_that_says_nothing_keeps_its_blocklist_coverage():
