@@ -489,9 +489,12 @@ def build_report(results, counts, github_issues_ran, targets, allowlist, config)
         nameres_url = section.get("NameResURL")
         # The configured backend rather than the one /status reports: NameRes
         # /status does not report one, and the NodeNorm tests already check the
-        # configured one against /status.
-        nodenorm_backend = section.get("NodeNormBackend", "redis")
-        nameres_backend = section.get("NameResBackend", "solr")
+        # configured one against /status. None for a service the environment
+        # does not run, or the Backend row would name one beside "NoURL".
+        nodenorm_backend = (
+            section.get("NodeNormBackend", "redis") if nodenorm_url else None
+        )
+        nameres_backend = section.get("NameResBackend", "solr") if nameres_url else None
         nodenorm_docs_url, nodenorm_status_url = service_links(
             nodenorm_url, nodenorm_backend
         )

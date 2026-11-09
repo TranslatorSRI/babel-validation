@@ -615,6 +615,18 @@ class TestServiceLinks:
         assert targets["ci"]["nameres_docs_url"] == "https://nr-es.example/"
         assert targets["ci"]["nodenorm_status_url"] == "https://nn-es.example/status"
 
+    def test_a_service_without_a_url_has_no_backend(self, monkeypatch):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string("[test]\nNodeNormURL = https://nn.example/\n")
+        counts = collections.defaultdict(collections.Counter)
+        test = generate_report.build_report(
+            {}, counts, True, ["test"], ALLOWLIST, config
+        )["targets"]["test"]
+        assert test["nodenorm_backend"] == "redis"
+        assert test["nameres_backend"] is None
 
     def test_history_line_reads_the_nameres_index_from_either_backend(self):
         report = {
