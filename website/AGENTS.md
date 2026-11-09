@@ -20,17 +20,9 @@ quickest way to get real data for frontend work. To make them from scratch inste
 `pytest --report-jsonl` plus `uv run python -m src.babel_validation.tools.generate_report`
 (see the root README).
 
-CI installs with `npm ci`, which is far stricter than the `npm install` you run locally: it
-refuses a lockfile that does not match `package.json`, and it fails on platform-specific
-packages that npm 11 writes into the lock without `optional: true` when the runner's npm is
-10 (`EBADPLATFORM` on an Android build of lightningcss). Both workflows therefore pin
-`node-version: 24`. After changing any dependency, run `npm ci` locally — not just
-`npm test` — or the failure surfaces only on the runner, and in `dashboard.yaml` it surfaces
-four hours in, at the build step, after every test has been paid for.
-
-Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
-`lib`, including under `website/src/` — a file there builds locally but never reaches CI.
-Check `git status` shows new frontend files as tracked.
+Two CI traps you can hit without opening a file here — `npm ci` refusing a lockfile, and the
+root `.gitignore` swallowing any directory named `lib` — are in the root `AGENTS.md`, under
+"Dashboard Website (website/)".
 
 ## Rendering untrusted report values
 

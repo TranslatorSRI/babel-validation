@@ -1,14 +1,13 @@
 # AGENTS.md — writing tests
 
-Rules for writing tests in this directory. The root `AGENTS.md` covers running them (the
-pytest commands, targets, categories), the rules that apply whenever the suite runs or an
-issue is filed, and "Untrusted Input", which applies to test code as much as library code.
+Rules for writing tests in this directory. The root `AGENTS.md` has the rest, including
+some about writing tests that you could break without opening a file here: the marker a new
+unit test needs, OpenAPI validation, and the `service_checks.py` helpers to use before writing
+a `requests` call. It also covers running the suite, filing issues, and "Untrusted Input",
+which applies to test code as much as library code.
 
 When writing new tests:
 - Use the `target_info` fixture to get NodeNorm/NameRes URLs from targets.ini
-- Before writing a `requests` call and its checks, look in `src/babel_validation/services/service_checks.py`:
-  `get_status()`, `get_normalized_node()` and `assert_x_translator()` already check the response's
-  shape and escape what the service returned, and `get_status()` is cached per target
 - For Google Sheet-based tests, parametrize with `gsheet.test_rows()` and use the `test_category` fixture for category filtering
 - Use `pytest.mark.xfail(strict=True)` for known failures (strict=True means unexpected passes also fail)
 - When a known failure is one check inside a test that also makes requests and checks shapes, give
@@ -43,16 +42,6 @@ When writing new tests:
   bug broke (no duplicates, no HTTP 500, not null) instead. `test_issue_11` once asserted the 17/32
   identifiers from its issue, which were one Babel release's cliques, and failed on every target
   running the next release with nothing actually wrong.
-- **Validate an OpenAPI document with `validate(parsed_json, base_uri=url)`, never
-  `validate_url(url)`.** `validate_url` re-fetches the URL and reads it as YAML, and YAML 1.1 needs
-  both a `.` and a signed exponent in a float — so NodeNorm's `1e-06` parses as the *string*
-  `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
-  perfectly valid. The spurious error is also first, so it masks the real one further down the
-  document.
-- **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
-  job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
-  like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
-  in #112 had six tests that had never run.
 - **Don't assert on `caplog.text` for anything about control characters**: it does not carry
   them through, so such a test passes whatever the code does. Read `caplog.records` and
   `getMessage()` instead.

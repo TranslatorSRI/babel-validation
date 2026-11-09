@@ -74,8 +74,21 @@ and running `black` on them after a ten-line edit rewrote every string in the fi
 
 ### Dashboard Website (website/)
 
-Commands, CI install traps and the frontend's own security rules are in
-`website/AGENTS.md`.
+Commands and the frontend's own security rules are in `website/AGENTS.md`. These two traps
+stay here, because a dependency change or a new directory hits them without opening a file in
+`website/`:
+
+CI installs with `npm ci`, which is far stricter than the `npm install` you run locally: it
+refuses a lockfile that does not match `package.json`, and it fails on platform-specific
+packages that npm 11 writes into the lock without `optional: true` when the runner's npm is
+10 (`EBADPLATFORM` on an Android build of lightningcss). Both workflows therefore pin
+`node-version: 24`. After changing any dependency, run `npm ci` locally — not just
+`npm test` — or the failure surfaces only on the runner, and in `dashboard.yaml` it surfaces
+four hours in, at the build step, after every test has been paid for.
+
+Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
+`lib`, anywhere in the tree, including `website/src/lib/` — a file there builds locally but
+never reaches CI. Check `git status` shows new files as tracked.
 
 ## Architecture
 
@@ -89,6 +102,12 @@ Shared library code used by the tests and potentially other consumers.
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
+
+Before writing a `requests` call to NodeNorm or NameRes and its checks — in a test, a tool such
+as `generate_report.py`, or the library itself — look in `services/service_checks.py`:
+`get_status()`, `get_openapi()`, `get_normalized_node()` and `assert_x_translator()` already
+check the response's shape and escape what the service returned, and the `/status` and OpenAPI
+fetches are cached per target.
 
 ### Test Framework (`tests/`)
 
@@ -243,9 +262,20 @@ the two halves of the codebase disagreed about where the cache was.
 ## Testing Patterns
 
 Rules for *writing* tests — fixtures, xfail markers, where a new test goes, what it may
-assert — are in `tests/AGENTS.md`. These ones apply whenever you run the suite, change what
-it fetches, or file an issue, so they stay here:
+assert — are in `tests/AGENTS.md`. These ones apply whenever you create a test file, validate
+an OpenAPI document anywhere in the repo, run the suite, change what it fetches, or file an
+issue, so they stay here:
 
+- **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
+  job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
+  like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
+  in #112 had six tests that had never run.
+- **Validate an OpenAPI document with `validate(parsed_json, base_uri=url)`, never
+  `validate_url(url)`.** `validate_url` re-fetches the URL and reads it as YAML, and YAML 1.1 needs
+  both a `.` and a signed exponent in a float — so NodeNorm's `1e-06` parses as the *string*
+  `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
+  perfectly valid. The spurious error is also first, so it masks the real one further down the
+  document.
 - **`pytest tests/github_issues` is expected to be red, and that is the tool working.** An open
   issue whose assertions all pass is a strict XPASS, meaning it looks closeable; a closed issue
   with failing assertions means it looks like it should be reopened. Those results are findings
