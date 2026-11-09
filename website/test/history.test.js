@@ -57,6 +57,10 @@ describe('what changed since the previous run', () => {
     expect(wrapper.vm.changes).toEqual([
       { target: 'prod', label: 'nameres babel version', from: '2025sep1', to: '2026jul22' },
     ]);
+    // The table names NameRes's release only on the run where it differs.
+    const cells = wrapper.findAll('tbody td.small').map((td) => td.text());
+    expect(cells.filter((text) => text.includes('NameRes on 2026jul22'))).toHaveLength(1);
+    expect(cells.filter((text) => text.includes('NameRes on'))).toHaveLength(1);
   });
 
   it('does not report a field the previous run did not record yet', async () => {

@@ -162,9 +162,19 @@ export default {
             <td class="text-nowrap">{{ run.date }}</td>
             <td v-for="target in targetNames" :key="target" class="small">
               <template v-if="run.targets?.[target]">
+                <!-- babel_version is NodeNorm's. NameRes's is shown only when it
+                     differs, and runs before 2026-11 did not record it. -->
                 <div>
-                  Babel {{ run.targets[target].babel_version ?? '?' }} · NameRes
-                  {{ run.targets[target].nameres_version ?? '?' }}
+                  Babel {{ run.targets[target].babel_version ?? '?' }}
+                  <template
+                    v-if="
+                      run.targets[target].nameres_babel_version &&
+                      run.targets[target].nameres_babel_version !== run.targets[target].babel_version
+                    "
+                  >
+                    (NameRes on {{ run.targets[target].nameres_babel_version }})
+                  </template>
+                  · NameRes {{ run.targets[target].nameres_version ?? '?' }}
                 </div>
                 <div class="text-body-secondary">
                   {{ formatCount(run.targets[target].nn_eq_records) }} ids ·
