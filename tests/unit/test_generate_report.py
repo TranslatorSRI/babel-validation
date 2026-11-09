@@ -379,6 +379,16 @@ class TestTrimStatus:
             "size": "0",
         }
 
+    def test_babel_releases_served_are_validated_and_ordered(self):
+        available = {
+            "2026jul22": "https://example/2026jul22",
+            "2025sep1": "https://example/2025sep1",
+            "2026feb30": "not a real date",
+            "\x1b[2Jlatest": "hostile",
+        }
+        trimmed = trim_status({"babel": {"available_versions": available}})
+        assert trimmed["babel_available_versions"] == ["2025sep1", "2026jul22"]
+
     def test_elasticsearch_nodes_are_summarised(self):
         nodes = {
             "es-0": {"version": "9.3.1", "disk.used_percent": "69.93"},

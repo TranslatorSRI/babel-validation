@@ -31,6 +31,8 @@ from pathlib import Path
 
 import requests
 
+from src.babel_validation.core.babel_release import babel_release_date
+
 logger = logging.getLogger(__name__)
 
 # Neither Google Sheet may be referenced in the output: the report must not
@@ -232,6 +234,15 @@ def trim_status(raw):
         "https://github.com/ncatstranslator/"
     ):
         trimmed["babel_version_url"] = sanitize(url, 200)
+    # NodeNorm ES from 1.2.0 can serve several Babel releases, chosen per
+    # request, and lists them under babel.available_versions. Keep only the
+    # names that are real Babel releases, oldest first; a name that passes
+    # babel_release_date() is plain ASCII, so it needs no further escaping.
+    babel = raw.get("babel")
+    available = babel.get("available_versions") if isinstance(babel, dict) else None
+    if isinstance(available, dict):
+        releases = [v for v in list(available)[:50] if babel_release_date(v)]
+        trimmed["babel_available_versions"] = sorted(releases, key=babel_release_date)
     biolink = raw.get("biolink_model")
     if isinstance(biolink, dict) and "tag" in biolink:
         trimmed["biolink_version"] = sanitize(biolink["tag"], 100)

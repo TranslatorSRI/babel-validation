@@ -100,6 +100,15 @@ describe('StatusMatrix', () => {
     ]);
   });
 
+  it('lists the Babel releases a NodeNorm serves', () => {
+    const wrapper = mountWith({
+      ci: target('2026jul22', { nodenorm: { babel_available_versions: ['2025sep1', '2026jul22'] } }),
+      dev: target('2026jul22'),
+    });
+    const cells = row(wrapper, 'nodenorm', 'Babel releases served').findAll('td');
+    expect(cells.map((td) => td.text())).toEqual(['2025sep1, 2026jul22', '—']);
+  });
+
   it('hides a row that no environment has a value for', () => {
     const wrapper = mountWith({
       exp: target('2026jul22', { nodenorm: { elasticsearch: { nodes: 3, version: '9.3.1' } } }),

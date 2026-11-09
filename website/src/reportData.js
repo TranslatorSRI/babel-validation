@@ -127,6 +127,12 @@ export const STATUS_SECTIONS = [
       { label: 'Version', value: (t) => t.nodenorm_status.version },
       { label: 'Backend', value: (t) => t.nodenorm_backend },
       {
+        // NodeNorm ES from 1.2.0 can serve several Babel releases, picked per
+        // request; the Babel version row above is its default.
+        label: 'Babel releases served',
+        value: (t) => t.nodenorm_status.babel_available_versions?.join(', ') || null,
+      },
+      {
         label: 'Records',
         value: (t) => formatCount(t.nodenorm_status.databases?.eq_id_to_id_db?.count),
       },
