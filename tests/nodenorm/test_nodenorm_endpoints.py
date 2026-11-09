@@ -5,9 +5,10 @@ NodeNorm Redis and NodeNorm ES are meant to be interchangeable for the endpoints
 and these tests hold each deployment to the response shapes clients were written against. They
 were added for three discrepancies found on NodeNorm ES: /get_allowed_conflations returned HTTP
 500, POST /get_setid returned an index-keyed object instead of a list, and /get_semantic_types
-lower-cased every Biolink class. biothings/NodeNormalizationAPI#58 fixed the first and most of
-the third, in NodeNorm ES 1.2.0, which not every ES target runs yet. What is left is a strict
-xfail on the Elasticsearch targets, and an unexpected pass is the signal to drop the marker.
+lower-cased every Biolink class. biothings/NodeNormalizationAPI#58 fixed the first, in NodeNorm
+ES 1.2.0, which not every ES target runs yet; #59 fixes the third, and NodeNorm ES 1.2.0 does
+not include it. What is left is a strict xfail on the Elasticsearch targets, and an unexpected
+pass is the signal to drop the marker.
 
 Everything a deployment returns is untrusted, its OpenAPI document included: it is formatted
 with truncated_repr(), and the document's path keys are validated before any URL is built from
