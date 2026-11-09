@@ -139,19 +139,26 @@ database sizes, NameRes latency). Because test expectations are pinned to the en
 where a new Babel version lands first, environments are not expected to all be green — the
 dashboard's purpose is to show *which* issues are visible in *which* environment.
 
-The `.github/workflows/dashboard.yaml` workflow regenerates and deploys it daily (or on
-manual dispatch): it runs pytest per target with `--report-jsonl`, turns the raw outcomes
-and `/status` responses into `report.json` and `history.jsonl` with
-`src.babel_validation.tools.generate_report`, and publishes the built site to the
-`gh-pages` branch.
+It also carries a `/milestones/` page: every open milestone across the Babel repositories in
+one chronological list, which GitHub cannot show because milestones do not span repositories.
+
+The `.github/workflows/dashboard.yaml` workflow regenerates and deploys all of it daily (or on
+manual dispatch), in three jobs. `validate` runs pytest per target with `--report-jsonl` and
+turns the raw outcomes and `/status` responses into `report.json` and `history.jsonl` with
+`src.babel_validation.tools.generate_report`. `milestones` reads the GitHub API into
+`milestones.json` with `src.babel_validation.tools.generate_milestones`, in parallel, so a page
+that takes seconds to build does not wait on a 26-minute test run or fail with it. `publish`
+builds the site from whichever data files arrived — refetching the last published copy of any
+that did not, since the deploy replaces the whole branch — and makes the only write to
+`gh-pages`. Nothing else may publish there.
 
 The Vue components' client-side logic (URL round-tripping, filtering, pagination, the
 odd-one-out shading, the drift grouping, and the withholding of blocklist detail) has vitest
 tests in `website/test/`, run by `npm test` and by the Tests workflow.
 
 To work on the site against the data the live dashboard is showing, download the published
-`report.json` and `history.jsonl` instead of generating them (both land in
-`website/public/data/`, which is gitignored):
+`report.json`, `history.jsonl` and `milestones.json` instead of generating them (all three land
+in `website/public/data/`, which is gitignored):
 
 ```shell
 $ cd website && npm install && npm run fetch-data && npm run dev
@@ -165,6 +172,14 @@ $ uv run pytest tests/nodenorm/test_nodenorm_from_gsheet.py tests/nameres/test_n
 $ uv run python -m src.babel_validation.tools.generate_report --raw-dir raw \
       --targets-ini tests/targets.ini --out-dir website/public/data
 $ cd website && npm install && npm run dev
+```
+
+The milestones page needs no test run, only a token — `GITHUB_TOKEN` must be set, and reading
+these five public repositories needs no scopes beyond the default:
+
+```shell
+$ GITHUB_TOKEN=$(gh auth token) uv run python -m src.babel_validation.tools.generate_milestones \
+      --targets-ini tests/targets.ini --output website/public/data/milestones.json
 ```
 
 ## The Babel Validator in Scala

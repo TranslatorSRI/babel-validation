@@ -18,13 +18,20 @@ with a small theme layer in `src/styles/theme.css`.
 
 ## Where the data comes from
 
-Nothing here queries NodeNorm or NameRes. The site renders two files that
+Nothing here queries NodeNorm or NameRes. The site renders three files that
 `.github/workflows/dashboard.yaml` regenerates daily and publishes to `gh-pages` alongside it:
 
 - **`data/report.json`** — one entry per test, with an outcome per environment, plus each
   deployment's `/status`. Written by `src/babel_validation/tools/generate_report.py` from the JSONL
   that `pytest --report-jsonl` emits.
 - **`data/history.jsonl`** — one summary line per run, appended to the previously published file.
+- **`data/milestones.json`** — open milestones across the Babel repositories and their open
+  issues. Written by `src/babel_validation/tools/generate_milestones.py` from the GitHub API,
+  in a job of its own so the milestones page does not wait on the test suite or fail with it.
+
+Any of the three may be a *carried-forward* copy: when a run fails to regenerate one, the
+publish job refetches the last published version rather than let the cleaning deploy delete
+the page. Each page renders its own `generated_at` for that reason.
 
 To work against real data locally, `npm run fetch-data` downloads the published copies into
 `public/data/`, which is gitignored. Or generate your own from a test run — see
@@ -64,6 +71,14 @@ path, so `replaceState(null, '', '?q=1')` on `/results/` silently rewrites the a
 site root — a different page, which ignores the parameters. Always build these from
 `window.location.pathname`. No test can catch it: the suite mounts components at `/` with no
 `<base>` element, so the relative form works there and fails only in production.
+
+**Vue condenses whitespace at a `<template>` boundary, and a dropped separator looks like bad
+data.** A trailing `" · "` inside a `<template v-if>` is a whitespace-only text node at the end of
+the block, so it is removed: the summary line on `/milestones/` rendered `3 past due· as of
+2026-09-01`, which reads as a generator bug rather than a template one. Put separators at the
+*start* of each part instead of joining parts with them — a leading `·` has no boundary to be
+eaten at. Assertions on `wrapper.text()` will not catch this unless they compare the whole string,
+because the words are all still there.
 
 `src/deploymentOrder.js` fixes the left-to-right order of every table. Environments read in
 promotion order, so a value that differs from its left neighbour is a change on its way through.

@@ -31,6 +31,17 @@ from pathlib import Path
 
 import requests
 
+# Re-exported, not merely imported: this module is documented as the choke point
+# for report.json, and callers (and its tests) import these names from here.
+# generate_milestones.py uses the same primitives on the same public website.
+from src.babel_validation.tools.sanitize import (  # noqa: F401
+    ISSUE_ID_RE,
+    MAX_MESSAGE_CHARS,
+    sanitize,
+    validate_issue_id,
+    validate_source_url,
+)
+
 logger = logging.getLogger(__name__)
 
 # Neither Google Sheet may be referenced in the output: the report must not
@@ -39,7 +50,6 @@ logger = logging.getLogger(__name__)
 # referenced anywhere in this module at all.
 
 STATUS_TIMEOUT_SECONDS = 30
-MAX_MESSAGE_CHARS = 500
 
 # Worst outcome wins when a nodeid has several records (phases, subtests).
 OUTCOME_SEVERITY = {
@@ -54,23 +64,6 @@ OUTCOME_SEVERITY = {
 # Outcomes whose messages are worth publishing; passed/xfailed/skipped messages
 # are noise and would bloat report.json.
 OUTCOMES_WITH_MESSAGES = {"failed", "xpassed", "error"}
-
-
-def sanitize(text, max_chars=MAX_MESSAGE_CHARS):
-    """
-    Truncate untrusted text and escape every non-printable character (ANSI
-    escapes, C0/C1 controls, bidi overrides, zero-width characters) the way
-    repr() would, keeping newlines and tabs readable. Escaping rather than
-    stripping keeps hostile content visible instead of silently vanishing.
-    """
-    if text is None:
-        return None
-    text = str(text)
-    if len(text) > max_chars:
-        text = text[:max_chars] + "…[truncated]"
-    return "".join(
-        ch if ch.isprintable() or ch in "\n\t" else repr(ch)[1:-1] for ch in text
-    )
 
 
 def classify_record(record):
@@ -109,6 +102,22 @@ def read_targets(targets_ini_path):
         if repo.strip()
     ]
     return targets, allowlist, config
+
+
+def read_repositories(config):
+    """
+    The `Repositories` list in the case targets.ini writes it.
+
+    read_targets() lowercases it, because its job is comparison: an allowlist is
+    only ever asked "is this in you?". Anything that has to *call* GitHub or
+    render a repository name needs the original case back, so it comes from
+    here instead of being re-cased at the call site.
+    """
+    return [
+        repo.strip()
+        for repo in config.defaults().get("repositories", "").splitlines()
+        if repo.strip()
+    ]
 
 
 def split_target(param_id, targets):
@@ -153,36 +162,6 @@ def parse_nodeid(nodeid, targets):
         return nodeid, "?", param_id
     key = f"{base}[{rest}]" if rest else base
     return key, target, rest
-
-
-# Issue ids must look like org/repo#N *and* be in the checked-in allowlist
-# before we build a github.com link from them.
-ISSUE_ID_RE = re.compile(r"^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([0-9]+)$")
-
-
-def validate_issue_id(issue_id, allowlist):
-    """Return the validated 'org/repo#N' or None."""
-    match = ISSUE_ID_RE.match(issue_id or "")
-    if not match:
-        return None
-    if match.group(1).lower() not in allowlist:
-        return None
-    return issue_id
-
-
-def validate_source_url(source_url, allowlist):
-    """
-    Return source_url only if it is a GitHub URL within an allowlisted
-    org/repo; otherwise None. SourceURL is free text from the Google Sheet.
-    """
-    if not source_url or not source_url.startswith("https://github.com/"):
-        return None
-    parts = source_url[len("https://github.com/") :].split("/")
-    if len(parts) < 2:
-        return None
-    if f"{parts[0]}/{parts[1]}".lower() not in allowlist:
-        return None
-    return source_url
 
 
 def _trimmed_int(value):
