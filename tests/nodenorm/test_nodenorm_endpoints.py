@@ -21,8 +21,9 @@ import pytest
 import requests
 
 from src.babel_validation.services.service_checks import (
-    get_status,
-    openapi_url,
+    get_normalized_node,
+    get_openapi,
+    nodenorm_version,
     truncated_repr,
 )
 
@@ -47,8 +48,11 @@ SHARED_PATHS = {
 # the deployment, and templated paths like '/x/{id}', which we would have no value to fill in.
 SAFE_PATH = re.compile(r"(?:/[A-Za-z0-9_-]+)+")
 # Neither backend documents more than ten paths; this bounds how many requests a document can
-# make us send.
-MAX_DOCUMENTED_PATHS = 50
+# make us send. The sweep requests them one at a time, so the cap times PATH_TIMEOUT, plus
+# REQUEST_TIMEOUT for the document itself, must stay under pytest-timeout's 300 seconds
+# (pyproject.toml), or a hung deployment trips that instead and the message names no URL.
+MAX_DOCUMENTED_PATHS = 20
+PATH_TIMEOUT = 10
 
 # The NodeNorm ES release, as /status reports its version, that fixed /get_allowed_conflations
 # answering HTTP 500 (biothings/NodeNormalizationAPI#58). On 2026-11-06 ci and test ran 1.2.0
@@ -67,39 +71,34 @@ class KnownElasticsearchDiscrepancy(AssertionError):
     """
 
 
-def nodenorm_version(target_info):
-    """Return the version a NodeNorm /status reports, as a tuple of ints, failing if there is none."""
-    status_url, status_json = get_status(target_info)
-    version = status_json.get("version")
-    match = (
-        re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
-        if isinstance(version, str)
-        else None
+def elasticsearch_discrepancy_applies(target_info, before=None):
+    """
+    Whether a known NodeNorm ES discrepancy is expected on this target: on every ES target, or
+    with ``before``, only on those whose /status version is older than it, because the fix has
+    been released and the targets already running it must pass.
+    """
+    if target_info.get("NodeNormBackend", "redis") != "elasticsearch":
+        return False
+    return before is None or nodenorm_version(target_info) < before
+
+
+def conflations_500_expected(target_info):
+    return elasticsearch_discrepancy_applies(
+        target_info, before=NODENORM_ES_CONFLATIONS_FIX
     )
-    assert match, f"{status_url} reports no x.y.z version: {truncated_repr(version)}"
-    return tuple(int(part) for part in match.groups())
 
 
 def expect_elasticsearch_discrepancy(request, target_info, reason, before=None):
     """
-    Mark the calling test a strict xfail on NodeNorm ES targets, for KnownElasticsearchDiscrepancy
-    only. With ``before``, only on ES targets whose /status version is older than it: the fix has
-    been released, and the targets already running it must pass.
+    Mark the calling test a strict xfail for KnownElasticsearchDiscrepancy only, on the targets
+    elasticsearch_discrepancy_applies() picks out.
     """
-    if target_info.get("NodeNormBackend", "redis") != "elasticsearch":
-        return
-    if before is None or nodenorm_version(target_info) < before:
+    if elasticsearch_discrepancy_applies(target_info, before):
         request.node.add_marker(
             pytest.mark.xfail(
                 strict=True, raises=KnownElasticsearchDiscrepancy, reason=reason
             )
         )
-
-
-def get_json(url, **kwargs):
-    response = requests.get(url, timeout=REQUEST_TIMEOUT, **kwargs)
-    assert response.ok, f"Could not GET {url}: {response}"
-    return response.json()
 
 
 def test_get_allowed_conflations(request, target_info):
@@ -113,9 +112,19 @@ def test_get_allowed_conflations(request, target_info):
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_allowed_conflations")
     response = requests.get(url, timeout=REQUEST_TIMEOUT)
-    if response.status_code == 500:
+    if response.status_code == 500 and conflations_500_expected(target_info):
+        # Tornado's bare error page is all the bug returns, and an ES outage would return the
+        # same page. So count the 500 as the known bug only if normalization, which also needs
+        # ES, still works; otherwise the deployment is broken in some new way.
+        assert "500: Internal Server Error" in response.text, (
+            f"GET {url} returned HTTP 500, but not the error page the known bug returns: "
+            f"{truncated_repr(response.text)}"
+        )
+        get_normalized_node(target_info, "MESH:D014867")
         raise KnownElasticsearchDiscrepancy(f"GET {url} returned HTTP 500")
-    assert response.ok, f"Could not GET {url}: {response}"
+    assert (
+        response.ok
+    ), f"Could not GET {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
     body = response.json()
     assert isinstance(body, dict) and isinstance(
         body.get("conflations"), list
@@ -138,7 +147,11 @@ def test_get_semantic_types_are_biolink_classes(request, target_info):
     )
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_semantic_types")
-    body = get_json(url)
+    response = requests.get(url, timeout=REQUEST_TIMEOUT)
+    assert (
+        response.ok
+    ), f"Could not GET {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
+    body = response.json()
     semantic_types = body.get("semantic_types") if isinstance(body, dict) else None
     types = semantic_types.get("types") if isinstance(semantic_types, dict) else None
     assert isinstance(
@@ -151,10 +164,22 @@ def test_get_semantic_types_are_biolink_classes(request, target_info):
         for t in types
         if not (isinstance(t, str) and re.fullmatch(r"biolink:[A-Z][A-Za-z]*", t))
     ]
-    if not_classes:
+    # Only an all-lower-case class name is the known bug; anything else that isn't a Biolink
+    # class CURIE is a new failure, and must not be absorbed by the xfail.
+    lower_cased = [
+        t
+        for t in not_classes
+        if isinstance(t, str) and re.fullmatch(r"biolink:[a-z]+", t)
+    ]
+    malformed = [t for t in not_classes if t not in lower_cased]
+    assert not malformed, (
+        f"{url} returned {len(malformed)} types that are not Biolink class CURIEs: "
+        f"{truncated_repr(malformed)}"
+    )
+    if lower_cased:
         raise KnownElasticsearchDiscrepancy(
-            f"{url} returned {len(not_classes)} types that are not Biolink class CURIEs: "
-            f"{truncated_repr(not_classes)}"
+            f"{url} returned {len(lower_cased)} lower-cased Biolink classes: "
+            f"{truncated_repr(lower_cased)}"
         )
 
 
@@ -181,10 +206,21 @@ def test_get_setid_post_returns_list(request, target_info):
         },
     ]
     response = requests.post(url, json=sets, timeout=REQUEST_TIMEOUT)
-    assert response.ok, f"Could not POST to {url}: {response}"
+    assert (
+        response.ok
+    ), f"Could not POST to {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
 
     body = response.json()
-    if isinstance(body, dict):
+    # The known bug is the list we expect, keyed by index instead: '0', '1', ... with a set-ID
+    # result under each. Any other object (an error, say) falls through to the list check below.
+    if (
+        isinstance(body, dict)
+        and set(body) == {str(i) for i in range(len(sets))}
+        and all(
+            isinstance(r, dict) and isinstance(r.get("setid"), str)
+            for r in body.values()
+        )
+    ):
         raise KnownElasticsearchDiscrepancy(
             f"POST {url} should return a list, got an object: {truncated_repr(body)}"
         )
@@ -198,8 +234,7 @@ def test_get_setid_post_returns_list(request, target_info):
 
 
 def get_documented_paths(target_info):
-    doc_url = openapi_url(target_info, "NodeNormURL", "NodeNormOpenAPIPath")
-    document = get_json(doc_url)
+    doc_url, document = get_openapi(target_info, "NodeNormURL", "NodeNormOpenAPIPath")
     assert isinstance(document, dict) and isinstance(
         document.get("paths"), dict
     ), f"{doc_url} has no 'paths' object: {truncated_repr(document)}"
@@ -215,17 +250,14 @@ def test_documents_every_shared_endpoint(target_info):
     ), f"{doc_url} does not document endpoints every NodeNorm serves: {missing!r}"
 
 
-def test_every_documented_path_is_served(request, target_info):
+def test_every_documented_path_is_served(target_info):
     """Every path in the published OpenAPI document answers a bare GET with neither a 404 nor a
     5xx. Anything else counts as served: a POST-only endpoint answers 405, and one with required
-    parameters 400 or 422."""
-    expect_elasticsearch_discrepancy(
-        request,
-        target_info,
-        "/get_allowed_conflations returns HTTP 500 before NodeNorm ES 1.2.0 "
-        "(biothings/NodeNormalizationAPI#58)",
-        before=NODENORM_ES_CONFLATIONS_FIX,
-    )
+    parameters 400 or 422.
+
+    Where /get_allowed_conflations is known to return HTTP 500, it is left out of the sweep:
+    test_get_allowed_conflations tracks that bug, and the rest of the paths still get checked.
+    """
     doc_url, paths = get_documented_paths(target_info)
 
     unsafe = sorted(p for p in paths if not SAFE_PATH.fullmatch(p))
@@ -237,16 +269,15 @@ def test_every_documented_path_is_served(request, target_info):
         f"this test will request"
     )
 
+    if conflations_500_expected(target_info):
+        paths = paths - {"/get_allowed_conflations"}
+
     not_served = []
     for path in sorted(paths):
         url = urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/"))
-        status = requests.get(url, timeout=REQUEST_TIMEOUT).status_code
+        status = requests.get(url, timeout=PATH_TIMEOUT).status_code
         if status == 404 or status >= 500:
             not_served.append(f"{path} (HTTP {status})")
-    if not_served == ["/get_allowed_conflations (HTTP 500)"]:
-        raise KnownElasticsearchDiscrepancy(
-            f"{doc_url} documents /get_allowed_conflations, which returns HTTP 500"
-        )
     assert (
         not not_served
     ), f"{doc_url} documents paths this deployment does not serve: {truncated_repr(not_served)}"
