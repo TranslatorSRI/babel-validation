@@ -48,8 +48,11 @@ SHARED_PATHS = {
 # the deployment, and templated paths like '/x/{id}', which we would have no value to fill in.
 SAFE_PATH = re.compile(r"(?:/[A-Za-z0-9_-]+)+")
 # Neither backend documents more than ten paths; this bounds how many requests a document can
-# make us send.
-MAX_DOCUMENTED_PATHS = 50
+# make us send. The sweep requests them one at a time, so the cap times PATH_TIMEOUT, plus
+# REQUEST_TIMEOUT for the document itself, must stay under pytest-timeout's 300 seconds
+# (pyproject.toml), or a hung deployment trips that instead and the message names no URL.
+MAX_DOCUMENTED_PATHS = 20
+PATH_TIMEOUT = 10
 
 # The NodeNorm ES release, as /status reports its version, that fixed /get_allowed_conflations
 # answering HTTP 500 (biothings/NodeNormalizationAPI#58). On 2026-11-06 ci and test ran 1.2.0
@@ -247,17 +250,14 @@ def test_documents_every_shared_endpoint(target_info):
     ), f"{doc_url} does not document endpoints every NodeNorm serves: {missing!r}"
 
 
-def test_every_documented_path_is_served(request, target_info):
+def test_every_documented_path_is_served(target_info):
     """Every path in the published OpenAPI document answers a bare GET with neither a 404 nor a
     5xx. Anything else counts as served: a POST-only endpoint answers 405, and one with required
-    parameters 400 or 422."""
-    expect_elasticsearch_discrepancy(
-        request,
-        target_info,
-        "/get_allowed_conflations returns HTTP 500 before NodeNorm ES 1.2.0 "
-        "(biothings/NodeNormalizationAPI#58)",
-        before=NODENORM_ES_CONFLATIONS_FIX,
-    )
+    parameters 400 or 422.
+
+    Where /get_allowed_conflations is known to return HTTP 500, it is left out of the sweep:
+    test_get_allowed_conflations tracks that bug, and the rest of the paths still get checked.
+    """
     doc_url, paths = get_documented_paths(target_info)
 
     unsafe = sorted(p for p in paths if not SAFE_PATH.fullmatch(p))
@@ -269,16 +269,15 @@ def test_every_documented_path_is_served(request, target_info):
         f"this test will request"
     )
 
+    if conflations_500_expected(target_info):
+        paths = paths - {"/get_allowed_conflations"}
+
     not_served = []
     for path in sorted(paths):
         url = urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/"))
-        status = requests.get(url, timeout=REQUEST_TIMEOUT).status_code
+        status = requests.get(url, timeout=PATH_TIMEOUT).status_code
         if status == 404 or status >= 500:
             not_served.append(f"{path} (HTTP {status})")
-    if not_served == ["/get_allowed_conflations (HTTP 500)"]:
-        raise KnownElasticsearchDiscrepancy(
-            f"{doc_url} documents /get_allowed_conflations, which returns HTTP 500"
-        )
     assert (
         not not_served
     ), f"{doc_url} documents paths this deployment does not serve: {truncated_repr(not_served)}"
