@@ -111,10 +111,14 @@ describe('StatusMatrix', () => {
 
   it('hides a row that no environment has a value for', () => {
     const wrapper = mountWith({
-      exp: target('2026jul22', { nodenorm: { elasticsearch: { nodes: 3, version: '9.3.1' } } }),
-      dev: target('2026jul22'),
+      exp: target('2026jul22', { nodenorm: { elasticsearch: { nodes: 3, versions: ['9.3.1'] } } }),
+      dev: target('2026jul22', {
+        nodenorm: { elasticsearch: { nodes: 3, versions: ['8.19.0', '9.3.1'] } },
+      }),
     });
-    expect(row(wrapper, 'nodenorm', 'Elasticsearch').findAll('td')[0].text()).toBe('3 × 9.3.1');
+    const cells = row(wrapper, 'nodenorm', 'Elasticsearch').findAll('td');
+    // dev is mid-upgrade, which the first node's version alone would hide.
+    expect(cells.map((td) => td.text())).toEqual(['3 × 9.3.1', '3 × 8.19.0, 9.3.1']);
     // No environment reports a disk percentage, so that row is not shown at all.
     expect(row(wrapper, 'nodenorm', 'ES disk used')).toBeUndefined();
   });

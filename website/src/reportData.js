@@ -145,7 +145,8 @@ export const STATUS_SECTIONS = [
         value: (t) => {
           const es = t.nodenorm_status.elasticsearch;
           if (!es?.nodes) return null;
-          return `${es.nodes} × ${es.version ?? '?'}`;
+          // Several versions mean a cluster mid-upgrade.
+          return `${es.nodes} × ${es.versions?.join(', ') || '?'}`;
         },
       },
       {

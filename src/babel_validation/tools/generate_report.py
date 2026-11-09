@@ -27,6 +27,7 @@ import math
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -208,9 +209,10 @@ def _trimmed_float(value):
     return value if math.isfinite(value) else None
 
 
-def trim_status(raw):
+def trim_status(raw, service):
     """
-    Whitelist the fields of a NodeNorm or NameRes /status response. The
+    Whitelist the fields of a NodeNorm or NameRes ("nodenorm" or "nameres")
+    /status response. The
     response is untrusted service output: unknown keys are dropped, numbers are
     coerced, strings are escaped and truncated, and babel_version_url is kept
     only if it points into the NCATSTranslator GitHub org.
@@ -223,9 +225,10 @@ def trim_status(raw):
     # The service's own release (NodeNorm 2.5.1, NodeNorm ES 1.0.0). NameRes
     # reports its own as nameres_version, below, and from v1.7 lists its Solr
     # core's stats at the top level, where "version" is the index's version
-    # counter (68618), not a release. So a top-level numDocs means "version"
-    # belongs to the index.
-    if "version" in raw and "numDocs" not in raw:
+    # counter (68618), not a release. Keyed on the service rather than on the
+    # shape of the response, because a NameRes error body need not carry the
+    # numDocs that would otherwise give the counter away.
+    if service == "nodenorm" and "version" in raw:
         trimmed["version"] = sanitize(raw["version"], 50)
     if "babel_version" in raw:
         trimmed["babel_version"] = sanitize(raw["babel_version"], 50)
@@ -238,11 +241,14 @@ def trim_status(raw):
     # request, and lists them under babel.available_versions. Keep only the
     # names that are real Babel releases, oldest first; a name that passes
     # babel_release_date() is plain ASCII, so it needs no further escaping.
+    # Every key is checked before the list is cut to the newest 50, so the
+    # releases that matter most cannot be cut off by a long or misordered list.
     babel = raw.get("babel")
     available = babel.get("available_versions") if isinstance(babel, dict) else None
     if isinstance(available, dict):
-        releases = [v for v in list(available)[:50] if babel_release_date(v)]
-        trimmed["babel_available_versions"] = sorted(releases, key=babel_release_date)
+        releases = [v for v in available if babel_release_date(v)]
+        releases.sort(key=babel_release_date)
+        trimmed["babel_available_versions"] = releases[-50:]
     biolink = raw.get("biolink_model")
     if isinstance(biolink, dict) and "tag" in biolink:
         trimmed["biolink_version"] = sanitize(biolink["tag"], 100)
@@ -265,17 +271,19 @@ def trim_status(raw):
         trimmed["databases"] = trimmed_dbs
 
     # NodeNorm ES: its Elasticsearch nodes, reduced to what says whether the
-    # cluster is healthy. Only the first 50 nodes are read, however many the
-    # response lists.
+    # cluster is healthy. Every node is counted and read, so a mixed-version
+    # cluster (mid rolling upgrade) shows all its versions; only the list of
+    # distinct versions is cut short, since that is what reaches the report.
     elasticsearch = raw.get("elasticsearch")
     nodes = elasticsearch.get("nodes") if isinstance(elasticsearch, dict) else None
     if isinstance(nodes, dict):
-        node_list = [n for n in list(nodes.values())[:50] if isinstance(n, dict)]
+        node_list = [n for n in nodes.values() if isinstance(n, dict)]
         disk = [_trimmed_float(n.get("disk.used_percent")) for n in node_list]
         disk = [d for d in disk if d is not None]
+        versions = {sanitize(n["version"], 20) for n in node_list if "version" in n}
         trimmed_es = {"nodes": len(node_list)}
-        if node_list and "version" in node_list[0]:
-            trimmed_es["version"] = sanitize(node_list[0]["version"], 20)
+        if versions:
+            trimmed_es["versions"] = sorted(versions)[:5]
         if disk:
             trimmed_es["max_disk_used_percent"] = max(disk)
         trimmed["elasticsearch"] = trimmed_es
@@ -329,24 +337,30 @@ def service_links(base_url, backend):
     return docs, base_url.rstrip("/") + "/status"
 
 
-def fetch_status(base_url):
-    """GET {base_url}status and whitelist it, adding how long it took to answer.
-    Errors become just a type name — no message text, since it could echo the
-    URL or response body."""
-    if not base_url:
+def fetch_status(status_url, service):
+    """GET a service's /status URL (from service_links) and whitelist it, adding
+    how long it took to answer. Errors become just a type name — no message
+    text, since it could echo the URL or response body."""
+    if not status_url:
         # A targets.ini section that defines only one of the two services: one
         # blank card, not a crashed report.
         return {"error": "NoURL"}
     try:
-        _, status_url = service_links(base_url, None)
+        # Timed by hand rather than with response.elapsed, which stops when the
+        # headers arrive and so leaves out downloading and parsing the body.
+        start = time.monotonic()
         response = requests.get(status_url, timeout=STATUS_TIMEOUT_SECONDS)
         response.raise_for_status()
-        status = trim_status(response.json())
+        body = response.json()
+        elapsed_ms = round((time.monotonic() - start) * 1000)
+        status = trim_status(body, service)
         if "error" not in status:
-            status["response_ms"] = round(response.elapsed.total_seconds() * 1000)
+            status["response_ms"] = elapsed_ms
         return status
     except Exception as e:
-        logger.warning("Could not fetch status from %r: %s", base_url, type(e).__name__)
+        logger.warning(
+            "Could not fetch status from %r: %s", status_url, type(e).__name__
+        )
         return {"error": type(e).__name__}
 
 
@@ -495,8 +509,8 @@ def build_report(results, counts, github_issues_ran, targets, allowlist, config)
             "nodenorm_status_url": nodenorm_status_url,
             "nameres_docs_url": nameres_docs_url,
             "nameres_status_url": nameres_status_url,
-            "nodenorm_status": fetch_status(nodenorm_url),
-            "nameres_status": fetch_status(nameres_url),
+            "nodenorm_status": fetch_status(nodenorm_status_url, "nodenorm"),
+            "nameres_status": fetch_status(nameres_status_url, "nameres"),
             "counts": target_counts,
             "unreachable": total == 0 or target_counts["error"] == total,
         }
