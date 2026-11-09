@@ -9,18 +9,14 @@ import requests
 from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
-from src.babel_validation.services.service_checks import assert_x_translator, openapi_url
+from src.babel_validation.services.service_checks import assert_x_translator, get_openapi
 
 def test_openapi_json(target_info):
     """
     Test the OpenAPI specification.
     """
 
-    url = openapi_url(target_info, 'NameResURL', 'NameResOpenAPIPath')
-    response = requests.get(url)
-    assert response.ok, f"Could not GET {url}: {response}"
-
-    openapi_json = response.json()
+    url, openapi_json = get_openapi(target_info, 'NameResURL', 'NameResOpenAPIPath')
     assert_x_translator(url, openapi_json, 'infores:sri-name-resolver')
 
     try:

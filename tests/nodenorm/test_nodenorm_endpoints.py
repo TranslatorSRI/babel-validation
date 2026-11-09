@@ -5,9 +5,10 @@ NodeNorm Redis and NodeNorm ES are meant to be interchangeable for the endpoints
 and these tests hold each deployment to the response shapes clients were written against. They
 were added for three discrepancies found on NodeNorm ES: /get_allowed_conflations returned HTTP
 500, POST /get_setid returned an index-keyed object instead of a list, and /get_semantic_types
-lower-cased every Biolink class. biothings/NodeNormalizationAPI#58 fixed the first and most of
-the third, in NodeNorm ES 1.2.0, which not every ES target runs yet. What is left is a strict
-xfail on the Elasticsearch targets, and an unexpected pass is the signal to drop the marker.
+lower-cased every Biolink class. biothings/NodeNormalizationAPI#58 fixed the first, in NodeNorm
+ES 1.2.0, which not every ES target runs yet; #59 fixes the third, and NodeNorm ES 1.2.0 does
+not include it. What is left is a strict xfail on the Elasticsearch targets, and an unexpected
+pass is the signal to drop the marker.
 
 Everything a deployment returns is untrusted, its OpenAPI document included: it is formatted
 with truncated_repr(), and the document's path keys are validated before any URL is built from
@@ -16,6 +17,7 @@ them.
 
 import re
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import requests
@@ -48,11 +50,16 @@ SHARED_PATHS = {
 # the deployment, and templated paths like '/x/{id}', which we would have no value to fill in.
 SAFE_PATH = re.compile(r"(?:/[A-Za-z0-9_-]+)+")
 # Neither backend documents more than ten paths; this bounds how many requests a document can
-# make us send. The sweep requests them one at a time, so the cap times PATH_TIMEOUT, plus
-# REQUEST_TIMEOUT for the document itself, must stay under pytest-timeout's 300 seconds
-# (pyproject.toml), or a hung deployment trips that instead and the message names no URL.
+# make us send.
 MAX_DOCUMENTED_PATHS = 20
-PATH_TIMEOUT = 10
+# The sweep must finish inside pytest-timeout's 300 seconds (pyproject.toml), or a hung
+# deployment trips that instead and the message names no path. requests applies a single
+# timeout number to the connect and to each read separately, so the paths get an explicit
+# (connect, read) pair, PATH_WORKERS at a time: 20 paths in 4 rounds of at most 15s is 60s.
+# The OpenAPI document and the /status version check each take up to STATUS_TIMEOUT_SECONDS
+# twice over (60s), for a worst case of 180s.
+PATH_WORKERS = 5
+PATH_TIMEOUT = (5, 10)
 
 # The NodeNorm ES release, as /status reports its version, that fixed /get_allowed_conflations
 # answering HTTP 500 (biothings/NodeNormalizationAPI#58). On 2026-11-06 ci and test ran 1.2.0
@@ -250,6 +257,20 @@ def test_documents_every_shared_endpoint(target_info):
     ), f"{doc_url} does not document endpoints every NodeNorm serves: {missing!r}"
 
 
+def path_problem(url):
+    """
+    Why ``url`` does not count as served, or None if it does. A timeout or refused connection
+    is recorded like a 404 rather than raised, so one hung path does not hide the rest.
+    """
+    try:
+        status = requests.get(url, timeout=PATH_TIMEOUT).status_code
+    except requests.RequestException as exc:
+        return type(exc).__name__
+    if status == 404 or status >= 500:
+        return f"HTTP {status}"
+    return None
+
+
 def test_every_documented_path_is_served(target_info):
     """Every path in the published OpenAPI document answers a bare GET with neither a 404 nor a
     5xx. Anything else counts as served: a POST-only endpoint answers 405, and one with required
@@ -272,12 +293,15 @@ def test_every_documented_path_is_served(target_info):
     if conflations_500_expected(target_info):
         paths = paths - {"/get_allowed_conflations"}
 
-    not_served = []
-    for path in sorted(paths):
-        url = urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/"))
-        status = requests.get(url, timeout=PATH_TIMEOUT).status_code
-        if status == 404 or status >= 500:
-            not_served.append(f"{path} (HTTP {status})")
+    urls = {
+        path: urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/"))
+        for path in sorted(paths)
+    }
+    with ThreadPoolExecutor(max_workers=PATH_WORKERS) as pool:
+        problems = dict(zip(urls, pool.map(path_problem, urls.values())))
+    not_served = [
+        f"{path} ({problem})" for path, problem in problems.items() if problem
+    ]
     assert (
         not not_served
     ), f"{doc_url} documents paths this deployment does not serve: {truncated_repr(not_served)}"
