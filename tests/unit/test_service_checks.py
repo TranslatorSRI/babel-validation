@@ -305,6 +305,12 @@ class TestGetStatus:
         with pytest.raises(AssertionError, match='did not return a JSON object'):
             get_status(self.TARGET)
 
+    def test_a_status_that_is_not_an_object_is_not_cached(self, monkeypatch):
+        self._serve(monkeypatch, FakeResponse(200, None), FakeResponse(200, {'status': 'ok'}))
+
+        with pytest.raises(AssertionError, match='did not return a JSON object'):
+            get_status(self.TARGET)
+        assert get_status(self.TARGET) == (STATUS_URL, {'status': 'ok'})
 
     def test_an_openapi_document_shares_the_cache(self, monkeypatch):
         document = {'paths': {}}

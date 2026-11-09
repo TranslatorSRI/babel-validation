@@ -44,10 +44,15 @@ NODENORM_VERSION = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?(?![\d.])')
 @functools.lru_cache(maxsize=None)
 def _fetch_json(url):
     # lru_cache does not cache an exception, so a failed fetch fails this test and is
-    # retried by the next one, rather than being remembered for the rest of the run.
+    # retried by the next one, rather than being remembered for the rest of the run. That
+    # is why the JSON-object check is in here too: in a caller, a gateway's brief 200 with
+    # `null` would be cached and fail every later test without another fetch. Both /status
+    # and an OpenAPI document are JSON objects, so neither caller needs anything else.
     response = requests.get(url, timeout=STATUS_TIMEOUT_SECONDS)
     assert response.ok, f"Could not GET {url}: {response}"
-    return response.json()
+    body = response.json()
+    assert isinstance(body, dict), f"{url} did not return a JSON object: {truncated_repr(body)}"
+    return body
 
 
 def get_openapi(target_info, url_key, path_key):
@@ -56,8 +61,8 @@ def get_openapi(target_info, url_key, path_key):
 
     A successful response is cached per URL for the process, so every test that reads
     the document costs one request per target; callers must not modify what is returned.
-    The JSON is not checked here, because it is untrusted and each caller says what it
-    needs from it.
+    Beyond being a JSON object, the document is not checked here, because it is untrusted
+    and each caller says what it needs from it.
 
     :param target_info: The target information for this set of tests.
     :param url_key: The targets.ini key giving the service's base URL.
@@ -208,14 +213,6 @@ def parse_babel_version(url, status_json):
     return babel_version
 
 
-def _fetch_status(status_url):
-    status_json = _fetch_json(status_url)
-    assert isinstance(status_json, dict), (
-        f"{status_url} did not return a JSON object: {truncated_repr(status_json)}"
-    )
-    return status_json
-
-
 def get_status(target_info):
     """
     GET a target's NodeNorm /status, and return its URL and the JSON object it returned.
@@ -228,7 +225,7 @@ def get_status(target_info):
     :return: A tuple of the /status URL and its parsed response.
     """
     status_url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
-    return status_url, _fetch_status(status_url)
+    return status_url, _fetch_json(status_url)
 
 
 def nodenorm_version(target_info):
