@@ -10,17 +10,30 @@ Babel Validation is a test suite and web tools for validating outputs from [Babe
 
 Agent instructions live in `AGENTS.md` files: this one, `tests/AGENTS.md` (writing tests),
 `website/AGENTS.md` (the dashboard) and `tests/nodenorm/by_issue/biothings/AGENTS.md` (NodeNorm
-ES investigations). Claude Code (v2.1.277 or later) loads this file at the start of a session
-and a subdirectory's file only when it reads a file in that directory; some other agents load
-only the files between the repository root and their working directory.
+ES investigations). **Before writing or changing anything under `tests/` or `website/`, read
+that directory's `AGENTS.md`**, because not every agent loads it for you. Claude Code loads a
+subdirectory's file only when it opens a file there with the Read tool, so writing a new file
+there does not load it; some other agents load only the files between the repository root and
+their working directory.
 
-- **Do not add a `CLAUDE.md` or `CLAUDE.local.md` anywhere in the repository.** In its default
-  mode Claude Code reads `AGENTS.md` only when there is no `CLAUDE.md` in the working directory
-  or above, so a single one — even a one-line `@AGENTS.md` shim — makes it ignore every file
-  listed above. (`~/.claude/CLAUDE.md` does not count.)
-- **Move a rule into a subdirectory's file only if nobody can break it without first reading a
-  file in that directory.** A rule that guards an action (filing an issue, reading `.env`,
-  running pytest) or states a principle that applies to new code anywhere stays here.
+Claude Code reads `AGENTS.md` directly from v2.1.277 (v2.1.281 on Amazon Bedrock or with
+telemetry disabled), possibly not until the second session after an upgrade:
+https://code.claude.com/docs/en/memory#agents-md. An interactive session that loaded it shows
+`no CLAUDE.md found; AGENTS.md loaded: …` near its start. If yours does not, update Claude Code
+rather than adding a `CLAUDE.md`.
+
+- **Do not add a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` anywhere in the
+  repository.** By default Claude Code reads `AGENTS.md` only when there is none of those in the
+  working directory or above, so a single one makes it ignore every file listed above. Even a
+  one-line `@AGENTS.md` shim would bring in this file but none of the subdirectory ones.
+  `~/.claude/CLAUDE.md` does not count. `tests.yaml` fails a PR that commits one, but cannot see
+  an untracked `CLAUDE.local.md`: for personal instructions in this repo, set **Project
+  instructions** to `claude-md-and-agents-md` in `/config` first.
+- **Move a rule into a subdirectory's file only if nobody can break it without first opening a
+  file in that directory.** Creating a file there, running a command, or writing code elsewhere
+  does not count. So a rule that guards one of those (a new test file's marker, a new
+  directory's name, a dependency change, filing an issue, reading `.env`), or states a principle
+  that applies to new code anywhere, stays here.
 
 ## Commands
 
