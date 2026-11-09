@@ -58,15 +58,22 @@ describe('Overview', () => {
       targets: {
         dev: target({}, { nameres_status: { status: 'ok', babel_version: '2025sep1' } }),
         prod: target({}, { nameres_status: { status: 'ok', babel_version: '2026jul22' } }),
+        // NodeNorm down: NameRes's release must not pass for the environment's.
+        exp: target({}, {
+          nodenorm_status: { error: 'ConnectionError' },
+          nameres_status: { status: 'ok', babel_version: '2026jul22' },
+        }),
       },
     };
     const wrapper = await mountOverview(report);
     const versions = wrapper.findAll('.col .card-body > .d-flex > .small');
     expect(versions.map((el) => el.findAll('.d-block').map((line) => line.text()))).toEqual([
+      ['NR 2026jul22'],
       ['2025sep1'],
       ['NN 2025sep1', 'NR 2026jul22'],
     ]);
-    expect(versions[1].attributes('title')).toBe('NodeNorm 2025sep1, NameRes 2026jul22');
+    expect(versions[0].attributes('title')).toBe('NameRes 2026jul22');
+    expect(versions[2].attributes('title')).toBe('NodeNorm 2025sep1, NameRes 2026jul22');
   });
 
   it('orders the environment cards by deployment, not by report order', async () => {

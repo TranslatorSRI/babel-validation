@@ -67,20 +67,28 @@ export default {
       return this.report.targets[target].counts;
     },
     // NodeNorm and NameRes are loaded separately, so they can be on different
-    // Babel releases while one is promoted. One version when they agree (or
-    // only one reports any); both, a line each, when they differ.
+    // Babel releases while one is promoted. One unlabelled version only when
+    // both report the same one; otherwise each one reported, labelled with its
+    // service, so a release one service reports is never read as the other's.
     babelVersion(target) {
       const { nodenorm_status: nn, nameres_status: nr } = this.report.targets[target];
       const nodenorm = nn?.babel_version;
       const nameres = nr?.babel_version;
-      if (nodenorm && nameres && nodenorm !== nameres) {
-        return {
-          lines: [`NN ${nodenorm}`, `NR ${nameres}`],
-          title: `NodeNorm ${nodenorm}, NameRes ${nameres}`,
-        };
+      if (nodenorm && nodenorm === nameres) {
+        return { lines: [nodenorm], title: `Babel ${nodenorm}` };
       }
-      const version = nodenorm ?? nameres;
-      return { lines: [version ?? '—'], title: version ? `Babel ${version}` : null };
+      if (!nodenorm && !nameres) return { lines: ['—'], title: null };
+      const lines = [];
+      const titles = [];
+      if (nodenorm) {
+        lines.push(`NN ${nodenorm}`);
+        titles.push(`NodeNorm ${nodenorm}`);
+      }
+      if (nameres) {
+        lines.push(`NR ${nameres}`);
+        titles.push(`NameRes ${nameres}`);
+      }
+      return { lines, title: titles.join(', ') };
     },
     resultsLink(params) {
       return `${this.resultsUrl}?${new URLSearchParams(params).toString()}`;
