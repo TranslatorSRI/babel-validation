@@ -45,6 +45,29 @@ describe('what changed since the previous run', () => {
     expect(wrapper.text()).toContain('+8');
   });
 
+  it("reports NameRes's Babel release moving even when NodeNorm's stays put", async () => {
+    const line = (date, nameres) =>
+      JSON.stringify({
+        date,
+        targets: {
+          prod: { babel_version: '2025sep1', nameres_babel_version: nameres, counts: {} },
+        },
+      });
+    const wrapper = await mountWith([line('2026-11-08', '2025sep1'), line('2026-11-09', '2026jul22')]);
+    expect(wrapper.vm.changes).toEqual([
+      { target: 'prod', label: 'nameres babel version', from: '2025sep1', to: '2026jul22' },
+    ]);
+  });
+
+  it('does not report a field the previous run did not record yet', async () => {
+    const before = JSON.stringify({ date: 'a', targets: { dev: { babel_version: 'x', counts: {} } } });
+    const now = JSON.stringify({
+      date: 'b',
+      targets: { dev: { babel_version: 'x', nameres_babel_version: 'y', counts: {} } },
+    });
+    expect((await mountWith([before, now])).vm.changes).toEqual([]);
+  });
+
   it('colours a drop in passing tests as a regression, not an improvement', async () => {
     // The polarity is per count: more failures is bad, but so are *fewer*
     // passes — an environment going down, or collection breaking, arrives here

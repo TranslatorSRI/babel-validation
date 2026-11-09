@@ -549,6 +549,9 @@ def build_history_line(report):
         line["targets"][target] = {
             "babel_version": nodenorm_status.get("babel_version"),
             "nameres_version": nameres_status.get("nameres_version"),
+            # NodeNorm and NameRes are promoted separately, so each release
+            # change shows up in the history diff on its own.
+            "nameres_babel_version": nameres_status.get("babel_version"),
             "biolink_version": nodenorm_status.get("biolink_version"),
             "nn_eq_records": eq_db.get("count"),
             # Named for Solr, but read from either backend's index.

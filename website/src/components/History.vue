@@ -63,11 +63,15 @@ export default {
           });
           continue;
         }
-        for (const field of ['babel_version', 'nameres_version']) {
-          if (now[field] !== before[field]) {
+        // babel_version is NodeNorm's; NameRes's is recorded separately
+        // because the two are promoted separately. A field the previous run
+        // did not record yet (nameres_babel_version, before 2026-11) is not
+        // a change.
+        for (const field of ['babel_version', 'nameres_babel_version', 'nameres_version']) {
+          if (Object.hasOwn(before, field) && now[field] !== before[field]) {
             changes.push({
               target,
-              label: field.replace('_', ' '),
+              label: field.replaceAll('_', ' '),
               from: before[field] ?? '—',
               to: now[field] ?? '—',
             });

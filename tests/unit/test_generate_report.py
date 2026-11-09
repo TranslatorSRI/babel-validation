@@ -645,6 +645,9 @@ class TestServiceLinks:
         }
         line = generate_report.build_history_line(report)["targets"]["ci"]
         assert (line["solr_docs"], line["solr_size"]) == (5, "2 GB")
+        # NameRes's Babel release is recorded apart from NodeNorm's.
+        assert line["nameres_babel_version"] == "2026jul22"
+        assert line["babel_version"] is None
 
     def test_a_missing_url_has_no_links(self):
         assert generate_report.service_links(None, "redis") == (None, None)
