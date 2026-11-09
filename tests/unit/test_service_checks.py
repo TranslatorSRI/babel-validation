@@ -18,7 +18,9 @@ from src.babel_validation.services.service_checks import (
     MAX_REPR_LENGTH,
     assert_backend,
     assert_x_translator,
+    get_openapi,
     get_status,
+    nodenorm_version,
     openapi_url,
     parse_babel_version,
     require_babel_release,
@@ -262,16 +264,16 @@ class FakeResponse:
         return self._json_body
 
 
-class TestGetStatus:
-    """/status is fetched once per URL, but a failure is never remembered."""
+class FetchesJSON:
+    """Clears the shared fetch cache around each test, and fakes the responses it gets."""
 
     TARGET = {'NodeNormURL': 'https://example.org/'}
 
     @pytest.fixture(autouse=True)
     def _clear_cache(self):
-        service_checks._fetch_status.cache_clear()
+        service_checks._fetch_json.cache_clear()
         yield
-        service_checks._fetch_status.cache_clear()
+        service_checks._fetch_json.cache_clear()
 
     def _serve(self, monkeypatch, *responses):
         calls = []
@@ -282,6 +284,10 @@ class TestGetStatus:
 
         monkeypatch.setattr(service_checks.requests, 'get', fake_get)
         return calls
+
+
+class TestGetStatus(FetchesJSON):
+    """/status is fetched once per URL, but a failure is never remembered."""
 
     def test_a_transient_failure_is_retried_by_the_next_caller(self, monkeypatch):
         self._serve(monkeypatch, FakeResponse(503, None), FakeResponse(200, {'status': 'ok'}))
@@ -302,3 +308,51 @@ class TestGetStatus:
 
         with pytest.raises(AssertionError, match='did not return a JSON object'):
             get_status(self.TARGET)
+
+    def test_a_status_that_is_not_an_object_is_not_cached(self, monkeypatch):
+        self._serve(monkeypatch, FakeResponse(200, None), FakeResponse(200, {'status': 'ok'}))
+
+        with pytest.raises(AssertionError, match='did not return a JSON object'):
+            get_status(self.TARGET)
+        assert get_status(self.TARGET) == (STATUS_URL, {'status': 'ok'})
+
+
+class TestGetOpenAPI(FetchesJSON):
+    def test_an_openapi_document_shares_the_cache(self, monkeypatch):
+        document = {'paths': {}}
+        calls = self._serve(monkeypatch, FakeResponse(200, document))
+
+        assert get_openapi(self.TARGET, 'NodeNormURL', 'NodeNormOpenAPIPath') == (
+            'https://example.org/openapi.json', document
+        )
+        get_openapi(self.TARGET, 'NodeNormURL', 'NodeNormOpenAPIPath')
+        assert calls == [service_checks.STATUS_TIMEOUT_SECONDS]
+
+
+class TestNodeNormVersion(FetchesJSON):
+    """A version gate needs a release number, in whichever of the usual spellings it comes."""
+
+    def _version(self, monkeypatch, version):
+        monkeypatch.setattr(
+            service_checks.requests, 'get',
+            lambda url, timeout=None: FakeResponse(200, {'version': version}),
+        )
+        return nodenorm_version({'NodeNormURL': 'https://example.org/'})
+
+    @pytest.mark.parametrize('version, expected', [
+        ('1.2.0', (1, 2, 0)),
+        ('v1.2.1', (1, 2, 1)),
+        ('1.3', (1, 3, 0)),
+        ('1.3.0-rc1', (1, 3, 0)),
+        ('1.3.0.dev0', (1, 3, 0)),
+        ('1.2.0.post1', (1, 2, 0)),
+        ('1.3.dev0', (1, 3, 0)),
+        ('10.0.12', (10, 0, 12)),
+    ])
+    def test_a_release_number_is_read(self, monkeypatch, version, expected):
+        assert self._version(monkeypatch, version) == expected
+
+    @pytest.mark.parametrize('version', [None, 3, '', 'latest', '1', '1.2.3.4', 'x1.2.0'])
+    def test_anything_else_fails(self, monkeypatch, version):
+        with pytest.raises(AssertionError, match='no NodeNorm release number'):
+            self._version(monkeypatch, version)
