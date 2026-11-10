@@ -8,6 +8,28 @@
 // disturbs no pair in the pipeline.
 const DEPLOYMENT_ORDER = ['exp', 'dev', 'ci', 'test', 'prod', 'ci-nameres-es'];
 
+// The Environments table is the exception. It is read across a row, value
+// against value rather than step by step, and a side branch is easiest to
+// compare beside the target it branches from: ci-nameres-es runs ci's NodeNorm,
+// so beside ci its NodeNorm cells match and its NameRes ones sit next to the
+// Solr NameRes it is meant to replace. Every other table keeps the pipeline
+// order above, for the reason given there.
+const SIDE_BRANCHES = new Map([['ci-nameres-es', 'ci']]);
+
+// sortByDeploymentOrder, then each side branch moved to just after the target
+// it branches from. A branch whose parent is not in the list stays where the
+// deployment order put it.
+export function sortBesideParents(targetNames) {
+  const sorted = sortByDeploymentOrder(targetNames);
+  const present = new Set(sorted);
+  const out = [];
+  for (const name of sorted) {
+    if (present.has(SIDE_BRANCHES.get(name))) continue;
+    out.push(name, ...sorted.filter((branch) => SIDE_BRANCHES.get(branch) === name));
+  }
+  return out;
+}
+
 // The environments this list does not know about. It is the third place a target
 // has to be registered — targets.ini defines it, the workflow and generate_report
 // now both read that, and the promotion order is a *semantic* fact about the

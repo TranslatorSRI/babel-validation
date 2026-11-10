@@ -87,6 +87,23 @@ describe('Overview', () => {
     );
   });
 
+  it('puts a side branch beside its parent in the Environments table only', async () => {
+    const report = {
+      ...REPORT,
+      targets: { ...REPORT.targets, 'ci-nameres-es': target({}), ci: target({}) },
+    };
+    const wrapper = await mountOverview(report);
+    const cards = wrapper.findAll('.col .card-body > .d-flex > .fw-semibold').map((el) => el.text());
+    expect(cards).toEqual(['exp', 'dev', 'ci', 'prod', 'ci-nameres-es']);
+    const columns = wrapper
+      .findAll('table.table-bordered')[0]
+      .findAll('thead th')
+      // The first word: an unreachable environment's header also says so.
+      .map((th) => th.text().split(/\s+/)[0])
+      .filter(Boolean);
+    expect(columns).toEqual(['exp', 'dev', 'ci', 'ci-nameres-es', 'prod']);
+  });
+
   it('orders the environment cards by deployment, not by report order', async () => {
     const wrapper = await mountOverview();
     const names = wrapper.findAll('.col .card-body > .d-flex > .fw-semibold').map((el) => el.text());

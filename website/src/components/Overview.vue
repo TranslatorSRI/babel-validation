@@ -9,7 +9,7 @@
   built with URLSearchParams rather than string concatenation.
 -->
 <script>
-import { sortByDeploymentOrder, unknownTargets } from '../deploymentOrder.js';
+import { sortBesideParents, sortByDeploymentOrder, unknownTargets } from '../deploymentOrder.js';
 import DriftPanel from './DriftPanel.vue';
 import StatusMatrix from './StatusMatrix.vue';
 import { fetchReport, formatCount, isInteresting, runLink } from '../reportData.js';
@@ -29,6 +29,11 @@ export default {
   computed: {
     targetNames() {
       return sortByDeploymentOrder(Object.keys(this.report?.targets ?? {}));
+    },
+    // The Environments table's columns: side branches beside their parents.
+    // See SIDE_BRANCHES in deploymentOrder.js.
+    environmentColumns() {
+      return sortBesideParents(this.targetNames);
     },
     unreachableTargets() {
       return this.targetNames.filter((t) => this.report.targets[t].unreachable);
@@ -227,7 +232,7 @@ export default {
       <!-- Scrolls sideways on its own, rather than widening the whole page,
            when a phone is narrower than six environments' columns. -->
       <div class="card-body overflow-x-auto">
-        <StatusMatrix :report="report" :target-names="targetNames" />
+        <StatusMatrix :report="report" :target-names="environmentColumns" />
         <p v-if="unattributed" class="small text-body-secondary mt-3 mb-0">
           {{ formatCount(unattributed) }} test result(s) could not be attributed to an environment,
           and are not counted above.
