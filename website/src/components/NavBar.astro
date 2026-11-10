@@ -26,7 +26,9 @@ const external = [
 ---
 
 <nav class="navbar navbar-expand bg-dark mb-4" data-bs-theme="dark">
-  <div class="container-xxl">
+  <!-- flex-wrap: on a phone the page links drop to a second line rather than
+       running off the right edge and widening every page. -->
+  <div class="container-xxl flex-wrap row-gap-1">
     <a class="navbar-brand" href={base}>Babel Validation</a>
 
     <ul class="navbar-nav flex-row gap-3">

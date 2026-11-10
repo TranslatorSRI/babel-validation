@@ -224,7 +224,9 @@ export default {
           {{ formatCount(totalInteresting) }} of {{ formatCount(totalResults) }} tests need a look →
         </a>
       </div>
-      <div class="card-body">
+      <!-- Scrolls sideways on its own, rather than widening the whole page,
+           when a phone is narrower than six environments' columns. -->
+      <div class="card-body overflow-x-auto">
         <StatusMatrix :report="report" :target-names="targetNames" />
         <p v-if="unattributed" class="small text-body-secondary mt-3 mb-0">
           {{ formatCount(unattributed) }} test result(s) could not be attributed to an environment,

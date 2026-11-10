@@ -154,7 +154,8 @@ export default {
       Nothing changed between the last two runs.
     </p>
 
-    <div class="card">
+    <!-- table-responsive: the table scrolls sideways on a phone, not the page. -->
+    <div class="card table-responsive">
       <table class="table table-dense align-middle mb-0">
         <thead>
           <tr>
