@@ -167,3 +167,18 @@ describe('an even split', () => {
   });
 });
 
+describe('an environment that reports nothing', () => {
+  it('is not shaded as an odd one out', () => {
+    // NameRes ES reports no babel_version. While the others disagree, its em
+    // dash was shaded amber alongside the real minority.
+    const wrapper = mountWith({
+      exp: target('2026jul22', { nameres: { babel_version: '2026jul22' } }),
+      dev: target('2026jul22', { nameres: { babel_version: '2026jul22' } }),
+      prod: target('2025sep1', { nameres: { babel_version: '2025sep1' } }),
+      'ci-nameres-es': target('2026jul22'),
+    });
+    const shaded = babelRow(wrapper, 'nameres').map((classes) => classes.includes('table-warning'));
+    expect(shaded).toEqual([false, false, true, false]);
+  });
+});
+

@@ -70,6 +70,10 @@ export default {
       if (statusRow.danger?.(info)) return 'table-danger';
       // Only rows the environments should agree on: see `compare` in STATUS_SECTIONS.
       if (!statusRow.compare) return '';
+      // A service that reports nothing is not an odd one out: the majority is
+      // found among reported values only, and shading the em dash too made it
+      // look like a disagreement, but only on days the others disagreed.
+      if (this.statusValue(statusRow, target) == null) return '';
       // Highlight the odd ones out when environments disagree, e.g. every
       // environment on Babel 2025sep1 except exp.
       const values = this.targetNames.map((t) => this.statusValue(statusRow, t));
