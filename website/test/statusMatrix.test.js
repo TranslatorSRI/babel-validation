@@ -41,14 +41,14 @@ describe('StatusMatrix', () => {
       prod: target('2025sep1'),
     });
     const [exp, dev, prod] = babelRow(wrapper);
-    expect(exp).toContain('table-warning');
-    expect(dev).not.toContain('table-warning');
-    expect(prod).not.toContain('table-warning');
+    expect(exp).toContain('cell-differs');
+    expect(dev).not.toContain('cell-differs');
+    expect(prod).not.toContain('cell-differs');
   });
 
   it('shades nothing when every environment agrees', () => {
     const wrapper = mountWith(Object.fromEntries(TARGETS.map((t) => [t, target('2025sep1')])));
-    expect(babelRow(wrapper).join(' ')).not.toContain('table-warning');
+    expect(babelRow(wrapper).join(' ')).not.toContain('cell-differs');
   });
 
   it('marks a status error as danger, not as a minority value', () => {
@@ -58,7 +58,7 @@ describe('StatusMatrix', () => {
       prod: target('2025sep1', { nodenorm: { error: 'ConnectionError', status: undefined } }),
     });
     expect(row(wrapper, 'nodenorm', 'Status').findAll('td')[2].classes()).toContain(
-      'table-danger'
+      'cell-broken'
     );
   });
 
@@ -70,8 +70,8 @@ describe('StatusMatrix', () => {
       dev: target('2026jul22', { nameres: { babel_version: '2026jul22' } }),
       prod: target('2025sep1', { nameres: { babel_version: '2026jul22' } }),
     });
-    expect(babelRow(wrapper, 'nodenorm')[2]).toContain('table-warning');
-    expect(babelRow(wrapper, 'nameres').join(' ')).not.toContain('table-warning');
+    expect(babelRow(wrapper, 'nodenorm')[2]).toContain('cell-differs');
+    expect(babelRow(wrapper, 'nameres').join(' ')).not.toContain('cell-differs');
     expect(row(wrapper, 'nameres', 'Babel version').findAll('td')[2].text()).toBe('2026jul22');
   });
 
@@ -129,8 +129,8 @@ describe('StatusMatrix', () => {
     });
     const cells = row(wrapper, 'nodenorm', 'Elasticsearch').findAll('td');
     expect(cells.map((td) => td.text())).toEqual(['no nodes', '—']);
-    expect(cells[0].classes()).toContain('table-danger');
-    expect(cells[1].classes()).not.toContain('table-danger');
+    expect(cells[0].classes()).toContain('cell-broken');
+    expect(cells[1].classes()).not.toContain('cell-broken');
   });
 
   it('hides a row that no environment has a value for', () => {
@@ -162,7 +162,7 @@ describe('an even split', () => {
       staging: target('2025sep1'),
     });
 
-    expect(babelRow(wrapper).join(' ')).not.toContain('table-warning');
+    expect(babelRow(wrapper).join(' ')).not.toContain('cell-differs');
   });
 });
 
@@ -176,7 +176,7 @@ describe('an environment that reports nothing', () => {
       prod: target('2025sep1', { nameres: { babel_version: '2025sep1' } }),
       'ci-nameres-es': target('2026jul22'),
     });
-    const shaded = babelRow(wrapper, 'nameres').map((classes) => classes.includes('table-warning'));
+    const shaded = babelRow(wrapper, 'nameres').map((classes) => classes.includes('cell-differs'));
     expect(shaded).toEqual([false, false, true, false]);
   });
 });

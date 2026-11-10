@@ -64,6 +64,20 @@ html {
   --bs-table-bg: var(--bs-tertiary-bg);
 }
 
+/* Shaded cells in the Environments table: a value that differs from the
+   other environments', and a broken service. Bootstrap's .table-warning and
+   .table-danger are fixed light colours, near-white against the dark theme's
+   muted table; the subtle/emphasis pairs flip with it. */
+.cell-differs {
+  --bs-table-bg: var(--bs-warning-bg-subtle);
+  --bs-table-color: var(--bs-warning-text-emphasis);
+}
+
+.cell-broken {
+  --bs-table-bg: var(--bs-danger-bg-subtle);
+  --bs-table-color: var(--bs-danger-text-emphasis);
+}
+
 /* A sticky <th> needs its own background: table cells are transparent by
    default, so rows would show through as they scroll under it.
 

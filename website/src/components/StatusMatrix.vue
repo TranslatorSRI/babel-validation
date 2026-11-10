@@ -7,6 +7,9 @@
   Report values are untrusted: render them with {{ }} only, never v-html, and
   link only to URLs the generator built or validated (a section's `docsUrl`,
   from targets.ini, and a row's `href` in STATUS_SECTIONS).
+
+  Shading uses theme.css's .cell-differs and .cell-broken, not Bootstrap's
+  .table-warning and .table-danger, which keep their light colours in dark mode.
 -->
 <script>
 import {
@@ -67,7 +70,7 @@ export default {
     },
     statusCellClass(statusRow, target) {
       const info = this.report.targets[target];
-      if (statusRow.danger?.(info)) return 'table-danger';
+      if (statusRow.danger?.(info)) return 'cell-broken';
       // Only rows the environments should agree on: see `compare` in STATUS_SECTIONS.
       if (!statusRow.compare) return '';
       // A service that reports nothing is not an odd one out: the majority is
@@ -90,7 +93,7 @@ export default {
       // to say nothing.
       if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) return '';
       const majority = ranked[0][0];
-      return this.statusValue(statusRow, target) === majority ? '' : 'table-warning';
+      return this.statusValue(statusRow, target) === majority ? '' : 'cell-differs';
     },
     database(target, name) {
       return this.report.targets[target].nodenorm_status.databases?.[name] ?? null;
@@ -108,10 +111,13 @@ export default {
           v-for="target in targetNames"
           :key="target"
           class="text-center"
-          :class="{ 'table-warning': report.targets[target].unreachable }"
+          :class="{ 'cell-differs': report.targets[target].unreachable }"
         >
           {{ target }}
-          <span v-if="report.targets[target].unreachable" class="badge text-bg-warning">
+          <span
+            v-if="report.targets[target].unreachable"
+            class="badge bg-warning-subtle text-warning-emphasis"
+          >
             no results
           </span>
         </th>

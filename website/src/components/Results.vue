@@ -355,7 +355,8 @@ export default {
         </thead>
         <tbody>
           <template v-for="(row, index) in rows" :key="row.key">
-            <tr v-if="kindHeading(index)" class="table-light">
+            <!-- table-group, not table-light, which stays white in dark mode. -->
+            <tr v-if="kindHeading(index)" class="table-group">
               <th :colspan="2 + targetNames.length">{{ kindHeading(index) }}</th>
             </tr>
             <tr
