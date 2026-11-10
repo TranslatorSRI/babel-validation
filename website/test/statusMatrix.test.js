@@ -90,8 +90,8 @@ describe('StatusMatrix', () => {
         .find(`tbody tr.table-group[data-section="${section}"]`)
         .findAll('a')
         .map((a) => [a.text(), a.attributes('href')]);
-    expect(links('nodenorm')).toEqual([['API docs', 'https://nn.example/docs']]);
-    expect(links('nameres')).toEqual([['API docs', 'https://nr-es.example/']]);
+    expect(links('nodenorm')).toEqual([['API', 'https://nn.example/docs']]);
+    expect(links('nameres')).toEqual([['API', 'https://nr-es.example/']]);
     // /status is linked from the Status value itself.
     const statusLink = (section) => row(wrapper, section, 'Status').find('a');
     expect(statusLink('nodenorm').text()).toBe('running');

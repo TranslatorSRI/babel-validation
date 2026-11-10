@@ -128,9 +128,12 @@ export default {
         <tr class="table-group" :data-section="section.key">
           <th class="text-nowrap">{{ section.title }}</th>
           <td v-for="target in targetNames" :key="target" class="text-center text-nowrap small">
-            <!-- Each service's /status is linked from its Status row below. -->
+            <!-- Each service's /status is linked from its Status row below.
+                 "API", not "docs": this is the service's Swagger UI, which a
+                 reader could mistake for the written API documentation each
+                 service keeps in its repository. -->
             <a v-if="section.docsUrl(report.targets[target])" :href="section.docsUrl(report.targets[target])">
-              API docs
+              API
             </a>
           </td>
         </tr>
