@@ -946,11 +946,18 @@ def bench_build(df, mo, pd):
             _ep=frame["exclude_prefixes"].apply(_join),
             _ot=frame["only_taxa"].apply(_join),
         )
+        # `exact` is None on lines from before NameRes v1.7.1; dropna=False keeps those
+        # rows rather than silently dropping them from every group.
         key = ["query", "autocomplete", "highlighting", "offset", "limit",
-               "_bt", "_op", "_ep", "_ot"]
+               "_bt", "_op", "_ep", "_ot", "exact"]
+
+        def _ms(value: float) -> float | None:
+            # A case whose every observation failed has no Solr wait; NaN would be
+            # written as a bare `NaN`, which is not valid JSON.
+            return None if pd.isna(value) else round(float(value), 3)
 
         cases = []
-        for _, g in src.groupby(key, sort=False):
+        for _, g in src.groupby(key, sort=False, dropna=False):
             r0 = g.iloc[0]
             cases.append(
                 {
@@ -963,11 +970,15 @@ def bench_build(df, mo, pd):
                     "only_prefixes": list(r0["only_prefixes"]),
                     "exclude_prefixes": list(r0["exclude_prefixes"]),
                     "only_taxa": list(r0["only_taxa"]),
+                    # Reissue NameRes's exact-match flag as logged; None means the
+                    # line predates it, i.e. NameRes's default (False).
+                    "exact": None if pd.isna(r0["exact"]) else bool(r0["exact"]),
                     "baseline_solr": {
                         "n_observed": int(len(g)),
-                        "solr_wait_ms_p50": round(float(g["solr_wait_ms"].median()), 3),
-                        "solr_wait_ms_p95": round(float(g["solr_wait_ms"].quantile(0.95)), 3),
-                        "took_ms_p50": round(float(g["took_ms"].median()), 3),
+                        "n_failed": int((g["outcome"] != "ok").sum()),
+                        "solr_wait_ms_p50": _ms(g["solr_wait_ms"].median()),
+                        "solr_wait_ms_p95": _ms(g["solr_wait_ms"].quantile(0.95)),
+                        "took_ms_p50": _ms(g["took_ms"].median()),
                         "ever_slow": bool(g["slow_query"].any()),
                         "first_seen": g["time"].min().isoformat(),
                         "last_seen": g["time"].max().isoformat(),
