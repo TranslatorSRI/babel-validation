@@ -109,6 +109,17 @@ describe('StatusMatrix', () => {
     expect(cells.map((td) => td.text())).toEqual(['2025sep1, 2026jul22', '—']);
   });
 
+  it('flags an Elasticsearch cluster with no nodes rather than hiding it', () => {
+    const wrapper = mountWith({
+      ci: target('2026jul22', { nodenorm: { elasticsearch: { nodes: 0 } } }),
+      dev: target('2026jul22'),
+    });
+    const cells = row(wrapper, 'nodenorm', 'Elasticsearch').findAll('td');
+    expect(cells.map((td) => td.text())).toEqual(['no nodes', '—']);
+    expect(cells[0].classes()).toContain('table-danger');
+    expect(cells[1].classes()).not.toContain('table-danger');
+  });
+
   it('hides a row that no environment has a value for', () => {
     const wrapper = mountWith({
       exp: target('2026jul22', { nodenorm: { elasticsearch: { nodes: 3, versions: ['9.3.1'] } } }),

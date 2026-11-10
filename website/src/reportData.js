@@ -144,10 +144,14 @@ export const STATUS_SECTIONS = [
         label: 'Elasticsearch',
         value: (t) => {
           const es = t.nodenorm_status.elasticsearch;
-          if (!es?.nodes) return null;
+          // == null, not falsy: a cluster reporting no nodes is the state this
+          // row most needs to show, not missing data.
+          if (es?.nodes == null) return null;
+          if (es.nodes === 0) return 'no nodes';
           // Several versions mean a cluster mid-upgrade.
           return `${es.nodes} × ${es.versions?.join(', ') || '?'}`;
         },
+        danger: (t) => t.nodenorm_status.elasticsearch?.nodes === 0,
       },
       {
         label: 'ES disk used',

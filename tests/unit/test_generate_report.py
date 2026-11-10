@@ -442,6 +442,11 @@ class TestTrimStatus:
         trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
         assert trimmed["elasticsearch"] == {"nodes": 2, "versions": ["9.3.1"]}
 
+    def test_elasticsearch_with_no_nodes_is_kept(self):
+        # A cluster with no nodes is a finding, not missing data.
+        trimmed = trim_status({"elasticsearch": {"nodes": {}}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {"nodes": 0}
+
     def test_elasticsearch_summary_is_bounded_and_escaped(self):
         nodes = {
             f"es-{i}": {"version": "\x1b[2J9" * 20, "disk.used_percent": "1"}
