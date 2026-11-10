@@ -280,7 +280,14 @@ def trim_status(raw, service):
         node_list = [n for n in nodes.values() if isinstance(n, dict)]
         disk = [_trimmed_float(n.get("disk.used_percent")) for n in node_list]
         disk = [d for d in disk if d is not None]
-        versions = {sanitize(n["version"], 20) for n in node_list if "version" in n}
+        # A node can report "version": null (mid-restart, say). sanitize() keeps
+        # None as None, and sorting None among strings raises TypeError, which
+        # fetch_status would turn into an error for the whole NodeNorm status.
+        versions = {
+            sanitize(n["version"], 20)
+            for n in node_list
+            if n.get("version") is not None
+        }
         trimmed_es = {"nodes": len(node_list)}
         if versions:
             trimmed_es["versions"] = sorted(versions)[:5]

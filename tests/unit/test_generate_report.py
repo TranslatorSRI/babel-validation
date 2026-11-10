@@ -434,6 +434,14 @@ class TestTrimStatus:
         trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
         assert trimmed["elasticsearch"]["versions"] == ["8.19.0", "9.3.1"]
 
+    def test_elasticsearch_node_with_null_version_is_skipped(self):
+        # A node mid-restart can report "version": null. Sorting None among
+        # strings raised TypeError, which turned the whole NodeNorm status into
+        # an error over one field.
+        nodes = {"es-0": {"version": "9.3.1"}, "es-1": {"version": None}}
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {"nodes": 2, "versions": ["9.3.1"]}
+
     def test_elasticsearch_summary_is_bounded_and_escaped(self):
         nodes = {
             f"es-{i}": {"version": "\x1b[2J9" * 20, "disk.used_percent": "1"}
