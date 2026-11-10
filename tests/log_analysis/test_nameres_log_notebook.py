@@ -208,6 +208,35 @@ def test_parse_record_rejects_a_half_failed_line(parser, line):
         parser["parse_record"](_record(line))
 
 
+def test_benchmark_export_handles_failed_and_exact_lookups(notebook, parser):
+    """A case whose every observation failed must still serialize as valid JSON, and
+    NameRes's exact flag must reach the case so a replay reissues it."""
+    import json
+
+    parse = parser["parse_record"]
+    entries = [
+        parse(_record(FAILED_TIMEOUT_LINE)),
+        parse(_record(_V171_LINE.replace("exact=False", "exact=True"))),
+        parse(_record(LOOKUP_LINE)),
+    ]
+    from dataclasses import asdict
+
+    frame = pd.DataFrame([asdict(e) for e in entries])
+    frame["time"] = pd.to_datetime(frame["time"])
+    _output, defs = notebook.bench_build.run(df=frame)
+    cases = defs["benchmark_cases"]
+
+    # exact=False, exact=True and "not logged" (None) are three different requests.
+    assert sorted(case["exact"] is None and "none" or str(case["exact"]) for case in cases) == [
+        "False", "True", "none"
+    ]
+    failed_only = next(case for case in cases if case["exact"] is False)
+    assert failed_only["baseline_solr"]["n_failed"] == 1
+    assert failed_only["baseline_solr"]["solr_wait_ms_p50"] is None
+    assert failed_only["baseline_solr"]["took_ms_p50"] == pytest.approx(30001.23)
+    json.dumps(cases, allow_nan=False)
+
+
 @pytest.mark.parametrize(
     "raw, expected",
     [
