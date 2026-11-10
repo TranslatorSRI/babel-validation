@@ -55,6 +55,11 @@ export default {
         // count, and comparing field by field would silently skip it: with
         // nothing else moving, the page said "Nothing changed" on the run that
         // added or dropped a whole target.
+        //
+        // targetNames spans every run in the file, so a target dropped long
+        // ago is missing from both runs here: that is no change at all, and
+        // without this skip it was reported as "no longer reported" every day.
+        if (!now && !before) continue;
         if (!now || !before) {
           changes.push({
             target,

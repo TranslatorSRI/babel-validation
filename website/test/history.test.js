@@ -119,6 +119,20 @@ describe('what changed since the previous run', () => {
     ]);
   });
 
+  it('says nothing of a target dropped before the last two runs', async () => {
+    // The table's columns span the whole file, so ci-es, dropped weeks ago, is
+    // missing from both of the runs compared, which is no change at all.
+    const old = JSON.stringify({
+      date: 'a',
+      targets: { dev: { counts: { passed: 10 } }, 'ci-es': { counts: { passed: 4 } } },
+    });
+    const later = JSON.stringify({ date: 'b', targets: { dev: { counts: { passed: 10 } } } });
+    const wrapper = await mountWith([old, later, later]);
+    expect(wrapper.vm.targetNames).toContain('ci-es');
+    expect(wrapper.vm.changes).toEqual([]);
+    expect(wrapper.text()).toContain('Nothing changed');
+  });
+
   it('says so when nothing moved, and shows nothing with only one run', async () => {
     let wrapper = await mountWith([run('2026-08-26', '2025sep1', 12), run('2026-08-27', '2025sep1', 12)]);
     expect(wrapper.vm.changes).toEqual([]);
