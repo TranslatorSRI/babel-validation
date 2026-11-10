@@ -67,15 +67,24 @@ export default {
       return this.report.targets[target].counts;
     },
     // NodeNorm and NameRes are loaded separately, so they can be on different
-    // Babel releases while one is promoted. One unlabelled version only when
-    // both report the same one; otherwise each one reported, labelled with its
-    // service, so a release one service reports is never read as the other's.
+    // Babel releases while one is promoted. Unlabelled when both report the
+    // same release, and when only NodeNorm reports one: the card showed
+    // NodeNorm's release before NameRes's was read, and older NameRes Solr
+    // releases (or one that timed out) report none, so labelling that case put
+    // "NN" on cards where nothing differs. NameRes's release alone is still
+    // labelled, so with NodeNorm down it is not read as the environment's.
     babelVersion(target) {
       const { nodenorm_status: nn, nameres_status: nr } = this.report.targets[target];
       const nodenorm = nn?.babel_version;
       const nameres = nr?.babel_version;
       if (nodenorm && nodenorm === nameres) {
         return { lines: [nodenorm], title: `Babel ${nodenorm}` };
+      }
+      if (nodenorm && !nameres) {
+        return {
+          lines: [nodenorm],
+          title: `NodeNorm on Babel ${nodenorm}; NameRes did not report a release`,
+        };
       }
       if (!nodenorm && !nameres) return { lines: ['—'], title: null };
       const lines = [];

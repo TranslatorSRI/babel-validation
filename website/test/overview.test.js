@@ -76,6 +76,17 @@ describe('Overview', () => {
     expect(versions[2].attributes('title')).toBe('NodeNorm 2025sep1, NameRes 2026jul22');
   });
 
+  it("leaves NodeNorm's release unlabelled when NameRes reports none", async () => {
+    // Older NameRes Solr releases report no babel_version; nothing differs, so
+    // the card should not grow an "NN" prefix.
+    const wrapper = await mountOverview();
+    const versions = wrapper.findAll('.col .card-body > .d-flex > .small');
+    expect(versions.map((el) => el.text())).toEqual(['2025sep1', '2025sep1', '2025sep1']);
+    expect(versions[0].attributes('title')).toBe(
+      'NodeNorm on Babel 2025sep1; NameRes did not report a release',
+    );
+  });
+
   it('orders the environment cards by deployment, not by report order', async () => {
     const wrapper = await mountOverview();
     const names = wrapper.findAll('.col .card-body > .d-flex > .fw-semibold').map((el) => el.text());
