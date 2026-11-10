@@ -136,6 +136,7 @@ export default {
             :key="target"
             class="text-center text-nowrap"
             :class="statusCellClass(statusRow, target)"
+            :title="statusRow.title?.(report.targets[target]) ?? undefined"
           >
             <a v-if="statusHref(statusRow, target)" :href="statusHref(statusRow, target)">
               {{ statusValue(statusRow, target) }}

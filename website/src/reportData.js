@@ -77,7 +77,9 @@ export function formatCount(value) {
 // and /status links followed by one row per /status value. Adding a row here is
 // all it takes to show a new one. `value` receives one entry of report.targets;
 // null renders as an em dash, and a row that is null in every environment is
-// hidden. `href` may return a generator-validated URL to link the value to; the
+// hidden. `title` may return a tooltip for the cell, for a value shortened to
+// keep the table narrow. `href` may return a generator-validated URL to link
+// the value to; the
 // section's `docsUrl` and `statusUrl` are built by the generator from
 // targets.ini, so they are safe to link.
 //
@@ -88,6 +90,7 @@ export function formatCount(value) {
 //
 // NodeNorm and NameRes each get their own Babel version and Biolink model rows
 // because they are loaded separately and can be on different releases.
+const RELEASES_SHOWN = 3;
 const dateOnly = (iso) => (typeof iso === 'string' ? iso.slice(0, 10) : null);
 const millis = (ms) => (ms == null ? null : `${formatCount(ms)} ms`);
 
@@ -128,9 +131,19 @@ export const STATUS_SECTIONS = [
       { label: 'Backend', value: (t) => t.nodenorm_backend },
       {
         // NodeNorm ES from 1.2.0 can serve several Babel releases, picked per
-        // request; the Babel version row above is its default.
+        // request; the Babel version row above is its default. The generator
+        // keeps up to 50, oldest first, and the cells don't wrap, so a long
+        // list would push every other environment off-screen: the cell shows
+        // the newest few and the tooltip lists them all.
         label: 'Babel releases served',
-        value: (t) => t.nodenorm_status.babel_available_versions?.join(', ') || null,
+        value: (t) => {
+          const releases = t.nodenorm_status.babel_available_versions;
+          if (!releases?.length) return null;
+          const newest = releases.slice(-RELEASES_SHOWN).reverse().join(', ');
+          const older = releases.length - RELEASES_SHOWN;
+          return older > 0 ? `${newest} +${older} older` : newest;
+        },
+        title: (t) => t.nodenorm_status.babel_available_versions?.join(', ') || null,
       },
       {
         label: 'Records',

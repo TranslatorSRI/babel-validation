@@ -106,7 +106,21 @@ describe('StatusMatrix', () => {
       dev: target('2026jul22'),
     });
     const cells = row(wrapper, 'nodenorm', 'Babel releases served').findAll('td');
-    expect(cells.map((td) => td.text())).toEqual(['2025sep1, 2026jul22', '—']);
+    expect(cells.map((td) => td.text())).toEqual(['2026jul22, 2025sep1', '—']);
+    expect(cells[0].attributes('title')).toBe('2025sep1, 2026jul22');
+    expect(cells[1].attributes('title')).toBeUndefined();
+  });
+
+  it('shortens a long list of Babel releases, keeping all of them in the tooltip', () => {
+    // The cells don't wrap, so twenty names in one would push every other
+    // environment off-screen.
+    const releases = Array.from({ length: 20 }, (_, i) => `2025jan${i + 1}`);
+    const wrapper = mountWith({
+      ci: target('2026jul22', { nodenorm: { babel_available_versions: releases } }),
+    });
+    const [cell] = row(wrapper, 'nodenorm', 'Babel releases served').findAll('td');
+    expect(cell.text()).toBe('2025jan20, 2025jan19, 2025jan18 +17 older');
+    expect(cell.attributes('title')).toBe(releases.join(', '));
   });
 
   it('flags an Elasticsearch cluster with no nodes rather than hiding it', () => {
