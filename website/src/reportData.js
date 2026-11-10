@@ -79,9 +79,9 @@ export function formatCount(value) {
 // null renders as an em dash, and a row that is null in every environment is
 // hidden. `title` may return a tooltip for the cell, for a value shortened to
 // keep the table narrow. `href` may return a generator-validated URL to link
-// the value to; the
-// section's `docsUrl` and `statusUrl` are built by the generator from
-// targets.ini, so they are safe to link.
+// the value to. The section's `docsUrl` and each service's
+// `<service>_status_url` are built by the generator from targets.ini, so they
+// are safe to link.
 //
 // `compare` marks the rows where environments are *supposed* to agree, and so
 // where a minority value is a finding. Record counts, index sizes and latencies
@@ -100,6 +100,9 @@ function commonRows(service) {
     {
       label: 'Status',
       value: (t) => status(t).error ?? status(t).status,
+      // The full /status response, of which this table shows a whitelisted
+      // part. Linked on an error too: that's when the raw response helps most.
+      href: (t) => t[`${service}_status_url`],
       danger: (t) => Boolean(status(t).error),
       compare: true,
     },
@@ -122,7 +125,6 @@ export const STATUS_SECTIONS = [
     key: 'nodenorm',
     title: 'NodeNorm',
     docsUrl: (t) => t.nodenorm_docs_url,
-    statusUrl: (t) => t.nodenorm_status_url,
     rows: [
       ...commonRows('nodenorm'),
       // Not compared: NodeNorm Redis (2.x) and NodeNorm ES (1.x) are separate
@@ -180,7 +182,6 @@ export const STATUS_SECTIONS = [
     key: 'nameres',
     title: 'NameRes',
     docsUrl: (t) => t.nameres_docs_url,
-    statusUrl: (t) => t.nameres_status_url,
     rows: [
       ...commonRows('nameres'),
       // Not compared, for the same reason as NodeNorm's: NameRes Solr and NameRes

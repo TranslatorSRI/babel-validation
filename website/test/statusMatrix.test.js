@@ -90,14 +90,13 @@ describe('StatusMatrix', () => {
         .find(`tbody tr.table-group[data-section="${section}"]`)
         .findAll('a')
         .map((a) => [a.text(), a.attributes('href')]);
-    expect(links('nodenorm')).toEqual([
-      ['docs', 'https://nn.example/docs'],
-      ['status', 'https://nn.example/status'],
-    ]);
-    expect(links('nameres')).toEqual([
-      ['docs', 'https://nr-es.example/'],
-      ['status', 'https://nr-es.example/status'],
-    ]);
+    expect(links('nodenorm')).toEqual([['API docs', 'https://nn.example/docs']]);
+    expect(links('nameres')).toEqual([['API docs', 'https://nr-es.example/']]);
+    // /status is linked from the Status value itself.
+    const statusLink = (section) => row(wrapper, section, 'Status').find('a');
+    expect(statusLink('nodenorm').text()).toBe('running');
+    expect(statusLink('nodenorm').attributes('href')).toBe('https://nn.example/status');
+    expect(statusLink('nameres').attributes('href')).toBe('https://nr-es.example/status');
   });
 
   it('lists the Babel releases a NodeNorm serves', () => {

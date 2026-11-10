@@ -5,8 +5,8 @@
   can be on different Babel releases; a third section holds the test counts.
 
   Report values are untrusted: render them with {{ }} only, never v-html, and
-  link only to URLs the generator built or validated (a section's `docsUrl` and
-  `statusUrl`, from targets.ini, and a row's `href` in STATUS_SECTIONS).
+  link only to URLs the generator built or validated (a section's `docsUrl`,
+  from targets.ini, and a row's `href` in STATUS_SECTIONS).
 -->
 <script>
 import {
@@ -122,15 +122,10 @@ export default {
         <tr class="table-group" :data-section="section.key">
           <th class="text-nowrap">{{ section.title }}</th>
           <td v-for="target in targetNames" :key="target" class="text-center text-nowrap small">
-            <template v-if="section.docsUrl(report.targets[target])">
-              <a :href="section.docsUrl(report.targets[target])">docs</a>
-              ·
-            </template>
-            <a
-              v-if="section.statusUrl(report.targets[target])"
-              :href="section.statusUrl(report.targets[target])"
-              >status</a
-            >
+            <!-- Each service's /status is linked from its Status row below. -->
+            <a v-if="section.docsUrl(report.targets[target])" :href="section.docsUrl(report.targets[target])">
+              API docs
+            </a>
           </td>
         </tr>
         <tr v-for="statusRow in section.rows" :key="statusRow.label" :data-section="section.key">
