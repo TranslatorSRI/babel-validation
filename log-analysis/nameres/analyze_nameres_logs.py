@@ -31,9 +31,11 @@ def title(mo):
     ```
 
     That is the `release-v1.5.2-with-metrics` format. NameRes v1.7.0 writes
-    `only_taxa=None): took …`, and v1.7.1 on adds `, exact=False` before the `)`;
-    the parser reads all three. Lookups that fail log
-    `FAILED QUERY (timeout|error: <exception>): … failed after <ms>ms` instead, and
+    `only_taxa=None): took …`, and v1.7.1 on adds `, exact=False` before the `)`.
+    After v1.7.1 (NameResolution#231), the Solr figure reads `(with 21.30ms for the
+    Solr round trip)`, matching `/status`'s `solr_round_trip_ms`; it is the same
+    measurement. The parser reads all four. Lookups that fail log
+    `FAILED QUERY (timeout|error|cancelled: <exception>): … failed after <ms>ms` instead, and
     are kept, with no Solr wait, so that total latency still counts the callers who
     waited for them.
 
@@ -166,7 +168,7 @@ def parser(ast, dataclass, datetime, re):
         # NameRes's `exact` parameter (exact-match mode, from v1.7.1), not the
         # autocomplete=False lookups this notebook calls "exact". None on older lines.
         exact: bool | None = None
-        outcome: str = "ok"     # "ok", or a failed lookup's "timeout" / "error"
+        outcome: str = "ok"     # "ok", or a failed lookup's "timeout" / "error" / "cancelled"
         error_type: str = ""    # exception class of a failed lookup, e.g. "ReadTimeout"
         pod_name: str = ""
         image_tag: str = ""
@@ -175,10 +177,12 @@ def parser(ast, dataclass, datetime, re):
 
     # Matches the INFO, WARNING ("SLOW QUERY:") and WARNING ("FAILED QUERY") variants,
     # in each NameRes version's format: ") took" (release-v1.5.2-with-metrics),
-    # "): took" (v1.7.0), and "exact=...): took" (v1.7.1 on). A line NameRes changes
+    # "): took" (v1.7.0), and "exact=...): took" (v1.7.1 on), with the Solr figure
+    # worded "waiting for Solr" (v1.7.1 and earlier) or "for the Solr round trip"
+    # (after). "cancelled" failures are also from after v1.7.1. A line NameRes changes
     # again still raises in parse_record rather than being skipped.
     LOOKUP_LINE_RE = re.compile(
-        r"(?:FAILED QUERY \((?P<outcome>timeout|error): (?P<error_type>\w+)\): )?"
+        r"(?:FAILED QUERY \((?P<outcome>timeout|error|cancelled): (?P<error_type>\w+)\): )?"
         r'Lookup query to Solr for "(?P<query>.*)" '
         r"\(autocomplete=(?P<autocomplete>True|False), "
         r"highlighting=(?P<highlighting>True|False), "
@@ -188,7 +192,8 @@ def parser(ast, dataclass, datetime, re):
         r"exclude_prefixes=(?P<exclude_prefixes>.*?), "
         r"only_taxa=(?P<only_taxa>.*?)"
         r"(?:, exact=(?P<exact>True|False))?\):? "
-        r"(?:took (?P<took>[\d.]+)ms \(with (?P<solr>[\d.]+)ms waiting for Solr\)"
+        r"(?:took (?P<took>[\d.]+)ms "
+        r"\(with (?P<solr>[\d.]+)ms (?:waiting for Solr|for the Solr round trip)\)"
         r"|failed after (?P<failed_after>[\d.]+)ms)"
     )
 

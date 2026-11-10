@@ -136,6 +136,8 @@ def test_parse_record_rejects_a_lookup_line_it_cannot_parse(parser):
 # variants of the v1.7.1 format.
 _V170_LINE = LOOKUP_LINE.replace("only_taxa=None) took", "only_taxa=None): took")
 _V171_LINE = LOOKUP_LINE.replace("only_taxa=None) took", "only_taxa=None, exact=False): took")
+# After v1.7.1 (NameResolution#231) the Solr figure is worded as /status names it.
+_ROUND_TRIP_LINE = _V171_LINE.replace("waiting for Solr", "for the Solr round trip")
 _FAILED_PREFIX = LOOKUP_LINE.split(" took ")[0].replace(
     "INFO:api.server:Lookup", "WARNING:api.server:FAILED QUERY (timeout: ReadTimeout): Lookup"
 )
@@ -151,6 +153,7 @@ FAILED_TIMEOUT_LINE = _FAILED_PREFIX.replace("only_taxa=None)", "only_taxa=None,
         pytest.param(_V170_LINE, None, id="v1.7.0"),
         pytest.param(_V171_LINE, False, id="v1.7.1"),
         pytest.param(_V171_LINE.replace("exact=False", "exact=True"), True, id="v1.7.1-exact"),
+        pytest.param(_ROUND_TRIP_LINE, False, id="after-v1.7.1-round-trip"),
     ],
 )
 def test_parse_record_reads_each_nameres_versions_format(parser, line, exact):
@@ -174,7 +177,8 @@ def test_parse_record_detects_slow_query_warning_in_current_format(parser):
 
 @pytest.mark.parametrize(
     "outcome, error_type",
-    [("timeout", "ReadTimeout"), ("error", "ConnectError")],
+    # "cancelled" is from after v1.7.1 (NameResolution#231).
+    [("timeout", "ReadTimeout"), ("error", "ConnectError"), ("cancelled", "CancelledError")],
 )
 def test_parse_record_keeps_failed_lookups(parser, outcome, error_type):
     """A failed lookup is kept, timed, and has no Solr wait.
