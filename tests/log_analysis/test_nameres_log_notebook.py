@@ -131,6 +131,83 @@ def test_parse_record_rejects_a_lookup_line_it_cannot_parse(parser):
         parser["parse_record"](_record(truncated))
 
 
+# The same lookup as LOOKUP_LINE (the release-v1.5.2-with-metrics format), as later
+# NameRes versions log it. NameResolution#231 adds the SLOW QUERY and FAILED QUERY
+# variants of the v1.7.1 format.
+_V170_LINE = LOOKUP_LINE.replace("only_taxa=None) took", "only_taxa=None): took")
+_V171_LINE = LOOKUP_LINE.replace("only_taxa=None) took", "only_taxa=None, exact=False): took")
+_FAILED_PREFIX = LOOKUP_LINE.split(" took ")[0].replace(
+    "INFO:api.server:Lookup", "WARNING:api.server:FAILED QUERY (timeout: ReadTimeout): Lookup"
+)
+FAILED_TIMEOUT_LINE = _FAILED_PREFIX.replace("only_taxa=None)", "only_taxa=None, exact=False)") + (
+    ": failed after 30001.23ms"
+)
+
+
+@pytest.mark.parametrize(
+    "line, exact",
+    [
+        pytest.param(LOOKUP_LINE, None, id="v1.5.2-with-metrics"),
+        pytest.param(_V170_LINE, None, id="v1.7.0"),
+        pytest.param(_V171_LINE, False, id="v1.7.1"),
+        pytest.param(_V171_LINE.replace("exact=False", "exact=True"), True, id="v1.7.1-exact"),
+    ],
+)
+def test_parse_record_reads_each_nameres_versions_format(parser, line, exact):
+    entry = parser["parse_record"](_record(line))
+    assert entry.query == "autism"
+    # The last filter field must not swallow the `exact=` that follows it.
+    assert entry.only_taxa == []
+    assert entry.exact is exact
+    assert entry.took_ms == pytest.approx(30.20)
+    assert entry.solr_wait_ms == pytest.approx(27.75)
+    assert entry.outcome == "ok"
+    assert entry.error_type == ""
+
+
+def test_parse_record_detects_slow_query_warning_in_current_format(parser):
+    line = _V171_LINE.replace("INFO:api.server:", "WARNING:api.server:SLOW QUERY: ")
+    entry = parser["parse_record"](_record(line))
+    assert entry.slow_query is True
+    assert entry.outcome == "ok"
+
+
+@pytest.mark.parametrize(
+    "outcome, error_type",
+    [("timeout", "ReadTimeout"), ("error", "ConnectError")],
+)
+def test_parse_record_keeps_failed_lookups(parser, outcome, error_type):
+    """A failed lookup is kept, timed, and has no Solr wait.
+
+    Dropping it would leave the slowest requests of all -- the timeouts -- out of
+    total latency, so a window where Solr was timing out would look its healthiest.
+    """
+    line = FAILED_TIMEOUT_LINE.replace("(timeout: ReadTimeout)", f"({outcome}: {error_type})")
+    entry = parser["parse_record"](_record(line))
+    assert entry.query == "autism"
+    assert entry.exact is False
+    assert entry.outcome == outcome
+    assert entry.error_type == error_type
+    assert entry.took_ms == pytest.approx(30001.23)
+    assert entry.solr_wait_ms != entry.solr_wait_ms  # NaN, so pandas skips it
+    assert entry.slow_query is False
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param(FAILED_TIMEOUT_LINE.replace("failed after", "took"), id="failed-prefix-without-failed-after"),
+        pytest.param(
+            _V171_LINE.replace("took 30.20ms (with 27.75ms waiting for Solr)", "failed after 30.20ms"),
+            id="failed-after-without-failed-prefix",
+        ),
+    ],
+)
+def test_parse_record_rejects_a_half_failed_line(parser, line):
+    with pytest.raises(ValueError, match="Unparseable NameRes lookup line"):
+        parser["parse_record"](_record(line))
+
+
 @pytest.mark.parametrize(
     "raw, expected",
     [

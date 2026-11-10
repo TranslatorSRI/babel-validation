@@ -30,6 +30,13 @@ def title(mo):
       exclude_prefixes=, only_taxa=None) took 22.01ms (with 21.30ms waiting for Solr)
     ```
 
+    That is the `release-v1.5.2-with-metrics` format. NameRes v1.7.0 writes
+    `only_taxa=None): took …`, and v1.7.1 on adds `, exact=False` before the `)`;
+    the parser reads all three. Lookups that fail log
+    `FAILED QUERY (timeout|error: <exception>): … failed after <ms>ms` instead, and
+    are kept, with no Solr wait, so that total latency still counts the callers who
+    waited for them.
+
     Exports are downloaded from CloudWatch Logs Insights with the autocomplete
     filter applied at query time, so the whole result budget is spent on the mode we
     care about rather than on the ~97% of traffic we do not:
@@ -153,16 +160,25 @@ def parser(ast, dataclass, datetime, re):
         only_prefixes: list[str]
         exclude_prefixes: list[str]
         only_taxa: list[str]
-        took_ms: float          # total request time
-        solr_wait_ms: float     # time spent waiting for Solr
+        took_ms: float          # total request time (for a failed lookup: time until it failed)
+        solr_wait_ms: float     # time spent waiting for Solr; NaN for a failed lookup
         slow_query: bool        # emitted as a WARNING "SLOW QUERY" line
+        # NameRes's `exact` parameter (exact-match mode, from v1.7.1), not the
+        # autocomplete=False lookups this notebook calls "exact". None on older lines.
+        exact: bool | None = None
+        outcome: str = "ok"     # "ok", or a failed lookup's "timeout" / "error"
+        error_type: str = ""    # exception class of a failed lookup, e.g. "ReadTimeout"
         pod_name: str = ""
         image_tag: str = ""
         source_file: str = ""   # export the line came from, for provenance
 
 
-    # Matches both the INFO and the WARNING ("SLOW QUERY:") log variants.
+    # Matches the INFO, WARNING ("SLOW QUERY:") and WARNING ("FAILED QUERY") variants,
+    # in each NameRes version's format: ") took" (release-v1.5.2-with-metrics),
+    # "): took" (v1.7.0), and "exact=...): took" (v1.7.1 on). A line NameRes changes
+    # again still raises in parse_record rather than being skipped.
     LOOKUP_LINE_RE = re.compile(
+        r"(?:FAILED QUERY \((?P<outcome>timeout|error): (?P<error_type>\w+)\): )?"
         r'Lookup query to Solr for "(?P<query>.*)" '
         r"\(autocomplete=(?P<autocomplete>True|False), "
         r"highlighting=(?P<highlighting>True|False), "
@@ -170,8 +186,10 @@ def parser(ast, dataclass, datetime, re):
         r"biolink_types=(?P<biolink_types>\[.*?\]), "
         r"only_prefixes=(?P<only_prefixes>.*?), "
         r"exclude_prefixes=(?P<exclude_prefixes>.*?), "
-        r"only_taxa=(?P<only_taxa>.*?)\) "
-        r"took (?P<took>[\d.]+)ms \(with (?P<solr>[\d.]+)ms waiting for Solr\)"
+        r"only_taxa=(?P<only_taxa>.*?)"
+        r"(?:, exact=(?P<exact>True|False))?\):? "
+        r"(?:took (?P<took>[\d.]+)ms \(with (?P<solr>[\d.]+)ms waiting for Solr\)"
+        r"|failed after (?P<failed_after>[\d.]+)ms)"
     )
 
 
@@ -195,6 +213,10 @@ def parser(ast, dataclass, datetime, re):
         if not m:
             raise ValueError(f"Unparseable NameRes lookup line: {line!r}")
         g = m.groupdict()
+        # A FAILED QUERY prefix and a "failed after" ending come together or not at all.
+        if (g["outcome"] is None) != (g["failed_after"] is None):
+            raise ValueError(f"Unparseable NameRes lookup line: {line!r}")
+        failed = g["outcome"] is not None
 
         k8s = message.get("kubernetes", {}) if isinstance(message, dict) else {}
         image = (k8s.get("container_image", "") or "")
@@ -211,9 +233,14 @@ def parser(ast, dataclass, datetime, re):
             only_prefixes=_parse_filter_list(g["only_prefixes"]),
             exclude_prefixes=_parse_filter_list(g["exclude_prefixes"]),
             only_taxa=_parse_filter_list(g["only_taxa"]),
-            took_ms=float(g["took"]),
-            solr_wait_ms=float(g["solr"]),
+            took_ms=float(g["failed_after"] if failed else g["took"]),
+            # NaN rather than 0: pandas skips NaN, so Solr-wait statistics leave out
+            # failed lookups while total-latency statistics still count them.
+            solr_wait_ms=float("nan") if failed else float(g["solr"]),
             slow_query="SLOW QUERY" in line,
+            exact=None if g["exact"] is None else g["exact"] == "True",
+            outcome=g["outcome"] or "ok",
+            error_type=g["error_type"] or "",
             pod_name=k8s.get("pod_name", ""),
             image_tag=image.split(":")[-1] if image else "",
             source_file=source_file,
@@ -400,9 +427,10 @@ def overall_stats(df, mo):
     - **Autocomplete lookups:** {_n:,} &nbsp; (~{_reqs_per_day:,.0f} / day)
     - **Unique query strings:** {df['query'].nunique():,}
     - **Slow queries (WARNING):** {int(df['slow_query'].sum()):,} ({df['slow_query'].mean() * 100:.2f}%)
+    - **Failed lookups:** {int((df['outcome'] != 'ok').sum()):,} ({(df['outcome'] != 'ok').mean() * 100:.2f}%), of which {int((df['outcome'] == 'timeout').sum()):,} timed out. Counted in total latency below, but not in Solr wait or app overhead.
     - **Total latency:** median {df['took_ms'].median():.2f} ms, p95 {df['took_ms'].quantile(0.95):,.2f} ms, max {df['took_ms'].max():,.2f} ms
     - **Solr wait:** median {df['solr_wait_ms'].median():.2f} ms, p95 {df['solr_wait_ms'].quantile(0.95):,.2f} ms, max {df['solr_wait_ms'].max():,.2f} ms
-    - **App overhead:** median {df['app_overhead_ms'].median():.2f} ms, p95 {df['app_overhead_ms'].quantile(0.95):.2f} ms &nbsp; ({df['app_overhead_ms'].sum() / df['took_ms'].sum() * 100:.1f}% of total time)
+    - **App overhead:** median {df['app_overhead_ms'].median():.2f} ms, p95 {df['app_overhead_ms'].quantile(0.95):.2f} ms &nbsp; ({df['app_overhead_ms'].sum() / df.loc[df['solr_wait_ms'].notna(), 'took_ms'].sum() * 100:.1f}% of total time)
     - **Query length (chars):** median {int(df['query_length'].median())}, mean {df['query_length'].mean():.1f}, max {df['query_length'].max()}
     - **Result limits requested:** {', '.join(f'{_k}×{_v:,}' for _k, _v in df['limit'].value_counts().items())}
     - **Filters used:** biolink_types {df['has_biolink_filter'].mean() * 100:.0f}%, only_prefixes {df['has_only_prefixes'].mean() * 100:.0f}%, exclude_prefixes {df['has_exclude_prefixes'].mean() * 100:.0f}%, only_taxa {df['has_taxa_filter'].mean() * 100:.0f}%
