@@ -361,7 +361,9 @@ def fetch_status(status_url, service):
         body = response.json()
         elapsed_ms = round((time.monotonic() - start) * 1000)
         status = trim_status(body, service)
-        if "error" not in status:
+        # A body that is not a JSON object is reported as InvalidStatus, with
+        # no timing: how fast a service answered with garbage says nothing.
+        if isinstance(body, dict):
             status["response_ms"] = elapsed_ms
         return status
     except Exception as e:
@@ -561,7 +563,12 @@ def build_history_line(report):
             "nameres_babel_version": nameres_status.get("babel_version"),
             "biolink_version": nodenorm_status.get("biolink_version"),
             "nn_eq_records": eq_db.get("count"),
-            # Named for Solr, but read from either backend's index.
+            # Named for Solr, but read from either backend's index. Runs before
+            # 2026-11 read only the pre-v1.7 "solr" key, so they recorded null
+            # for NameRes v1.7+ environments: a null followed by a number in
+            # these two fields is data that was missing, not a change. Anything
+            # that compares them across runs must skip a null, as History.vue
+            # skips fields an older run did not record.
             "solr_docs": index.get("numDocs"),
             "solr_size": index.get("size"),
             "p95_ms": nameres_status.get("recent_queries", {}).get("p95_ms"),
