@@ -83,7 +83,9 @@ export default {
       aria-label="Search test, query or category"
     />
 
-    <div class="btn-group btn-group-sm" role="group" aria-label="Filter by outcome">
+    <!-- flex-wrap: the six outcomes are ~365px together, wider than a 360px
+         phone, and a btn-group otherwise never wraps. -->
+    <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Filter by outcome">
       <button
         v-for="outcome in outcomes"
         :key="outcome"
@@ -97,9 +99,11 @@ export default {
       </button>
     </div>
 
+    <!-- mw-100 on each select: w-auto sizes one to its longest option, and a
+         source can be a long URL, which widened the page past a phone. -->
     <select
       v-model="filters.env"
-      class="form-select form-select-sm w-auto"
+      class="form-select form-select-sm w-auto mw-100"
       aria-label="Restrict the outcome filter to one environment"
     >
       <option value="">any environment</option>
@@ -108,7 +112,7 @@ export default {
 
     <select
       v-model="filters.cat"
-      class="form-select form-select-sm w-auto"
+      class="form-select form-select-sm w-auto mw-100"
       aria-label="Filter by category"
     >
       <option value="">all categories</option>
@@ -120,7 +124,7 @@ export default {
 
     <select
       v-model="filters.src"
-      class="form-select form-select-sm w-auto"
+      class="form-select form-select-sm w-auto mw-100"
       aria-label="Filter by source"
     >
       <option value="">all sources</option>

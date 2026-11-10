@@ -69,12 +69,29 @@ html {
 
    Both sticky layers break silently if any ancestor gets `overflow: auto` -
    which is exactly what .table-responsive sets. Do not wrap these tables in
-   one; drop columns at narrow widths instead. */
+   one; drop columns at narrow widths instead.
+
+   The one exception is a phone. Dropping columns can't get there: six
+   environment columns of outcome badges alone are about 410px, wider than the
+   screen, and the Category column is already gone below lg. Below md, then,
+   .sticky-head-scroll scrolls the table sideways inside its card and the
+   header stops sticking, rather than the whole page scrolling sideways. The
+   filter bar is outside that card, so it still sticks. */
 .sticky-head thead th {
   position: sticky;
   top: var(--filterbar-h);
   z-index: 2;
   background: var(--bs-body-bg);
+}
+
+@media (max-width: 767.98px) {
+  .sticky-head-scroll {
+    overflow-x: auto;
+  }
+
+  .sticky-head-scroll .sticky-head thead th {
+    position: static;
+  }
 }
 
 /* The controls above the results table stay put while it scrolls, and the

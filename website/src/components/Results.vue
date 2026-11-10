@@ -338,13 +338,19 @@ export default {
       />
     </div>
 
-    <div class="card">
+    <!-- sticky-head-scroll: see theme.css. On a phone the table scrolls
+         sideways inside this card, at the cost of its sticky header. -->
+    <div class="card sticky-head-scroll">
       <table class="table table-dense table-hover align-middle sticky-head mb-0">
         <thead>
           <tr>
             <th>Test</th>
             <th class="d-none d-lg-table-cell">Category</th>
-            <th v-for="target in targetNames" :key="target" class="text-center">{{ target }}</th>
+            <!-- text-nowrap: on a phone "ci-nameres-es" broke at each hyphen and
+                 tripled the header's height; the table scrolls sideways there. -->
+            <th v-for="target in targetNames" :key="target" class="text-center text-nowrap">
+              {{ target }}
+            </th>
           </tr>
         </thead>
         <tbody>
