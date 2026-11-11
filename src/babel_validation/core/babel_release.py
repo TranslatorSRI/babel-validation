@@ -16,9 +16,9 @@ import re
 
 # Each part is a fixed width or a disjoint character class, so there is nothing here to
 # backtrack over: the input is often a service's response.
-BABEL_MONTHS = ('jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec')
+BABEL_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 BABEL_VERSION_RE = re.compile(
-    r'(?P<year>\d{4})(?P<month>' + '|'.join(BABEL_MONTHS) + r')(?P<day>\d{1,2})(?:-[A-Za-z0-9]+)?'
+    r"(?P<year>\d{4})(?P<month>" + "|".join(BABEL_MONTHS) + r")(?P<day>\d{1,2})(?:-[A-Za-z0-9]+)?"
 )
 BABEL_VERSION_MAX_LENGTH = 64
 
@@ -50,8 +50,6 @@ def babel_release_date(babel_version):
     if not match:
         return None
     try:
-        return datetime.date(
-            int(match['year']), BABEL_MONTHS.index(match['month']) + 1, int(match['day'])
-        )
+        return datetime.date(int(match["year"]), BABEL_MONTHS.index(match["month"]) + 1, int(match["day"]))
     except ValueError:
         return None

@@ -30,40 +30,44 @@ from babel_validation.services.service_checks import (
 
 pytestmark = pytest.mark.unit
 
-INFORES = 'infores:sri-node-normalizer'
-URL = 'https://example.org/openapi.json'
+INFORES = "infores:sri-node-normalizer"
+URL = "https://example.org/openapi.json"
 
 
 def valid_document():
-    return {'info': {'title': 'NodeNorm', 'x-translator': {'infores': INFORES}}}
+    return {"info": {"title": "NodeNorm", "x-translator": {"infores": INFORES}}}
 
 
 def test_a_valid_document_passes():
     assert_x_translator(URL, valid_document(), INFORES)
 
 
-@pytest.mark.parametrize('document, expected_message', [
-    # A document that isn't an object at all: FastAPI would never return this, but a
-    # proxy or an error page rendered as JSON might.
-    ([], 'did not return a JSON object'),
-    ('not a document', 'did not return a JSON object'),
-    # An info that is absent, or present as something we can't look inside.
-    ({'openapi': '3.1.0'}, 'has no info block'),
-    ({'info': None}, 'has an info that is not a JSON object'),
-    ({'info': 'NodeNorm'}, 'has an info that is not a JSON object'),
-    # The case this all started from: FastAPI's default document, which has an info
-    # but no x-translator in it.
-    ({'info': {'title': 'FastAPI', 'version': '0.1.0'}}, 'has no info.x-translator block'),
-    # An x-translator that is present but malformed reports as malformed, not as
-    # absent — "missing it altogether" points at the wrong diagnosis here.
-    ({'info': {'x-translator': []}}, 'has an info.x-translator that is not a JSON object'),
-    ({'info': {'x-translator': 'infores:sri-node-normalizer'}},
-     'has an info.x-translator that is not a JSON object'),
-    # The right shape, the wrong service.
-    ({'info': {'x-translator': {'infores': 'infores:sri-name-resolver'}}},
-     'declares info.x-translator.infores'),
-    ({'info': {'x-translator': {}}}, 'declares info.x-translator.infores'),
-])
+@pytest.mark.parametrize(
+    "document, expected_message",
+    [
+        # A document that isn't an object at all: FastAPI would never return this, but a
+        # proxy or an error page rendered as JSON might.
+        ([], "did not return a JSON object"),
+        ("not a document", "did not return a JSON object"),
+        # An info that is absent, or present as something we can't look inside.
+        ({"openapi": "3.1.0"}, "has no info block"),
+        ({"info": None}, "has an info that is not a JSON object"),
+        ({"info": "NodeNorm"}, "has an info that is not a JSON object"),
+        # The case this all started from: FastAPI's default document, which has an info
+        # but no x-translator in it.
+        ({"info": {"title": "FastAPI", "version": "0.1.0"}}, "has no info.x-translator block"),
+        # An x-translator that is present but malformed reports as malformed, not as
+        # absent — "missing it altogether" points at the wrong diagnosis here.
+        ({"info": {"x-translator": []}}, "has an info.x-translator that is not a JSON object"),
+        (
+            {"info": {"x-translator": "infores:sri-node-normalizer"}},
+            "has an info.x-translator that is not a JSON object",
+        ),
+        # The right shape, the wrong service.
+        ({"info": {"x-translator": {"infores": "infores:sri-name-resolver"}}}, "declares info.x-translator.infores"),
+        ({"info": {"x-translator": {}}}, "declares info.x-translator.infores"),
+    ],
+)
 def test_a_malformed_document_fails_with_a_readable_message(document, expected_message):
     with pytest.raises(AssertionError) as excinfo:
         assert_x_translator(URL, document, INFORES)
@@ -73,75 +77,79 @@ def test_a_malformed_document_fails_with_a_readable_message(document, expected_m
 
 def test_the_failure_message_is_bounded_however_large_the_document():
     """The message is kept in pytest's report, so a service cannot be allowed to choose its size."""
-    document = {'info': {str(i): 'x' * 10_000 for i in range(1000)}}
+    document = {"info": {str(i): "x" * 10_000 for i in range(1000)}}
 
     with pytest.raises(AssertionError) as excinfo:
         assert_x_translator(URL, document, INFORES)
 
     message = str(excinfo.value)
-    assert 'has no info.x-translator block' in message
+    assert "has no info.x-translator block" in message
     assert len(message) < 1000
-    assert '(+980 more)' in message
+    assert "(+980 more)" in message
 
 
 def test_the_failure_message_escapes_control_characters():
     """repr() is the whole defence for text that reaches a terminal or a log line."""
-    document = {'info': {'x-translator': {'infores': '\x1b[2Jinfores:not-this-one‮'}}}
+    document = {"info": {"x-translator": {"infores": "\x1b[2Jinfores:not-this-one‮"}}}
 
     with pytest.raises(AssertionError) as excinfo:
         assert_x_translator(URL, document, INFORES)
 
     message = str(excinfo.value)
-    assert '\x1b' not in message
-    assert '‮' not in message
-    assert '\\x1b[2Jinfores:not-this-one\\u202e' in message
+    assert "\x1b" not in message
+    assert "‮" not in message
+    assert "\\x1b[2Jinfores:not-this-one\\u202e" in message
 
 
 def test_truncated_repr_keeps_short_values_intact():
-    assert truncated_repr('short') == "'short'"
+    assert truncated_repr("short") == "'short'"
 
 
 def test_truncated_repr_caps_long_values():
-    text = truncated_repr('x' * 10_000)
+    text = truncated_repr("x" * 10_000)
 
     assert len(text) < MAX_REPR_LENGTH + 100
-    assert 'truncated to' in text
+    assert "truncated to" in text
 
 
 def test_truncated_keys_repr_caps_the_number_of_keys():
     text = truncated_keys_repr({str(i): i for i in range(MAX_KEYS_LISTED + 5)})
 
-    assert '(+5 more)' in text
+    assert "(+5 more)" in text
 
 
 class TestOpenAPIURL:
     """The path to the document is per-target: the -es deployments don't serve it at the root."""
 
     def test_it_defaults_to_the_fastapi_location(self):
-        target_info = {'NodeNormURL': 'https://nodenorm.example.org/'}
+        target_info = {"NodeNormURL": "https://nodenorm.example.org/"}
 
-        assert openapi_url(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath') == \
-            'https://nodenorm.example.org/openapi.json'
+        assert (
+            openapi_url(target_info, "NodeNormURL", "NodeNormOpenAPIPath")
+            == "https://nodenorm.example.org/openapi.json"
+        )
 
     def test_it_uses_the_configured_path(self):
         target_info = {
-            'NodeNormURL': 'https://nodenorm-es.example.org/',
-            'NodeNormOpenAPIPath': 'webapp/openapi.json',
+            "NodeNormURL": "https://nodenorm-es.example.org/",
+            "NodeNormOpenAPIPath": "webapp/openapi.json",
         }
 
-        assert openapi_url(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath') == \
-            'https://nodenorm-es.example.org/webapp/openapi.json'
+        assert (
+            openapi_url(target_info, "NodeNormURL", "NodeNormOpenAPIPath")
+            == "https://nodenorm-es.example.org/webapp/openapi.json"
+        )
 
 
 class TestBackend:
     """Which backend a target talks to is configuration, and /status is how we hold it to that."""
 
     def test_the_configured_backend_passes(self):
-        assert_backend(URL, {'status': 'running', 'backend': 'elasticsearch'}, 'elasticsearch')
+        assert_backend(URL, {"status": "running", "backend": "elasticsearch"}, "elasticsearch")
 
     def test_the_other_backend_fails(self):
         with pytest.raises(AssertionError) as excinfo:
-            assert_backend(URL, {'status': 'running', 'backend': 'redis'}, 'elasticsearch')
+            assert_backend(URL, {"status": "running", "backend": "redis"}, "elasticsearch")
 
         message = str(excinfo.value)
         assert "reports backend 'redis'" in message
@@ -149,109 +157,116 @@ class TestBackend:
 
     def test_a_status_that_is_not_an_object_fails_readably(self):
         with pytest.raises(AssertionError) as excinfo:
-            assert_backend(URL, ['running'], 'redis')
+            assert_backend(URL, ["running"], "redis")
 
-        assert 'did not return a JSON object' in str(excinfo.value)
+        assert "did not return a JSON object" in str(excinfo.value)
 
     def test_a_backend_that_is_not_a_string_is_reported_safely(self):
         with pytest.raises(AssertionError) as excinfo:
-            assert_backend(URL, {'backend': {'name': '\x1b[2Jredis'}}, 'redis')
+            assert_backend(URL, {"backend": {"name": "\x1b[2Jredis"}}, "redis")
 
         message = str(excinfo.value)
-        assert '\x1b' not in message
-        assert '\\x1b[2Jredis' in message
+        assert "\x1b" not in message
+        assert "\\x1b[2Jredis" in message
 
 
-STATUS_URL = 'https://example.org/status'
+STATUS_URL = "https://example.org/status"
 
 
-@pytest.mark.parametrize('babel_version', ['2026sep24', '2025sep1', '2026sep24-dev', '2026feb28-rc1'])
+@pytest.mark.parametrize("babel_version", ["2026sep24", "2025sep1", "2026sep24-dev", "2026feb28-rc1"])
 def test_a_babel_release_name_is_accepted(babel_version):
-    assert parse_babel_version(STATUS_URL, {'babel_version': babel_version}) == babel_version
+    assert parse_babel_version(STATUS_URL, {"babel_version": babel_version}) == babel_version
 
 
-@pytest.mark.parametrize('status_json, expected_message', [
-    # What NodeNorm ES has actually reported: biothings/NodeNormalizationAPI#24, and later
-    # nodenorm-es.ci. These are the regressions this check exists to catch.
-    ({'babel_version': '1.9'}, 'not a Babel release name'),
-    ({'babel_version': 'VERSION.txt'}, 'not a Babel release name'),
-    # Near misses on the name itself.
-    ({'babel_version': '2026SEP24'}, 'not a Babel release name'),
-    ({'babel_version': '2026sept24'}, 'not a Babel release name'),
-    ({'babel_version': '2026sep24-'}, 'not a Babel release name'),
-    ({'babel_version': '2026sep24-dev-2'}, 'not a Babel release name'),
-    ({'babel_version': ' 2026sep24'}, 'not a Babel release name'),
-    ({'babel_version': '2026sep24\n'}, 'not a Babel release name'),
-    ({'babel_version': '2026feb30'}, 'not a real date'),
-    # Not a string at all, or too long to be one.
-    ({'babel_version': None}, 'not a Babel release name'),
-    ({'babel_version': 20260924}, 'not a Babel release name'),
-    ({'babel_version': '2026sep24-' + 'x' * 100}, 'not a Babel release name'),
-    ({}, 'does not report a babel_version'),
-])
+@pytest.mark.parametrize(
+    "status_json, expected_message",
+    [
+        # What NodeNorm ES has actually reported: biothings/NodeNormalizationAPI#24, and later
+        # nodenorm-es.ci. These are the regressions this check exists to catch.
+        ({"babel_version": "1.9"}, "not a Babel release name"),
+        ({"babel_version": "VERSION.txt"}, "not a Babel release name"),
+        # Near misses on the name itself.
+        ({"babel_version": "2026SEP24"}, "not a Babel release name"),
+        ({"babel_version": "2026sept24"}, "not a Babel release name"),
+        ({"babel_version": "2026sep24-"}, "not a Babel release name"),
+        ({"babel_version": "2026sep24-dev-2"}, "not a Babel release name"),
+        ({"babel_version": " 2026sep24"}, "not a Babel release name"),
+        ({"babel_version": "2026sep24\n"}, "not a Babel release name"),
+        ({"babel_version": "2026feb30"}, "not a real date"),
+        # Not a string at all, or too long to be one.
+        ({"babel_version": None}, "not a Babel release name"),
+        ({"babel_version": 20260924}, "not a Babel release name"),
+        ({"babel_version": "2026sep24-" + "x" * 100}, "not a Babel release name"),
+        ({}, "does not report a babel_version"),
+    ],
+)
 def test_a_malformed_babel_version_names_the_problem(status_json, expected_message):
     with pytest.raises(AssertionError, match=expected_message):
         parse_babel_version(STATUS_URL, status_json)
 
 
-@pytest.mark.parametrize('babel_version, expected', [
-    ('2026jul22', datetime.date(2026, 7, 22)),
-    ('2025sep1', datetime.date(2025, 9, 1)),
-    ('2026jul22-dev', datetime.date(2026, 7, 22)),
-    ('2026feb30', None),
-    ('VERSION.txt', None),
-    (None, None),
-])
+@pytest.mark.parametrize(
+    "babel_version, expected",
+    [
+        ("2026jul22", datetime.date(2026, 7, 22)),
+        ("2025sep1", datetime.date(2025, 9, 1)),
+        ("2026jul22-dev", datetime.date(2026, 7, 22)),
+        ("2026feb30", None),
+        ("VERSION.txt", None),
+        (None, None),
+    ],
+)
 def test_babel_release_date_orders_releases(babel_version, expected):
     assert babel_release_date(babel_version) == expected
 
 
 def test_babel_release_dates_compare_across_releases():
-    assert babel_release_date('2025sep1') < babel_release_date('2026jul22')
-    assert babel_release_date('2026jul22-dev') == babel_release_date('2026jul22')
+    assert babel_release_date("2025sep1") < babel_release_date("2026jul22")
+    assert babel_release_date("2026jul22-dev") == babel_release_date("2026jul22")
 
 
 class TestRequireBabelRelease:
     """require_babel_release() skips an older release, and fails one it cannot read."""
 
-    TARGET = {'NodeNormURL': 'https://example.org/'}
+    TARGET = {"NodeNormURL": "https://example.org/"}
 
     def _status(self, monkeypatch, status_json):
-        monkeypatch.setattr(
-            service_checks, 'get_status', lambda target_info: (STATUS_URL, status_json)
-        )
+        monkeypatch.setattr(service_checks, "get_status", lambda target_info: (STATUS_URL, status_json))
 
-    @pytest.mark.parametrize('babel_version', ['2026jul22', '2026jul22-dev', '2026sep24'])
+    @pytest.mark.parametrize("babel_version", ["2026jul22", "2026jul22-dev", "2026sep24"])
     def test_the_minimum_release_or_a_later_one_runs(self, monkeypatch, babel_version):
-        self._status(monkeypatch, {'babel_version': babel_version})
-        require_babel_release(self.TARGET, '2026jul22')
+        self._status(monkeypatch, {"babel_version": babel_version})
+        require_babel_release(self.TARGET, "2026jul22")
 
     def test_an_older_release_skips(self, monkeypatch):
-        self._status(monkeypatch, {'babel_version': '2025sep1'})
-        with pytest.raises(pytest.skip.Exception, match='serves Babel 2025sep1'):
-            require_babel_release(self.TARGET, '2026jul22')
+        self._status(monkeypatch, {"babel_version": "2025sep1"})
+        with pytest.raises(pytest.skip.Exception, match="serves Babel 2025sep1"):
+            require_babel_release(self.TARGET, "2026jul22")
 
-    @pytest.mark.parametrize('status_json, expected_message', [
-        # A skip here would make a run green that tested nothing: nodenorm-es.ci has
-        # reported 'VERSION.txt', and it is the one ES target these tests exist for.
-        ({'status': 'running'}, 'does not report a babel_version'),
-        ({'babel_version': 'VERSION.txt'}, 'not a Babel release name'),
-    ])
+    @pytest.mark.parametrize(
+        "status_json, expected_message",
+        [
+            # A skip here would make a run green that tested nothing: nodenorm-es.ci has
+            # reported 'VERSION.txt', and it is the one ES target these tests exist for.
+            ({"status": "running"}, "does not report a babel_version"),
+            ({"babel_version": "VERSION.txt"}, "not a Babel release name"),
+        ],
+    )
     def test_an_unreadable_release_fails(self, monkeypatch, status_json, expected_message):
         self._status(monkeypatch, status_json)
         with pytest.raises(AssertionError, match=expected_message):
-            require_babel_release(self.TARGET, '2026jul22')
+            require_babel_release(self.TARGET, "2026jul22")
 
     def test_the_failure_escapes_what_the_service_said(self, monkeypatch):
-        self._status(monkeypatch, {'babel_version': '\x1b[2Jnope'})
+        self._status(monkeypatch, {"babel_version": "\x1b[2Jnope"})
         with pytest.raises(AssertionError) as excinfo:
-            require_babel_release(self.TARGET, '2026jul22')
-        assert '\x1b' not in str(excinfo.value)
+            require_babel_release(self.TARGET, "2026jul22")
+        assert "\x1b" not in str(excinfo.value)
 
     def test_a_malformed_minimum_is_a_test_bug(self, monkeypatch):
-        self._status(monkeypatch, {'babel_version': '2026jul22'})
-        with pytest.raises(AssertionError, match='not a Babel release name'):
-            require_babel_release(self.TARGET, 'latest')
+        self._status(monkeypatch, {"babel_version": "2026jul22"})
+        with pytest.raises(AssertionError, match="not a Babel release name"):
+            require_babel_release(self.TARGET, "latest")
 
 
 class FakeResponse:
@@ -267,7 +282,7 @@ class FakeResponse:
 class FetchesJSON:
     """Clears the shared fetch cache around each test, and fakes the responses it gets."""
 
-    TARGET = {'NodeNormURL': 'https://example.org/'}
+    TARGET = {"NodeNormURL": "https://example.org/"}
 
     @pytest.fixture(autouse=True)
     def _clear_cache(self):
@@ -282,7 +297,7 @@ class FetchesJSON:
             calls.append(timeout)
             return responses[len(calls) - 1]
 
-        monkeypatch.setattr(service_checks.requests, 'get', fake_get)
+        monkeypatch.setattr(service_checks.requests, "get", fake_get)
         return calls
 
 
@@ -290,42 +305,43 @@ class TestGetStatus(FetchesJSON):
     """/status is fetched once per URL, but a failure is never remembered."""
 
     def test_a_transient_failure_is_retried_by_the_next_caller(self, monkeypatch):
-        self._serve(monkeypatch, FakeResponse(503, None), FakeResponse(200, {'status': 'ok'}))
+        self._serve(monkeypatch, FakeResponse(503, None), FakeResponse(200, {"status": "ok"}))
 
-        with pytest.raises(AssertionError, match='Could not GET'):
+        with pytest.raises(AssertionError, match="Could not GET"):
             get_status(self.TARGET)
-        assert get_status(self.TARGET) == (STATUS_URL, {'status': 'ok'})
+        assert get_status(self.TARGET) == (STATUS_URL, {"status": "ok"})
 
     def test_a_success_is_cached_and_the_request_has_a_timeout(self, monkeypatch):
-        calls = self._serve(monkeypatch, FakeResponse(200, {'status': 'ok'}))
+        calls = self._serve(monkeypatch, FakeResponse(200, {"status": "ok"}))
 
         get_status(self.TARGET)
         get_status(self.TARGET)
         assert calls == [service_checks.STATUS_TIMEOUT_SECONDS]
 
     def test_a_status_that_is_not_an_object_fails(self, monkeypatch):
-        self._serve(monkeypatch, FakeResponse(200, ['running']))
+        self._serve(monkeypatch, FakeResponse(200, ["running"]))
 
-        with pytest.raises(AssertionError, match='did not return a JSON object'):
+        with pytest.raises(AssertionError, match="did not return a JSON object"):
             get_status(self.TARGET)
 
     def test_a_status_that_is_not_an_object_is_not_cached(self, monkeypatch):
-        self._serve(monkeypatch, FakeResponse(200, None), FakeResponse(200, {'status': 'ok'}))
+        self._serve(monkeypatch, FakeResponse(200, None), FakeResponse(200, {"status": "ok"}))
 
-        with pytest.raises(AssertionError, match='did not return a JSON object'):
+        with pytest.raises(AssertionError, match="did not return a JSON object"):
             get_status(self.TARGET)
-        assert get_status(self.TARGET) == (STATUS_URL, {'status': 'ok'})
+        assert get_status(self.TARGET) == (STATUS_URL, {"status": "ok"})
 
 
 class TestGetOpenAPI(FetchesJSON):
     def test_an_openapi_document_shares_the_cache(self, monkeypatch):
-        document = {'paths': {}}
+        document = {"paths": {}}
         calls = self._serve(monkeypatch, FakeResponse(200, document))
 
-        assert get_openapi(self.TARGET, 'NodeNormURL', 'NodeNormOpenAPIPath') == (
-            'https://example.org/openapi.json', document
+        assert get_openapi(self.TARGET, "NodeNormURL", "NodeNormOpenAPIPath") == (
+            "https://example.org/openapi.json",
+            document,
         )
-        get_openapi(self.TARGET, 'NodeNormURL', 'NodeNormOpenAPIPath')
+        get_openapi(self.TARGET, "NodeNormURL", "NodeNormOpenAPIPath")
         assert calls == [service_checks.STATUS_TIMEOUT_SECONDS]
 
 
@@ -334,25 +350,29 @@ class TestNodeNormVersion(FetchesJSON):
 
     def _version(self, monkeypatch, version):
         monkeypatch.setattr(
-            service_checks.requests, 'get',
-            lambda url, timeout=None: FakeResponse(200, {'version': version}),
+            service_checks.requests,
+            "get",
+            lambda url, timeout=None: FakeResponse(200, {"version": version}),
         )
-        return nodenorm_version({'NodeNormURL': 'https://example.org/'})
+        return nodenorm_version({"NodeNormURL": "https://example.org/"})
 
-    @pytest.mark.parametrize('version, expected', [
-        ('1.2.0', (1, 2, 0)),
-        ('v1.2.1', (1, 2, 1)),
-        ('1.3', (1, 3, 0)),
-        ('1.3.0-rc1', (1, 3, 0)),
-        ('1.3.0.dev0', (1, 3, 0)),
-        ('1.2.0.post1', (1, 2, 0)),
-        ('1.3.dev0', (1, 3, 0)),
-        ('10.0.12', (10, 0, 12)),
-    ])
+    @pytest.mark.parametrize(
+        "version, expected",
+        [
+            ("1.2.0", (1, 2, 0)),
+            ("v1.2.1", (1, 2, 1)),
+            ("1.3", (1, 3, 0)),
+            ("1.3.0-rc1", (1, 3, 0)),
+            ("1.3.0.dev0", (1, 3, 0)),
+            ("1.2.0.post1", (1, 2, 0)),
+            ("1.3.dev0", (1, 3, 0)),
+            ("10.0.12", (10, 0, 12)),
+        ],
+    )
     def test_a_release_number_is_read(self, monkeypatch, version, expected):
         assert self._version(monkeypatch, version) == expected
 
-    @pytest.mark.parametrize('version', [None, 3, '', 'latest', '1', '1.2.3.4', 'x1.2.0'])
+    @pytest.mark.parametrize("version", [None, 3, "", "latest", "1", "1.2.3.4", "x1.2.0"])
     def test_anything_else_fails(self, monkeypatch, version):
-        with pytest.raises(AssertionError, match='no NodeNorm release number'):
+        with pytest.raises(AssertionError, match="no NodeNorm release number"):
             self._version(monkeypatch, version)

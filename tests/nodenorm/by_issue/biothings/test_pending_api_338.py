@@ -22,14 +22,9 @@ def _post(nodenorm_url, curies):
 
 def _assert_ok(response, nodenorm_url, curies):
     url = urllib.parse.urljoin(nodenorm_url, "get_normalized_nodes")
-    assert response.ok, (
-        f"POST {url} returned HTTP {response.status_code} for {curies}: "
-        f"{truncated_repr(response.text)}"
-    )
+    assert response.ok, f"POST {url} returned HTTP {response.status_code} for {curies}: {truncated_repr(response.text)}"
     result = response.json()
-    assert isinstance(result, dict), (
-        f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
-    )
+    assert isinstance(result, dict), f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
     null_curies = [c for c in curies if result.get(c) is None]
     assert not null_curies, f"CURIEs returned as null: {null_curies}"
 
