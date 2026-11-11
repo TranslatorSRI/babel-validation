@@ -217,6 +217,30 @@ def _version_key(version):
     return [int(n) for n in re.findall(r"[0-9]+", version)], version
 
 
+def _babel_releases(available):
+    """
+    The Babel releases in a /status babel.available_versions, oldest first, or
+    None if it is in a shape we do not read. NodeNorm ES 1.2.0 sends an object
+    keyed by release name (the values are links to each release's README); a
+    plain list of names is read the same way. Anything else is logged rather
+    than dropped silently, because an empty "Babel releases served" row looks
+    exactly like a NodeNorm that serves only its default.
+    """
+    if isinstance(available, (dict, list)):
+        names = {v for v in available if babel_release_date(v)}
+        if available and not names:
+            logger.warning(
+                "babel.available_versions lists %d entries, none a Babel release",
+                len(available),
+            )
+        return sorted(names, key=babel_release_date)
+    logger.warning(
+        "Unreadable babel.available_versions: a %s, not an object or list",
+        type(available).__name__,
+    )
+    return None
+
+
 def trim_status(raw, service):
     """
     Whitelist the fields of a NodeNorm or NameRes ("nodenorm" or "nameres")
@@ -249,14 +273,14 @@ def trim_status(raw, service):
     # request, and lists them under babel.available_versions. Keep only the
     # names that are real Babel releases, oldest first; a name that passes
     # babel_release_date() is plain ASCII, so it needs no further escaping.
-    # Every key is checked before the list is cut to the newest 50, so the
+    # Every name is checked before the list is cut to the newest 50, so the
     # releases that matter most cannot be cut off by a long or misordered list.
     babel = raw.get("babel")
     available = babel.get("available_versions") if isinstance(babel, dict) else None
-    if isinstance(available, dict):
-        releases = [v for v in available if babel_release_date(v)]
-        releases.sort(key=babel_release_date)
-        trimmed["babel_available_versions"] = releases[-50:]
+    if available is not None:
+        releases = _babel_releases(available)
+        if releases is not None:
+            trimmed["babel_available_versions"] = releases[-50:]
     biolink = raw.get("biolink_model")
     if isinstance(biolink, dict) and "tag" in biolink:
         trimmed["biolink_version"] = sanitize(biolink["tag"], 100)

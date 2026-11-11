@@ -410,6 +410,36 @@ class TestTrimStatus:
         assert len(releases) == 50
         assert releases[-1] == "2026jul22"
 
+    def test_babel_releases_served_read_from_a_list_too(self):
+        available = ["2026jul22", "2025sep1", "2025sep1", {"not": "hashable"}, None]
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == ["2025sep1", "2026jul22"]
+
+    @pytest.mark.parametrize("available", ["2026jul22", 3, True])
+    def test_babel_releases_served_in_an_unknown_shape_is_logged(
+        self, available, caplog
+    ):
+        # Dropping it silently hid the row, which reads as a NodeNorm that serves
+        # only its default release.
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert "babel_available_versions" not in trimmed
+        assert any(
+            "available_versions" in r.getMessage() for r in caplog.records
+        ), caplog.records
+
+    def test_babel_releases_served_with_no_real_release_is_logged(self, caplog):
+        available = {"latest": "", "\x1b[2J": ""}
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == []
+        assert any(
+            "none a Babel release" in r.getMessage() for r in caplog.records
+        ), caplog.records
+
+    def test_babel_releases_served_absent_is_quiet(self, caplog):
+        trimmed = trim_status({"babel": {"default_version": "2025sep1"}}, "nodenorm")
+        assert "babel_available_versions" not in trimmed
+        assert not caplog.records
+
     def test_elasticsearch_nodes_are_summarised(self):
         nodes = {
             "es-0": {"version": "9.3.1", "disk.used_percent": "69.93"},
