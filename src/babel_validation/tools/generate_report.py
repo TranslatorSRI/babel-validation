@@ -336,7 +336,8 @@ def service_links(base_url, backend):
     The docs and /status URLs of a service, from its targets.ini base URL and
     backend. The Redis- and Solr-backed services serve Swagger UI at /docs; the
     Elasticsearch-backed ones serve it at their root and answer /docs with a
-    404. Both URLs come from checked-in config, so the website may link to them.
+    404 (checked on nodenorm-es and namelookup-es on 2026-11-11). Both URLs come
+    from checked-in config, so the website may link to them.
     """
     if not base_url:
         return None, None
