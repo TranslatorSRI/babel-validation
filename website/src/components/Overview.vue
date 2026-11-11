@@ -14,6 +14,40 @@ import DriftPanel from './DriftPanel.vue';
 import StatusMatrix from './StatusMatrix.vue';
 import { fetchReport, formatCount, isInteresting, runLink } from '../reportData.js';
 
+// NodeNorm and NameRes are loaded separately, so they can be on different
+// Babel releases while one is promoted. Unlabelled when both report the
+// same release, and when only NodeNorm reports one: the card showed
+// NodeNorm's release before NameRes's was read, and older NameRes Solr
+// releases (or one that timed out) report none, so labelling that case put
+// "NN" on cards where nothing differs. NameRes's release alone is still
+// labelled, so with NodeNorm down it is not read as the environment's.
+function babelVersion(section) {
+  const { nodenorm_status: nn, nameres_status: nr } = section;
+  const nodenorm = nn?.babel_version;
+  const nameres = nr?.babel_version;
+  if (nodenorm && nodenorm === nameres) {
+    return { lines: [nodenorm], title: `Babel ${nodenorm}` };
+  }
+  if (nodenorm && !nameres) {
+    return {
+      lines: [nodenorm],
+      title: `NodeNorm on Babel ${nodenorm}; NameRes did not report a release`,
+    };
+  }
+  if (!nodenorm && !nameres) return { lines: ['—'], title: null };
+  const lines = [];
+  const titles = [];
+  if (nodenorm) {
+    lines.push(`NN ${nodenorm}`);
+    titles.push(`NodeNorm ${nodenorm}`);
+  }
+  if (nameres) {
+    lines.push(`NR ${nameres}`);
+    titles.push(`NameRes ${nameres}`);
+  }
+  return { lines, title: titles.join(', ') };
+}
+
 export default {
   components: { DriftPanel, StatusMatrix },
   props: {
@@ -36,6 +70,13 @@ export default {
       return sortBesideParents(
         this.targetNames,
         (name) => this.report.targets[name].side_branch_of ?? null,
+      );
+    },
+    // Each card's Babel release, worked out once per report: the card reads
+    // both its tooltip and its lines from the same result.
+    babelVersions() {
+      return Object.fromEntries(
+        this.targetNames.map((t) => [t, babelVersion(this.report.targets[t])]),
       );
     },
     unreachableTargets() {
@@ -73,39 +114,6 @@ export default {
     },
     counts(target) {
       return this.report.targets[target].counts;
-    },
-    // NodeNorm and NameRes are loaded separately, so they can be on different
-    // Babel releases while one is promoted. Unlabelled when both report the
-    // same release, and when only NodeNorm reports one: the card showed
-    // NodeNorm's release before NameRes's was read, and older NameRes Solr
-    // releases (or one that timed out) report none, so labelling that case put
-    // "NN" on cards where nothing differs. NameRes's release alone is still
-    // labelled, so with NodeNorm down it is not read as the environment's.
-    babelVersion(target) {
-      const { nodenorm_status: nn, nameres_status: nr } = this.report.targets[target];
-      const nodenorm = nn?.babel_version;
-      const nameres = nr?.babel_version;
-      if (nodenorm && nodenorm === nameres) {
-        return { lines: [nodenorm], title: `Babel ${nodenorm}` };
-      }
-      if (nodenorm && !nameres) {
-        return {
-          lines: [nodenorm],
-          title: `NodeNorm on Babel ${nodenorm}; NameRes did not report a release`,
-        };
-      }
-      if (!nodenorm && !nameres) return { lines: ['—'], title: null };
-      const lines = [];
-      const titles = [];
-      if (nodenorm) {
-        lines.push(`NN ${nodenorm}`);
-        titles.push(`NodeNorm ${nodenorm}`);
-      }
-      if (nameres) {
-        lines.push(`NR ${nameres}`);
-        titles.push(`NameRes ${nameres}`);
-      }
-      return { lines, title: titles.join(', ') };
     },
     resultsLink(params) {
       return `${this.resultsUrl}?${new URLSearchParams(params).toString()}`;
@@ -169,8 +177,8 @@ export default {
           <div class="card-body py-2 px-3">
             <div class="d-flex justify-content-between align-items-baseline gap-2">
               <span class="fw-semibold">{{ target }}</span>
-              <span class="small text-body-secondary text-end" :title="babelVersion(target).title">
-                <span v-for="line in babelVersion(target).lines" :key="line" class="d-block">
+              <span class="small text-body-secondary text-end" :title="babelVersions[target].title">
+                <span v-for="line in babelVersions[target].lines" :key="line" class="d-block">
                   {{ line }}
                 </span>
               </span>
