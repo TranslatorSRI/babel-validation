@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-import src.babel_validation.core as core
-from src.babel_validation.core import cache_dir
-from tests.conftest import unlink_if_exists
+import babel_validation.core as core
+from babel_validation.core import cache_dir
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
+from tests.conftest import unlink_if_exists
 
 pytestmark = pytest.mark.unit
 
@@ -124,9 +124,7 @@ def test_unset_home_still_resolves(monkeypatch):
     assert cache_dir().is_dir()
 
 
-@pytest.mark.skipif(
-    os.geteuid() == 0, reason="root ignores the permission bits this relies on"
-)
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the permission bits this relies on")
 def test_unwritable_location_names_the_override(monkeypatch, tmp_path):
     """A locked-down runner or container is the realistic case. The bare PermissionError names a
     path but not the escape hatch, so the error has to mention the environment variable.

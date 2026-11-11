@@ -45,6 +45,7 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Run from
 # With -n (xdist), always pass the tests path explicitly (`pytest tests -n 8 ...`):
 # without it, workers do not load tests/conftest.py early enough to know the
 # custom options, and every worker dies at argparse — or collects nothing.
+pytest -m unit                         # Offline unit tests only — no network, no live services (what CI runs)
 pytest --target dev                    # Run all tests against dev environment (default if no --target)
 pytest --target prod                   # Run against production
 pytest --target dev --target prod      # Run against multiple targets
@@ -57,20 +58,20 @@ pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
 pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nodenorm_from_gsheet.test_row:row=42-dev]"
 ```
 
+`-m unit` and `--category "Unit Tests"` are unrelated despite the names. `-m unit` selects the
+offline tests marked `unit`; `--category "Unit Tests"` selects Google Sheet rows whose Category
+column says "Unit Tests", and those still call a live NodeNorm or NameRes.
+
 ### Code Formatting
 
 ```bash
-black tests/    # Format Python test code
+uv run ruff check --fix .   # Lint (import sorting, pyupgrade, pyflakes) and auto-fix
+uv run ruff format .        # Format Python code
 ```
 
-Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
-~30 files it would reformat. Running `black` across the tree would bury a real change in
-unrelated churn, so format only the files you touch, or match the surrounding style.
-"Files you touch" means files that are already black-clean:
-`src/babel_validation/services/service_checks.py`, `src/babel_validation/core/babel_release.py`,
-`tests/unit/test_service_checks.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
-and running `black` on them after a ten-line edit rewrote every string in the file. Check
-`black --check <file>` on the committed version first; if it is not clean, edit by hand.
+Both run on every pull request (`tests.yaml`), over the whole tree, so the tree is always
+ruff-clean and running them never reformats code you did not touch. Settings live in
+`pyproject.toml` and are kept in sync with [Babel](https://github.com/NCATSTranslator/Babel).
 
 ### Dashboard Website (website/)
 
@@ -94,7 +95,13 @@ never reaches CI. Check `git status` shows new files as tracked.
 
 ### Library (`src/babel_validation/`)
 
-Shared library code used by the tests and potentially other consumers.
+Shared library code used by the tests and potentially other consumers. Import it as
+`babel_validation`, never `src.babel_validation`. The `src.` form still resolves under pytest,
+because `tests/__init__.py` makes pytest put the repository root on `sys.path` and `src/` then
+counts as a namespace package, so a test using it passes. But it loads a second copy of each
+module, so `from_url()` hands out a different instance with its own cache, and the same import
+fails with "No module named 'src'" from anywhere else, including `python -m` from outside the
+repository. `ruff check` rejects it (TID251, configured in `pyproject.toml`).
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
 - `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
@@ -126,6 +133,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
+- `tests/unit/` (and `tests/github_issues/unit/`) — Offline tests for the library in `src/babel_validation/`: service caching, Google Sheet parsing and downloading, the report generator, the issue parser. Marked `unit`; these are the only tests that run without network access, so they are the ones CI runs on every PR
 - `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm, one or more GitHub issues each; `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
 
 ### Dashboard Website
@@ -254,7 +262,7 @@ the two halves of the codebase disagreed about where the cache was.
 
 ## Key Dependencies
 
-- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, black
+- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, ruff
 - `uv` for Python dependency management (no requirements.txt — uses pyproject.toml)
 
 ## Testing Patterns
@@ -301,7 +309,7 @@ issue, so they stay here:
   unauthenticated endpoint. If one of them fails or comes back different, that worker collects a
   different set of tests and xdist aborts the whole run before executing anything:
   `ERROR gw2 - Different tests were collected between gw0 and gw2`. Use
-  `src.babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
+  `babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
   `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
   mode reappears if a cache's TTL can expire *during* a run, which is why
   `pytest_configure` deletes `gsheet_*.csv` before collection starts.

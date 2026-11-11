@@ -16,7 +16,21 @@ and fill in `BABEL_VALIDATION_SHEET_ID` (ask a maintainer for the ID; in GitHub 
 comes from a repository secret of the same name). `env.default` documents every variable
 this repository reads, and what each one turns on.
 
-To run these tests, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
+The offline subset needs no services at all and runs in well under a second:
+
+```shell
+$ uv run pytest -m unit
+```
+
+These are the tests marked `unit`, wherever they are: most are in [`./tests/unit`](./tests/unit/),
+covering the library in `src/babel_validation/`, but others sit beside the code they test, such as
+[`./tests/github_issues/unit`](./tests/github_issues/unit/) and [`./tests/test_environment`](./tests/test_environment/).
+The marker, not the directory, is what decides whether a test is offline, so a new offline test needs
+`pytestmark = pytest.mark.unit` wherever you put it.
+They are what GitHub Actions runs on every pull request, alongside `ruff check` and `ruff format --check`.
+Everything else needs a live NodeNorm or NameRes, and is run on demand against a chosen target.
+
+To run those, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 You can then use `uv` to run the tests. The file [`tests/targets.ini`](./tests/targets.ini) allows you to
 control which NodeNorm instance is tested. The `[DEFAULT]` section applies defaults for all the environments.
 For example, to run all the tests on the `dev` instance, you can use `--target`:
@@ -142,7 +156,7 @@ dashboard's purpose is to show *which* issues are visible in *which* environment
 The `.github/workflows/dashboard.yaml` workflow regenerates and deploys it daily (or on
 manual dispatch): it runs pytest per target with `--report-jsonl`, turns the raw outcomes
 and `/status` responses into `report.json` and `history.jsonl` with
-`src.babel_validation.tools.generate_report`, and publishes the built site to the
+`babel_validation.tools.generate_report`, and publishes the built site to the
 `gh-pages` branch.
 
 The Vue components' client-side logic (URL round-tripping, filtering, pagination, the
@@ -162,7 +176,7 @@ To regenerate it locally against a couple of environments:
 ```shell
 $ uv run pytest tests/nodenorm/test_nodenorm_from_gsheet.py tests/nameres/test_nameres_from_gsheet.py \
       --target dev --target prod -n 8 --report-jsonl raw/local.jsonl
-$ uv run python -m src.babel_validation.tools.generate_report --raw-dir raw \
+$ uv run python -m babel_validation.tools.generate_report --raw-dir raw \
       --targets-ini tests/targets.ini --out-dir website/public/data
 $ cd website && npm install && npm run dev
 ```

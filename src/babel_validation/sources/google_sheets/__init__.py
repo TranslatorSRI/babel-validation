@@ -29,10 +29,7 @@ def resolve_sheet_id(env_var, sheet_id=None):
         dotenv.load_dotenv()
         sheet_id = os.environ.get(env_var)
         if not sheet_id:
-            raise RuntimeError(
-                f"No Google Sheet ID: set {env_var} (e.g. in .env). "
-                "Ask a maintainer for the ID."
-            )
+            raise RuntimeError(f"No Google Sheet ID: set {env_var} (e.g. in .env). Ask a maintainer for the ID.")
     if not _SHEET_ID_RE.fullmatch(sheet_id):
         raise RuntimeError(f"{env_var} does not look like a Google Sheet ID.")
     return sheet_id
@@ -71,10 +68,7 @@ def fetch_sheet_csv(
     lock_file = cache_file.with_suffix(".lock")
 
     with FileLock(lock_file):
-        if (
-            cache_file.exists()
-            and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds
-        ):
+        if cache_file.exists() and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds:
             return cache_file.read_text(encoding="utf-8")
 
         csv_url = (
@@ -92,8 +86,7 @@ def fetch_sheet_csv(
             # `from e` pytest prints the whole chain, original message included,
             # which is exactly what we are trying not to publish.
             raise RuntimeError(
-                f"Could not download tab {sheet_name!r} of the {env_var} sheet: "
-                f"{_redacted_reason(e)}."
+                f"Could not download tab {sheet_name!r} of the {env_var} sheet: {_redacted_reason(e)}."
             ) from None
         csv_content = response.text
         cache_file.write_text(csv_content, encoding="utf-8")

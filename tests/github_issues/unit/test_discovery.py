@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from github import UnknownObjectException
 
-from src.babel_validation.sources.github.github_issues_test_cases import issue_id
+from babel_validation.sources.github.github_issues_test_cases import issue_id
 from tests.github_issues.unit._helpers import _mock_issue
 
 pytestmark = pytest.mark.unit
@@ -21,19 +21,18 @@ class TestIssueHasTests:
         assert github_issues_test_cases.issue_has_tests(_mock_issue("   ")) is False
 
     def test_wiki_syntax_detected(self, github_issues_test_cases):
-        assert github_issues_test_cases.issue_has_tests(
-            _mock_issue("{{BabelTest|Resolves|CHEBI:12345}}")
-        ) is True
+        assert github_issues_test_cases.issue_has_tests(_mock_issue("{{BabelTest|Resolves|CHEBI:12345}}")) is True
 
     def test_yaml_syntax_detected(self, github_issues_test_cases):
-        assert github_issues_test_cases.issue_has_tests(
-            _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```")
-        ) is True
+        assert (
+            github_issues_test_cases.issue_has_tests(
+                _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```")
+            )
+            is True
+        )
 
     def test_plain_text_not_detected(self, github_issues_test_cases):
-        assert github_issues_test_cases.issue_has_tests(
-            _mock_issue("Just some text without babel tests.")
-        ) is False
+        assert github_issues_test_cases.issue_has_tests(_mock_issue("Just some text without babel tests.")) is False
 
 
 class TestGetIssuesWithTests:
@@ -42,45 +41,30 @@ class TestGetIssuesWithTests:
     _REPOS = ["test-org/test-repo"]
 
     def test_no_results_yields_nothing(self, github_issues_test_cases):
-        with patch.object(github_issues_test_cases.github, "search_issues",
-                          return_value=[]):
-            results = list(
-                github_issues_test_cases.get_issues_with_tests(self._REPOS)
-            )
+        with patch.object(github_issues_test_cases.github, "search_issues", return_value=[]):
+            results = list(github_issues_test_cases.get_issues_with_tests(self._REPOS))
         assert results == []
 
     def test_matching_issue_is_yielded(self, github_issues_test_cases):
         mock = _mock_issue("{{BabelTest|Resolves|CHEBI:12345}}", number=1)
         # Two keyword searches per repo; first returns our issue, second returns nothing.
-        with patch.object(github_issues_test_cases.github, "search_issues",
-                          side_effect=[[mock], []]):
-            results = list(
-                github_issues_test_cases.get_issues_with_tests(self._REPOS)
-            )
+        with patch.object(github_issues_test_cases.github, "search_issues", side_effect=[[mock], []]):
+            results = list(github_issues_test_cases.get_issues_with_tests(self._REPOS))
         assert results == [mock]
 
     def test_duplicate_across_keywords_deduplicated(self, github_issues_test_cases):
         # Issue contains both syntaxes → appears in both keyword searches → yielded once.
-        body = (
-            "{{BabelTest|Resolves|CHEBI:12345}}\n"
-            "```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```"
-        )
+        body = "{{BabelTest|Resolves|CHEBI:12345}}\n```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:12345\n```"
         mock = _mock_issue(body, number=42)
-        with patch.object(github_issues_test_cases.github, "search_issues",
-                          side_effect=[[mock], [mock]]):
-            results = list(
-                github_issues_test_cases.get_issues_with_tests(self._REPOS)
-            )
+        with patch.object(github_issues_test_cases.github, "search_issues", side_effect=[[mock], [mock]]):
+            results = list(github_issues_test_cases.get_issues_with_tests(self._REPOS))
         assert results == [mock]
 
     def test_search_false_positive_filtered(self, github_issues_test_cases):
         # GitHub returns an issue that mentions the keyword in prose (no real BabelTest block).
         mock = _mock_issue("This issue discusses babel_tests: in passing.", number=99)
-        with patch.object(github_issues_test_cases.github, "search_issues",
-                          side_effect=[[mock], []]):
-            results = list(
-                github_issues_test_cases.get_issues_with_tests(self._REPOS)
-            )
+        with patch.object(github_issues_test_cases.github, "search_issues", side_effect=[[mock], []]):
+            results = list(github_issues_test_cases.get_issues_with_tests(self._REPOS))
         assert results == []
 
 
@@ -100,9 +84,7 @@ class TestIssueId:
         issue = MagicMock()
         issue.number = 7
         issue.html_url = "https://github.com/other-org/other-repo/issues/7"
-        type(issue).repository = property(
-            lambda self: pytest.fail("issue_id() must not read .repository")
-        )
+        type(issue).repository = property(lambda self: pytest.fail("issue_id() must not read .repository"))
         assert issue_id(issue) == "other-org/other-repo#7"
 
 
@@ -115,11 +97,14 @@ class TestGetIssuesByIdsNotFound:
         repo.get_issue.side_effect = UnknownObjectException(404, {"message": "Not Found"}, {})
         return patch.object(github_issues_test_cases.github, "get_repo", return_value=repo)
 
-    @pytest.mark.parametrize("issue_ref", [
-        "test-org/test-repo#99999",   # org/repo#N
-        "test-repo#99999",            # repo#N
-        "99999",                      # N
-    ])
+    @pytest.mark.parametrize(
+        "issue_ref",
+        [
+            "test-org/test-repo#99999",  # org/repo#N
+            "test-repo#99999",  # repo#N
+            "99999",  # N
+        ],
+    )
     def test_missing_issue_raises_value_error(self, github_issues_test_cases, issue_ref):
         with self._missing(github_issues_test_cases):
             with pytest.raises(ValueError, match="Could not resolve issue ID"):
@@ -145,11 +130,14 @@ class TestConfiguredRepositoriesOnly:
     is worth more than the thematic grouping.
     """
 
-    @pytest.mark.parametrize("issue_ref", [
-        "attacker/evil#1",                  # simply not configured
-        "test-org/test-repo/../../evil#1",  # the repo group admits slashes: URL path injection
-        "test-org/test-repo?x=y#1",
-    ])
+    @pytest.mark.parametrize(
+        "issue_ref",
+        [
+            "attacker/evil#1",  # simply not configured
+            "test-org/test-repo/../../evil#1",  # the repo group admits slashes: URL path injection
+            "test-org/test-repo?x=y#1",
+        ],
+    )
     def test_unconfigured_repo_is_never_fetched(self, github_issues_test_cases, issue_ref):
         with patch.object(github_issues_test_cases.github, "get_repo") as get_repo:
             with pytest.raises(ValueError, match="Could not resolve issue ID"):

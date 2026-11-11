@@ -1,20 +1,23 @@
 """Generate assertions/README.md from handler class attributes.
 
 Run:
-    uv run python -m src.babel_validation.assertions.gen_docs
+    uv run python -m babel_validation.assertions.gen_docs
 """
 
 from pathlib import Path
 
-from src.babel_validation.assertions import (
-    ASSERTION_HANDLERS, AssertionHandler, NodeNormTest, NameResTest,
+from babel_validation.assertions import (
+    ASSERTION_HANDLERS,
+    AssertionHandler,
+    NameResTest,
+    NodeNormTest,
 )
 
 README_PATH = Path(__file__).parent / "README.md"
 
 INTRO = """\
 <!-- AUTO-GENERATED — do not edit by hand.
-     Regenerate with: uv run python -m src.babel_validation.assertions.gen_docs -->
+     Regenerate with: uv run python -m babel_validation.assertions.gen_docs -->
 
 # BabelTest Assertion Types
 
@@ -116,18 +119,16 @@ ADDING_NEW = """\
 5. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
    matter — this file groups handlers by the service they test.
 
-6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
+6. Run `uv run python -m babel_validation.assertions.gen_docs` to regenerate `README.md`,
    and `uv run pytest -m unit` to confirm the checked-in copy is in sync.
 """
 
 _GROUP_HEADERS: dict[str, str] = {
     "NodeNorm": (
-        "## NodeNorm Assertions\n\n"
-        "These assertions test the [NodeNorm](https://nodenorm.transltr.io/docs) service."
+        "## NodeNorm Assertions\n\nThese assertions test the [NodeNorm](https://nodenorm.transltr.io/docs) service."
     ),
     "NameRes": (
-        "## NameRes Assertions\n\n"
-        "These assertions test the [NameRes](https://name-lookup.transltr.io/docs) service."
+        "## NameRes Assertions\n\nThese assertions test the [NameRes](https://name-lookup.transltr.io/docs) service."
     ),
     "NodeNorm and NameRes": "## Special Assertions",
 }
@@ -170,9 +171,7 @@ def _render_handler(h: AssertionHandler) -> str:
     wiki_block = "\n".join(wiki_examples)
     parts.append(f"**Wiki syntax:**\n```\n{wiki_block}\n```\n")
 
-    parts.append(
-        f"**YAML syntax:**\n```yaml\nbabel_tests:\n  {name}:\n{yaml_params}\n```\n"
-    )
+    parts.append(f"**YAML syntax:**\n```yaml\nbabel_tests:\n  {name}:\n{yaml_params}\n```\n")
 
     parts.append("---\n")
 

@@ -17,7 +17,7 @@ npm run fetch-data                         # download the published report.json/
 The dashboard fetches `data/report.json` and `data/history.jsonl`, which are gitignored.
 `npm run fetch-data` downloads the live site's copies into `website/public/data/` — the
 quickest way to get real data for frontend work. To make them from scratch instead, run
-`pytest --report-jsonl` plus `uv run python -m src.babel_validation.tools.generate_report`
+`pytest --report-jsonl` plus `uv run python -m babel_validation.tools.generate_report`
 (see the root README).
 
 Two CI traps you can hit without opening a file here — `npm ci` refusing a lockfile, and the

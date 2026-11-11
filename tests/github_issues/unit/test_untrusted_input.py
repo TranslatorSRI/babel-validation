@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
-from src.babel_validation.core.testrow import TestStatus
+from babel_validation.core.testrow import TestStatus
 from tests.github_issues.unit._helpers import _mock_issue
 
 pytestmark = pytest.mark.unit
@@ -34,13 +34,16 @@ class TestUntrustedInput:
         assert github_issues_test_cases.issue_has_tests(mock) is False
         assert time.monotonic() - started < 1.0
 
-    @pytest.mark.parametrize("body", [
-        # Chained anchors: each level multiplies the one below it.
-        "```yaml\nbabel_tests:\n  Resolves: &a [CHEBI:1,CHEBI:1,CHEBI:1]\n"
-        "  B: &b [*a,*a,*a]\n  C: &c [*b,*b,*b]\n  D: [*c,*c,*c]\n```",
-        # A merge key needs an alias, so refusing aliases covers it.
-        "```yaml\nbabel_tests:\n  base: &b [CHEBI:1]\n  Resolves:\n    <<: *b\n```",
-    ])
+    @pytest.mark.parametrize(
+        "body",
+        [
+            # Chained anchors: each level multiplies the one below it.
+            "```yaml\nbabel_tests:\n  Resolves: &a [CHEBI:1,CHEBI:1,CHEBI:1]\n"
+            "  B: &b [*a,*a,*a]\n  C: &c [*b,*b,*b]\n  D: [*c,*c,*c]\n```",
+            # A merge key needs an alias, so refusing aliases covers it.
+            "```yaml\nbabel_tests:\n  base: &b [CHEBI:1]\n  Resolves:\n    <<: *b\n```",
+        ],
+    )
     def test_yaml_aliases_are_rejected(self, github_issues_test_cases, body):
         """safe_load blocks code execution but still expands aliases, and PyYAML shares the
         aliased nodes — so the load looks cheap and the cost lands on whatever stringifies the
@@ -66,9 +69,7 @@ class TestUntrustedInput:
     def test_duplicate_yaml_keys_are_rejected(self, github_issues_test_cases):
         """YAML says last-wins, which breaks the assumption the feature rests on: that a
         reviewer reading the body can see what the run will do."""
-        mock = _mock_issue(
-            "```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:15365\n  Resolves:\n  - CHEBI:99999\n```"
-        )
+        mock = _mock_issue("```yaml\nbabel_tests:\n  Resolves:\n  - CHEBI:15365\n  Resolves:\n  - CHEBI:99999\n```")
         with pytest.raises(yaml.YAMLError, match="duplicate key"):
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
@@ -79,11 +80,14 @@ class TestUntrustedInput:
         with pytest.raises(ValueError, match="over the"):
             github_issues_test_cases.get_test_issues_from_issue(mock)
 
-    @pytest.mark.parametrize("body, match", [
-        ("{{BabelTest|Resolves|CHEBI:15365}}" * 101, "BabelTest assertions"),
-        ("```yaml\nbabel_tests:\n  Resolves:\n" + "  - [CHEBI:15365]\n" * 1001 + "```", "param sets"),
-        ("```yaml\nbabel_tests:\n  Resolves:\n  - [" + "CHEBI:1," * 1001 + "]\n```", "parameters"),
-    ])
+    @pytest.mark.parametrize(
+        "body, match",
+        [
+            ("{{BabelTest|Resolves|CHEBI:15365}}" * 101, "BabelTest assertions"),
+            ("```yaml\nbabel_tests:\n  Resolves:\n" + "  - [CHEBI:15365]\n" * 1001 + "```", "param sets"),
+            ("```yaml\nbabel_tests:\n  Resolves:\n  - [" + "CHEBI:1," * 1001 + "]\n```", "parameters"),
+        ],
+    )
     def test_size_caps_raise(self, github_issues_test_cases, body, match):
         with pytest.raises(ValueError, match=match):
             github_issues_test_cases.get_test_issues_from_issue(_mock_issue(body))
@@ -105,8 +109,7 @@ class TestUntrustedInput:
         """The asymmetry that matters: structural caps fail the whole issue, but a bad param
         goes through the existing _rejection() path so its siblings still run."""
         mock = _mock_issue(
-            "```yaml\nbabel_tests:\n  Resolves:\n  - ['CHEBI:" + "9" * 1001 + "']\n"
-            "  - [CHEBI:15365]\n```"
+            "```yaml\nbabel_tests:\n  Resolves:\n  - ['CHEBI:" + "9" * 1001 + "']\n  - [CHEBI:15365]\n```"
         )
         tests = github_issues_test_cases.get_test_issues_from_issue(mock)
         nodenorm = MagicMock()
@@ -121,11 +124,14 @@ class TestUntrustedInput:
         # Truncated, so an enormous param cannot blow up the report it is kept in.
         assert len(failed[0].message) < 500
 
-    @pytest.mark.parametrize("bad_param", [
-        "\x1b[31mCHEBI:15365",   # ANSI escape
-        "CHEBI:15365‮",     # bidi override
-        "CHEBI:​15365",     # zero-width space
-    ])
+    @pytest.mark.parametrize(
+        "bad_param",
+        [
+            "\x1b[31mCHEBI:15365",  # ANSI escape
+            "CHEBI:15365‮",  # bidi override
+            "CHEBI:​15365",  # zero-width space
+        ],
+    )
     def test_control_characters_in_wiki_param_are_rejected(self, github_issues_test_cases, bad_param):
         """Wiki syntax is the unguarded path for these: it is a plain str.split('|'), whereas
         YAML cannot carry a raw control character at all (see the test below)."""

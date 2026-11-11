@@ -1,12 +1,13 @@
-from typing import Iterator
+from collections.abc import Iterator
 
-from src.babel_validation.assertions import NodeNormTest, ParamsList
-from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nodenorm import NodeNormService
+from babel_validation.assertions import NodeNormTest, ParamsList
+from babel_validation.core.testrow import TestResult
+from babel_validation.services.nodenorm import NodeNormService
 
 
 class ResolvesHandler(NodeNormTest):
     """Test that every CURIE in every params_list resolves in NodeNorm."""
+
     NAME = "resolves"
     DESCRIPTION = "Each CURIE in each params_list must resolve to a non-null result in NodeNorm."
     PARAMETERS = "One or more CURIEs per params_list."
@@ -16,8 +17,7 @@ class ResolvesHandler(NodeNormTest):
     ]
     YAML_PARAMS = "    - CHEBI:15365\n    - [MONDO:0005015, DOID:9351]"
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService, label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
             if not result:
@@ -28,6 +28,7 @@ class ResolvesHandler(NodeNormTest):
 
 class DoesNotResolveHandler(NodeNormTest):
     """Test that every CURIE in every params_list does NOT resolve in NodeNorm."""
+
     NAME = "doesnotresolve"
     DESCRIPTION = (
         "Each CURIE in each params_list must fail to resolve (return null) in NodeNorm. "
@@ -41,19 +42,18 @@ class DoesNotResolveHandler(NodeNormTest):
     # asserting that is the whole point of this assertion — so don't reject it.
     VALIDATE_CURIES = False
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService, label: str = "") -> Iterator[TestResult]:
         for curie in params:
             result = nodenorm.normalize_curie(curie)
             if not result:
                 yield self.passed(f"Could not resolve {curie} with NodeNormalization service {nodenorm} as expected")
             else:
-                yield self.failed(f"Resolved {curie} to {result['id']['identifier']} ({self.first_type(result)}, \"{result['id'].get('label', '')}\") with NodeNormalization service {nodenorm}, but expected not to resolve")
+                yield self.failed(
+                    f'Resolved {curie} to {result["id"]["identifier"]} ({self.first_type(result)}, "{result["id"].get("label", "")}") with NodeNormalization service {nodenorm}, but expected not to resolve'
+                )
 
 
-def _compare_resolutions(
-    params: ParamsList, nodenorm: NodeNormService
-) -> tuple[dict | None, dict[str, dict | None]]:
+def _compare_resolutions(params: ParamsList, nodenorm: NodeNormService) -> tuple[dict | None, dict[str, dict | None]]:
     """Resolve all params; return (first_good_result, per_curie_results).
 
     Shared by ResolvesWith and DoesNotResolveWith, which ask the same question
@@ -73,6 +73,7 @@ def _compare_resolutions(
 
 class ResolvesWithHandler(NodeNormTest):
     """Test that all CURIEs in a params_list resolve to the same normalized result in NodeNorm."""
+
     NAME = "resolveswith"
     DESCRIPTION = (
         "All CURIEs within each params_list must resolve to the identical normalized result. "
@@ -84,36 +85,32 @@ class ResolvesWithHandler(NodeNormTest):
 
     MIN_PARAMS = 2  # comparing one CURIE against nothing would pass vacuously
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService, label: str = "") -> Iterator[TestResult]:
         first_good, results = _compare_resolutions(params, nodenorm)
 
         if first_good is None:
             yield self.failed(f"None of the CURIEs {params} could be resolved on {nodenorm}")
             return
 
-        canonical_id = first_good['id']['identifier']
+        canonical_id = first_good["id"]["identifier"]
 
         for curie, result in results.items():
             if result is None:
-                yield self.failed(
-                    f"CURIE {curie} could not be resolved on {nodenorm}"
-                )
-            elif result['id']['identifier'] == canonical_id:
-                yield self.passed(
-                    f"Resolved {curie} to the expected canonical identifier {canonical_id}"
-                )
+                yield self.failed(f"CURIE {curie} could not be resolved on {nodenorm}")
+            elif result["id"]["identifier"] == canonical_id:
+                yield self.passed(f"Resolved {curie} to the expected canonical identifier {canonical_id}")
             else:
                 yield self.failed(
                     f"Resolved {curie} to {result['id']['identifier']} "
-                    f"({self.first_type(result)}, \"{result['id'].get('label', '')}\"), but expected "
+                    f'({self.first_type(result)}, "{result["id"].get("label", "")}"), but expected '
                     f"{canonical_id} "
-                    f"({self.first_type(first_good)}, \"{first_good['id'].get('label', '')}\") on {nodenorm}"
+                    f'({self.first_type(first_good)}, "{first_good["id"].get("label", "")}") on {nodenorm}'
                 )
 
 
 class DoesNotResolveWithHandler(NodeNormTest):
     """Test that not all CURIEs in a params_list resolve to the same result in NodeNorm."""
+
     NAME = "doesnotresolvewith"
     DESCRIPTION = (
         "The CURIEs within each params_list must NOT all resolve to the same normalized "
@@ -125,8 +122,7 @@ class DoesNotResolveWithHandler(NodeNormTest):
 
     MIN_PARAMS = 2  # comparing one CURIE against nothing would fail vacuously
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService, label: str = "") -> Iterator[TestResult]:
         first_good, results = _compare_resolutions(params, nodenorm)
 
         # Every CURIE must resolve — an unresolved CURIE is a configuration error.
@@ -139,7 +135,7 @@ class DoesNotResolveWithHandler(NodeNormTest):
             return
 
         # All resolved — check that they don't all map to the same canonical identifier.
-        canonical_ids = {result['id']['identifier'] for result in results.values()}
+        canonical_ids = {result["id"]["identifier"] for result in results.values()}
 
         if len(canonical_ids) == 1:
             # Every CURIE maps to the same result — assertion fails.
@@ -147,21 +143,17 @@ class DoesNotResolveWithHandler(NodeNormTest):
             yield self.failed(
                 f"All CURIEs {params} resolved to the same result "
                 f"{shared['id']['identifier']} "
-                f"({self.first_type(shared)}, \"{shared['id'].get('label', '')}\") on {nodenorm}, "
+                f'({self.first_type(shared)}, "{shared["id"].get("label", "")}") on {nodenorm}, '
                 f"but expected them to resolve differently"
             )
         else:
-            summary = ", ".join(
-                f"{curie} → {result['id']['identifier']}"
-                for curie, result in results.items()
-            )
-            yield self.passed(
-                f"CURIEs resolve to different results as expected: {summary} on {nodenorm}"
-            )
+            summary = ", ".join(f"{curie} → {result['id']['identifier']}" for curie, result in results.items())
+            yield self.passed(f"CURIEs resolve to different results as expected: {summary} on {nodenorm}")
 
 
 class HasLabelHandler(NodeNormTest):
     """Test that a CURIE resolves to a specific primary label in NodeNorm."""
+
     NAME = "haslabel"
     DESCRIPTION = (
         "The CURIE must resolve in NodeNorm and its primary label (id.label) must "
@@ -176,38 +168,31 @@ class HasLabelHandler(NodeNormTest):
     def curie_params(self, params: ParamsList) -> ParamsList:
         return params[:1]
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService, label: str = "") -> Iterator[TestResult]:
         curie = params[0]
         expected_label = params[1].strip()
 
         result = nodenorm.normalize_curie(curie)
         if not result:
-            yield self.failed(
-                f"Could not resolve {curie} on {nodenorm}"
-            )
+            yield self.failed(f"Could not resolve {curie} on {nodenorm}")
             return
 
-        if 'label' not in result['id']:
-            yield self.failed(
-                f"CURIE {curie} has no label but expected '{expected_label}' on {nodenorm}"
-            )
+        if "label" not in result["id"]:
+            yield self.failed(f"CURIE {curie} has no label but expected '{expected_label}' on {nodenorm}")
             return
 
-        actual_label = result['id']['label']
+        actual_label = result["id"]["label"]
         if actual_label == expected_label:
-            yield self.passed(
-                f"CURIE {curie} has expected label '{actual_label}' on {nodenorm}"
-            )
+            yield self.passed(f"CURIE {curie} has expected label '{actual_label}' on {nodenorm}")
         else:
             yield self.failed(
-                f"CURIE {curie} has label '{actual_label}', "
-                f"but expected '{expected_label}' on {nodenorm}"
+                f"CURIE {curie} has label '{actual_label}', but expected '{expected_label}' on {nodenorm}"
             )
 
 
 class ResolvesWithTypeHandler(NodeNormTest):
     """Test that CURIEs resolve with a specific Biolink type in NodeNorm."""
+
     NAME = "resolveswithtype"
     DESCRIPTION = (
         "Each params_list must have at least two elements: the first is the expected Biolink type "
@@ -225,8 +210,7 @@ class ResolvesWithTypeHandler(NodeNormTest):
     def curie_params(self, params: ParamsList) -> ParamsList:
         return params[1:]
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService, label: str = "") -> Iterator[TestResult]:
         expected_biolink_type = params[0]
         curies = params[1:]
 
@@ -236,8 +220,12 @@ class ResolvesWithTypeHandler(NodeNormTest):
             if not node:
                 yield self.failed(f"Could not resolve {curie} with NodeNormalization service {nodenorm}")
                 continue
-            biolink_types = node.get('type') or []
+            biolink_types = node.get("type") or []
             if expected_biolink_type in biolink_types:
-                yield self.passed(f"Biolink types {biolink_types} for CURIE {curie} includes expected Biolink type {expected_biolink_type}")
+                yield self.passed(
+                    f"Biolink types {biolink_types} for CURIE {curie} includes expected Biolink type {expected_biolink_type}"
+                )
             else:
-                yield self.failed(f"Biolink types {biolink_types} for CURIE {curie} does not include expected Biolink type {expected_biolink_type}")
+                yield self.failed(
+                    f"Biolink types {biolink_types} for CURIE {curie} does not include expected Biolink type {expected_biolink_type}"
+                )

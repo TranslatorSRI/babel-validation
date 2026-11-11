@@ -12,7 +12,7 @@
 # backends, so that is deliberately not pinned.
 import pytest
 
-from src.babel_validation.services.service_checks import (
+from babel_validation.services.service_checks import (
     get_normalized_node,
     require_babel_release,
     truncated_repr,
@@ -58,16 +58,10 @@ def _xfail_on_elasticsearch(request, target_info):
 
 
 def _assert_well_formed_types(curie, types):
-    assert (
-        isinstance(types, list) and types
-    ), f"{curie} has no list of types: {truncated_repr(types)}"
+    assert isinstance(types, list) and types, f"{curie} has no list of types: {truncated_repr(types)}"
     duplicates = sorted({repr(t) for t in types if types.count(t) > 1})
-    assert (
-        not duplicates
-    ), f"{curie} lists these types more than once: {truncated_repr(duplicates)}"
-    assert (
-        "biolink:Entity" not in types
-    ), f"{curie} has biolink:Entity in its types: {truncated_repr(types)}"
+    assert not duplicates, f"{curie} lists these types more than once: {truncated_repr(duplicates)}"
+    assert "biolink:Entity" not in types, f"{curie} has biolink:Entity in its types: {truncated_repr(types)}"
 
 
 @pytest.mark.parametrize("curie", sorted(DUPLICATE_LEADERS))
@@ -78,9 +72,7 @@ def test_one_clique_one_type(request, target_info, curie):
     types = get_normalized_node(target_info, curie).get("type")
     _assert_well_formed_types(curie, types)
     both = [t for t in pair if t in types]
-    assert (
-        len(both) < 2
-    ), f"{curie} ({label!r}) is typed as both {pair[0]} and {pair[1]}: {truncated_repr(types)}"
+    assert len(both) < 2, f"{curie} ({label!r}) is typed as both {pair[0]} and {pair[1]}: {truncated_repr(types)}"
 
 
 @pytest.mark.parametrize("curie", sorted(DUPLICATE_LEADERS))
@@ -91,18 +83,14 @@ def test_individual_types_are_strings(request, target_info, curie):
     _xfail_on_elasticsearch(request, target_info)
     node = get_normalized_node(target_info, curie, individual_types=True)
     eqids = node.get("equivalent_identifiers")
-    assert isinstance(
-        eqids, list
-    ), f"{curie}: equivalent_identifiers is {truncated_repr(eqids)}"
+    assert isinstance(eqids, list), f"{curie}: equivalent_identifiers is {truncated_repr(eqids)}"
     typed = [eqid for eqid in eqids if isinstance(eqid, dict) and "type" in eqid]
     # Without this, a backend that ignored individual_types would pass vacuously.
-    assert (
-        typed
-    ), f"{curie}: no equivalent identifier has a type with individual_types=true"
+    assert typed, f"{curie}: no equivalent identifier has a type with individual_types=true"
     for eqid in typed:
-        assert isinstance(
-            eqid["type"], str
-        ), f"{curie}: individual type of {truncated_repr(eqid.get('identifier'))} is {truncated_repr(eqid['type'])}, not a string"
+        assert isinstance(eqid["type"], str), (
+            f"{curie}: individual type of {truncated_repr(eqid.get('identifier'))} is {truncated_repr(eqid['type'])}, not a string"
+        )
 
 
 def test_single_leader_is_well_formed(target_info):

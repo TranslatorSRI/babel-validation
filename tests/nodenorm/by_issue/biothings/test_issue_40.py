@@ -6,7 +6,7 @@
 # the Elasticsearch-backed NodeNorm while the Redis-backed one resolves it.
 import pytest
 
-from src.babel_validation.services.service_checks import (
+from babel_validation.services.service_checks import (
     get_normalized_node,
     require_babel_release,
     truncated_repr,
@@ -48,6 +48,6 @@ def test_compendium_is_loaded(request, target_info, curie):
     label, expected_type = CURIES[curie]
     node = get_normalized_node(target_info, curie)
     types = node.get("type")
-    assert (
-        isinstance(types, list) and types and types[0] == expected_type
-    ), f"{curie} ({label!r}) should be a {expected_type}, got {truncated_repr(types)}"
+    assert isinstance(types, list) and types and types[0] == expected_type, (
+        f"{curie} ({label!r}) should be a {expected_type}, got {truncated_repr(types)}"
+    )

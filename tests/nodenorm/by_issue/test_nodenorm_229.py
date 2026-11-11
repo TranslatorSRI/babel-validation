@@ -1,9 +1,10 @@
 # This is a test for https://github.com/TranslatorSRI/NodeNormalization/issues/229
-import pytest
-import requests
 import urllib.parse
 
-from src.babel_validation.services.service_checks import truncated_repr
+import pytest
+import requests
+
+from babel_validation.services.service_checks import truncated_repr
 
 
 def test_nodenorm_229(target_info):
@@ -469,17 +470,19 @@ def test_nodenorm_229(target_info):
                 },
                 {
                     "node_bindings": {
-                        "n0": [{
-                            "id": "CHEBI:6541",
-                            "attributes": [
-                                {
-                                    "attribute_type_id": "biolink:has_numeric_value",
-                                    "value": 90.9,
-                                    "value_type_id": "EDAM:data_0006",
-                                    "original_attribute_name": "information_content",
-                                }
-                            ],
-                        }],
+                        "n0": [
+                            {
+                                "id": "CHEBI:6541",
+                                "attributes": [
+                                    {
+                                        "attribute_type_id": "biolink:has_numeric_value",
+                                        "value": 90.9,
+                                        "value_type_id": "EDAM:data_0006",
+                                        "original_attribute_name": "information_content",
+                                    }
+                                ],
+                            }
+                        ],
                         "n1": [
                             {
                                 "id": "MONDO:0001134",
@@ -512,8 +515,7 @@ def test_nodenorm_229(target_info):
     actual_output = response.json()
 
     # For this issue, we are primarily interested in the results.
-    input_results = input_json["message"]["results"]
     expected_results = expected_output["message"]["results"]
     actual_results = actual_output["message"]["results"]
 
-    assert actual_results == expected_results, f"Did not receive the expected results."
+    assert actual_results == expected_results, "Did not receive the expected results."

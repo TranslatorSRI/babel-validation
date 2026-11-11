@@ -25,16 +25,15 @@ param_sets  — The full list of param_sets for one assertion in one issue.
 
 import logging
 import re
-from typing import Iterator
+from collections.abc import Iterator
 
 import yaml
+from github import Auth, Github, Issue
 
-from github import Github, Auth, Issue
-
-from src.babel_validation.assertions import ASSERTION_HANDLERS
-from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nameres import CachedNameRes
-from src.babel_validation.services.nodenorm import CachedNodeNorm
+from babel_validation.assertions import ASSERTION_HANDLERS
+from babel_validation.core.testrow import TestResult
+from babel_validation.services.nameres import CachedNameRes
+from babel_validation.services.nodenorm import CachedNodeNorm
 
 _logger = logging.getLogger(__name__)
 
@@ -43,14 +42,14 @@ _logger = logging.getLogger(__name__)
 # reviews them before we parse them and turn them into live API calls. These caps bound what a
 # single issue can cost us. They all sit far above anything a real issue contains — an issue
 # that trips one is meant to be split up, so exceeding them fails loudly rather than truncating.
-MAX_ISSUE_BODY_CHARS = 65536      # GitHub's own issue-body limit; longer means something is wrong
-MAX_BABELTESTS_PER_ISSUE = 100    # an issue with more assertions than this is not human-reviewable
-MAX_PARAM_SETS_PER_ISSUE = 1000   # bounds the fan-out even when the param_sets are empty
-MAX_PARAMS_PER_ISSUE = 1000       # prepare_params_lists fans a whole assertion into ONE POST body
+MAX_ISSUE_BODY_CHARS = 65536  # GitHub's own issue-body limit; longer means something is wrong
+MAX_BABELTESTS_PER_ISSUE = 100  # an issue with more assertions than this is not human-reviewable
+MAX_PARAM_SETS_PER_ISSUE = 1000  # bounds the fan-out even when the param_sets are empty
+MAX_PARAMS_PER_ISSUE = 1000  # prepare_params_lists fans a whole assertion into ONE POST body
 
 # Assertion names are looked up in ASSERTION_HANDLERS, but the raw name reaches a log line and
 # str(self) first, so its shape is checked before it gets that far. Every real NAME matches.
-_ASSERTION_NAME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_]{0,63}$')
+_ASSERTION_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
 class _NoAliasSafeLoader(yaml.SafeLoader):
@@ -125,7 +124,9 @@ def _to_str_list(value, context: str) -> list[str]:
 class GitHubIssueTest:
     """Represents one assertion extracted from a GitHub issue body — an assertion name paired with a list of param_sets to evaluate."""
 
-    def __init__(self, github_issue_id: str, github_issue: Issue.Issue, assertion: str, param_sets: list[list[str]] = None):
+    def __init__(
+        self, github_issue_id: str, github_issue: Issue.Issue, assertion: str, param_sets: list[list[str]] = None
+    ):
         """
         :param github_issue_id: Human-readable issue identifier, e.g. "org/repo#42".
         :param github_issue: The PyGitHub Issue object this test was extracted from.
@@ -135,7 +136,9 @@ class GitHubIssueTest:
                            Each inner list is one param_set — see module docstring for details.
         """
         if not isinstance(param_sets, list) and param_sets is not None:
-            raise ValueError(f"param_sets must be a list when creating a GitHubIssueTest({github_issue}, {assertion}, {param_sets!r})")
+            raise ValueError(
+                f"param_sets must be a list when creating a GitHubIssueTest({github_issue}, {assertion}, {param_sets!r})"
+            )
         # Checked here rather than in either parser branch: this is the one place the wiki and
         # YAML syntaxes both route through, and it runs before the name reaches a log line,
         # str(self), or the "unknown assertion" message in test_github_issues.py. A name that
@@ -170,8 +173,12 @@ class GitHubIssueTest:
     def test_with_nodenorm(self, nodenorm: CachedNodeNorm) -> Iterator[TestResult]:
         return self._get_handler().test_with_nodenorm(self.param_sets, nodenorm, label=str(self))
 
-    def test_with_nameres(self, nodenorm: CachedNodeNorm, nameres: CachedNameRes, pass_if_found_in_top=5) -> Iterator[TestResult]:
-        return self._get_handler().test_with_nameres(self.param_sets, nodenorm, nameres, pass_if_found_in_top, label=str(self))
+    def test_with_nameres(
+        self, nodenorm: CachedNodeNorm, nameres: CachedNameRes, pass_if_found_in_top=5
+    ) -> Iterator[TestResult]:
+        return self._get_handler().test_with_nameres(
+            self.param_sets, nodenorm, nameres, pass_if_found_in_top, label=str(self)
+        )
 
 
 class GitHubIssuesTestCases:
@@ -184,7 +191,7 @@ class GitHubIssuesTestCases:
 
     # Case-insensitive, matching the case-insensitivity of assertion names.
     # Group 1 captures everything between '{{BabelTest|' and '}}'.
-    _BABELTEST_RE = re.compile(r'{{BabelTest\|(.*?)}}', re.IGNORECASE)
+    _BABELTEST_RE = re.compile(r"{{BabelTest\|(.*?)}}", re.IGNORECASE)
     # This pattern used to end `babel_tests:\s+.*?\s+```. Those three nested backtracking
     # quantifiers made matching cubic on a body that opens a babel_tests block and never closes
     # the fence: 6.8s at 4KB, 53s at 8KB, and hours at GitHub's 65536-character limit. Worse, it
@@ -200,7 +207,7 @@ class GitHubIssuesTestCases:
     #
     # Keep it group-free: findall() is called with this pattern and would return the group
     # rather than the whole match.
-    _BABELTEST_YAML_RE = re.compile(r'```yaml\s+babel_tests:[^\S\n]*\n.*?```', re.DOTALL)
+    _BABELTEST_YAML_RE = re.compile(r"```yaml\s+babel_tests:[^\S\n]*\n.*?```", re.DOTALL)
 
     def __init__(self, github_token: str, github_repositories):
         """
@@ -214,7 +221,7 @@ class GitHubIssuesTestCases:
         :param github_repositories: A list of GitHub repositories to pull issues from, specified as 'organization/repo'.
         """
         self.github_token = github_token
-        if not self.github_token or self.github_token.strip() == '':
+        if not self.github_token or self.github_token.strip() == "":
             raise ValueError("No GitHub authentication token provided.")
 
         self.github = Github(auth=Auth.Token(self.github_token))
@@ -248,11 +255,16 @@ class GitHubIssuesTestCases:
         """
 
         github_issue_id = issue_id(github_issue)
-        self.logger.debug("Looking for tests in issue %s: %s (%s, %s)",
-                          github_issue_id, github_issue.title, github_issue.state, github_issue.html_url)
+        self.logger.debug(
+            "Looking for tests in issue %s: %s (%s, %s)",
+            github_issue_id,
+            github_issue.title,
+            github_issue.state,
+            github_issue.html_url,
+        )
 
         # Is there an issue body at all?
-        if not github_issue.body or github_issue.body.strip() == '':
+        if not github_issue.body or github_issue.body.strip() == "":
             return []
 
         if len(github_issue.body) > MAX_ISSUE_BODY_CHARS:
@@ -288,17 +300,14 @@ class GitHubIssuesTestCases:
                 # _NoAliasSafeLoader rather than safe_load: safe_load blocks code execution
                 # but still expands aliases and honours merge keys.
                 try:
-                    yaml_dict = yaml.load(match.removeprefix("```yaml").removesuffix("```"),
-                                          Loader=_NoAliasSafeLoader)
+                    yaml_dict = yaml.load(match.removeprefix("```yaml").removesuffix("```"), Loader=_NoAliasSafeLoader)
                 except RecursionError as e:
                     # A few KB of nested `[[[[...]]]]` blows the interpreter's stack inside the
                     # loader. Report it as the malformed block it is rather than dumping a
                     # several-thousand-frame traceback.
-                    raise ValueError(
-                        f"YAML block in issue {github_issue_id} is nested too deeply to parse"
-                    ) from e
+                    raise ValueError(f"YAML block in issue {github_issue_id} is nested too deeply to parse") from e
 
-                babel_tests = yaml_dict.get('babel_tests') if isinstance(yaml_dict, dict) else None
+                babel_tests = yaml_dict.get("babel_tests") if isinstance(yaml_dict, dict) else None
                 if babel_tests is None:
                     raise ValueError(
                         f"YAML block in issue {github_issue_id} matched the detection pattern "
@@ -324,8 +333,7 @@ class GitHubIssuesTestCases:
                             f"param list — use an empty list [] or remove the entry"
                         )
                     normalized = _to_list(
-                        original_param_sets,
-                        f"YAML block in issue {github_issue_id}: assertion '{assertion}'"
+                        original_param_sets, f"YAML block in issue {github_issue_id}: assertion '{assertion}'"
                     )
                     param_sets = [
                         _to_str_list(ps, f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set")
@@ -365,15 +373,14 @@ class GitHubIssuesTestCases:
 
     def issue_has_tests(self, issue: Issue.Issue) -> bool:
         """Quick regex check to see if an issue body contains any BabelTest syntax."""
-        if not issue.body or issue.body.strip() == '':
+        if not issue.body or issue.body.strip() == "":
             return False
         if len(issue.body) > MAX_ISSUE_BODY_CHARS:
             # Claim it rather than raising: this runs during collection over every issue the
             # search returned, so raising here would abort the whole run for one bad issue.
             # Saying yes routes it to get_test_issues_from_issue(), where it fails on its own.
             return True
-        return bool(self._BABELTEST_RE.search(issue.body) or
-                    self._BABELTEST_YAML_RE.search(issue.body))
+        return bool(self._BABELTEST_RE.search(issue.body) or self._BABELTEST_YAML_RE.search(issue.body))
 
     def get_issues_by_ids(self, issue_ids: list[str]) -> list[Issue.Issue]:
         """
@@ -395,11 +402,12 @@ class GitHubIssuesTestCases:
         'org/repo/../../elsewhere#1' would reach the GitHub API as a URL path.
         """
         from github import UnknownObjectException
+
         issues = []
         configured = {r.lower() for r in self.github_repositories}
         for raw_id in issue_ids:
             found = False
-            if m := re.match(r'^([^/]+)/([^#]+)#(\d+)$', raw_id):
+            if m := re.match(r"^([^/]+)/([^#]+)#(\d+)$", raw_id):
                 # org/repo#N
                 full_repo = f"{m.group(1)}/{m.group(2)}"
                 if full_repo.lower() in configured:
@@ -408,11 +416,11 @@ class GitHubIssuesTestCases:
                         found = True
                     except UnknownObjectException:
                         pass
-            elif m := re.match(r'^([^/#]+)#(\d+)$', raw_id):
+            elif m := re.match(r"^([^/#]+)#(\d+)$", raw_id):
                 # repo#N — find repo in configured list
                 repo_name, num = m.group(1), int(m.group(2))
                 for full_repo in self.github_repositories:
-                    parts = full_repo.split('/')
+                    parts = full_repo.split("/")
                     if len(parts) >= 2 and parts[1] == repo_name:
                         try:
                             issues.append(self.github.get_repo(full_repo).get_issue(num))
@@ -420,7 +428,7 @@ class GitHubIssuesTestCases:
                         except UnknownObjectException:
                             pass
                         break
-            elif m := re.match(r'^(\d+)$', raw_id):
+            elif m := re.match(r"^(\d+)$", raw_id):
                 # N — try all configured repos; skip repos that don't have this issue number.
                 num = int(m.group(1))
                 for full_repo in self.github_repositories:
@@ -452,7 +460,7 @@ class GitHubIssuesTestCases:
             github_repositories = self.github_repositories
         for repo_id in github_repositories:
             seen_numbers = set()
-            for keyword in ['{{BabelTest', 'babel_tests:']:
+            for keyword in ["{{BabelTest", "babel_tests:"]:
                 query = f'"{keyword}" is:issue in:body repo:{repo_id}'
                 self.logger.info("Searching GitHub issues with query: %s", query)
                 for issue in self.github.search_issues(query):

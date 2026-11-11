@@ -6,7 +6,6 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "black>=25.9.0",
     "pyyaml>=6.0",
     "requests>=2.32.5",
     "filelock",
@@ -20,6 +19,14 @@ dependencies = [
     "pytest-subtests",
 ]
 
+# Tools for working on this repository, not needed to use babel_validation, so they stay out of
+# the wheel's dependencies. `uv sync` and `uv run` install the dev group by default, and
+# ruff-action in tests.yaml reads ruff's version from uv.lock, which covers this group too.
+[dependency-groups]
+dev = [
+    "ruff>=0.14.14",
+]
+
 [project.urls]
 Repository = "https://github.com/TranslatorSRI/babel-validation"
 
@@ -28,15 +35,51 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# Package the entire `src/` directory so existing imports
-# (`from src.babel_validation.X import Y`) continue to work after install.
-packages = ["src"]
+packages = ["src/babel_validation"]
 
 [tool.pytest.ini_options]
 # Without testpaths, a bare `pytest` would also scan the website directories
 # (including node_modules) during collection.
 testpaths = ["tests"]
+# Import babel_validation from the source tree, whatever is installed. The wheel packages only
+# src/babel_validation, so an editable install made when it packaged all of src/ still points
+# at the repository root, and collection failed with "No module named 'babel_validation'"
+# until `uv sync` was re-run. This also lets a bare `pytest` run with no install at all.
+pythonpath = ["src"]
 timeout = 300
+# Canonical marker definitions. Every test that talks to a live service or downloads the
+# Google Sheet is unmarked, so `pytest -m unit` is the offline subset CI can run on every PR.
 markers = [
-    "unit: unit tests that do not require network access",
+    "unit: fast offline tests with no external dependencies",
 ]
+
+# Linting/formatting configuration, kept in sync with NCATSTranslator/Babel.
+[tool.ruff]
+line-length = 120
+# log-analysis/ holds exploratory notebooks, not maintained code: one cell does not even parse.
+# Linting them would gate CI on scratch work nobody imports.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade
+    "TID251",  # banned imports: see banned-api below. Ours alone, not part of the Babel settings.
+]
+
+ignore = [
+    "E501",  # let Ruff handle wrapping consistently
+]
+
+fixable = ["ALL"]
+unfixable = []
+
+# Under pytest, `src.babel_validation` still resolves (tests/__init__.py puts the repository root
+# on sys.path, where src/ counts as a namespace package), so a test using it passes. But it loads a
+# second copy of every module, with its own from_url() singletons and caches, and the same import
+# fails with "No module named 'src'" anywhere outside pytest. Banning `src` catches every form:
+# `from src.babel_validation.x import y`, `import src.babel_validation.x` and `from src import ...`.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"src" = { msg = "Import babel_validation, not src.babel_validation (see AGENTS.md, 'Library')" }

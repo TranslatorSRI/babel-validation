@@ -14,7 +14,7 @@ The one trusted input here is the URL we ask for, which comes from the checked-i
 
 These are test-facing: they fail (or skip) the calling test with ``assert`` and
 ``pytest.skip``. The release-name parsing they build on needs neither, and is in
-``src.babel_validation.core.babel_release`` for use outside the test suite.
+``babel_validation.core.babel_release`` for use outside the test suite.
 """
 
 import functools
@@ -24,7 +24,7 @@ import urllib.parse
 import pytest
 import requests
 
-from src.babel_validation.core.babel_release import babel_release_date, match_babel_version
+from babel_validation.core.babel_release import babel_release_date, match_babel_version
 
 # The longest repr() we will put into an assertion message, and the most keys we
 # will list from an object, so that a service returning something enormous or
@@ -39,10 +39,10 @@ STATUS_TIMEOUT_SECONDS = 30
 # A NodeNorm /status version: a release number, with an optional 'v' and anything after it
 # ('1.2.0', 'v1.2.1', '1.3', '1.3.0-rc1', and PEP 440's '1.3.0.dev0' or '1.2.0.post1', since
 # NodeNorm ES is a Python project). A fourth number ('1.2.3.4') is not a suffix: rejected.
-NODENORM_VERSION = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?(?!\d|\.\d)')
+NODENORM_VERSION = re.compile(r"v?(\d+)\.(\d+)(?:\.(\d+))?(?!\d|\.\d)")
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _fetch_json(url):
     # lru_cache does not cache an exception, so a failed fetch fails this test and is
     # retried by the next one, rather than being remembered for the rest of the run. That
@@ -91,7 +91,7 @@ def openapi_url(target_info, url_key, path_key):
     :param path_key: The targets.ini key giving the path to the OpenAPI document.
     :return: The URL of the OpenAPI document.
     """
-    return urllib.parse.urljoin(target_info[url_key], target_info.get(path_key, 'openapi.json'))
+    return urllib.parse.urljoin(target_info[url_key], target_info.get(path_key, "openapi.json"))
 
 
 def truncated_repr(value, max_length=MAX_REPR_LENGTH):
@@ -137,30 +137,24 @@ def assert_x_translator(url, openapi_json, expected_infores):
     :param openapi_json: The parsed OpenAPI document.
     :param expected_infores: The infores identifier this service should declare.
     """
-    assert isinstance(openapi_json, dict), (
-        f"{url} did not return a JSON object: {truncated_repr(openapi_json)}"
-    )
+    assert isinstance(openapi_json, dict), f"{url} did not return a JSON object: {truncated_repr(openapi_json)}"
 
-    assert 'info' in openapi_json, (
-        f"{url} has no info block (top-level keys: {truncated_keys_repr(openapi_json)})."
-    )
-    info = openapi_json['info']
-    assert isinstance(info, dict), (
-        f"{url} has an info that is not a JSON object: {truncated_repr(info)}"
-    )
+    assert "info" in openapi_json, f"{url} has no info block (top-level keys: {truncated_keys_repr(openapi_json)})."
+    info = openapi_json["info"]
+    assert isinstance(info, dict), f"{url} has an info that is not a JSON object: {truncated_repr(info)}"
 
-    assert 'x-translator' in info, (
+    assert "x-translator" in info, (
         f"{url} has no info.x-translator block (info keys: {truncated_keys_repr(info)}). Every "
         f"Translator service needs one to be registered in SmartAPI; a service that is missing it "
         f"altogether is usually serving FastAPI's default OpenAPI document instead of its own "
         f"openapi.yml."
     )
-    x_translator = info['x-translator']
+    x_translator = info["x-translator"]
     assert isinstance(x_translator, dict), (
         f"{url} has an info.x-translator that is not a JSON object: {truncated_repr(x_translator)}"
     )
 
-    assert x_translator.get('infores') == expected_infores, (
+    assert x_translator.get("infores") == expected_infores, (
         f"{url} declares info.x-translator.infores as "
         f"{truncated_repr(x_translator.get('infores'))}, expected {expected_infores!r}."
     )
@@ -180,11 +174,9 @@ def assert_backend(url, status_json, expected_backend):
     :param status_json: The parsed /status response.
     :param expected_backend: The backend this target is configured to be talking to.
     """
-    assert isinstance(status_json, dict), (
-        f"{url} did not return a JSON object: {truncated_repr(status_json)}"
-    )
+    assert isinstance(status_json, dict), f"{url} did not return a JSON object: {truncated_repr(status_json)}"
 
-    assert status_json.get('backend') == expected_backend, (
+    assert status_json.get("backend") == expected_backend, (
         f"{url} reports backend {truncated_repr(status_json.get('backend'))}, but this target is "
         f"configured as {expected_backend!r}. Either the deployment was repointed at the other "
         f"backend, in which case targets.ini needs to follow it (including the path to its "
@@ -200,8 +192,8 @@ def parse_babel_version(url, status_json):
     :param status_json: The parsed /status response.
     :return: The babel_version, which is safe to build a URL from.
     """
-    assert 'babel_version' in status_json, f"{url} does not report a babel_version."
-    babel_version = status_json['babel_version']
+    assert "babel_version" in status_json, f"{url} does not report a babel_version."
+    babel_version = status_json["babel_version"]
 
     assert match_babel_version(babel_version), (
         f"{url} reports babel_version {truncated_repr(babel_version)}, which is not a Babel "
@@ -225,7 +217,7 @@ def get_status(target_info):
     :param target_info: The target information for this set of tests.
     :return: A tuple of the /status URL and its parsed response.
     """
-    status_url = urllib.parse.urljoin(target_info['NodeNormURL'], 'status')
+    status_url = urllib.parse.urljoin(target_info["NodeNormURL"], "status")
     return status_url, _fetch_json(status_url)
 
 
@@ -243,12 +235,9 @@ def nodenorm_version(target_info):
     :return: The version as (major, minor, patch).
     """
     status_url, status_json = get_status(target_info)
-    version = status_json.get('version')
+    version = status_json.get("version")
     match = NODENORM_VERSION.match(version) if isinstance(version, str) else None
-    assert match, (
-        f"{status_url} reports no NodeNorm release number such as '1.2.0': "
-        f"{truncated_repr(version)}"
-    )
+    assert match, f"{status_url} reports no NodeNorm release number such as '1.2.0': {truncated_repr(version)}"
     return tuple(int(part or 0) for part in match.groups())
 
 
@@ -271,9 +260,7 @@ def require_babel_release(target_info, minimum_version):
     status_url, status_json = get_status(target_info)
     babel_version = parse_babel_version(status_url, status_json)
     if babel_release_date(babel_version) < minimum_date:
-        pytest.skip(
-            f"{status_url} serves Babel {babel_version}; this test needs {minimum_version} or later"
-        )
+        pytest.skip(f"{status_url} serves Babel {babel_version}; this test needs {minimum_version} or later")
 
 
 def get_normalized_node(target_info, curie, **params):
@@ -288,11 +275,9 @@ def get_normalized_node(target_info, curie, **params):
     :param params: Further request parameters; conflate defaults to False.
     :return: The normalized node for curie.
     """
-    url = urllib.parse.urljoin(target_info['NodeNormURL'], 'get_normalized_nodes')
-    response = requests.post(url, json={'curies': [curie], 'conflate': False, **params})
-    assert response.ok, (
-        f"POST {url} returned HTTP {response.status_code}: {truncated_repr(response.text)}"
-    )
+    url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_normalized_nodes")
+    response = requests.post(url, json={"curies": [curie], "conflate": False, **params})
+    assert response.ok, f"POST {url} returned HTTP {response.status_code}: {truncated_repr(response.text)}"
     result = response.json()
     assert isinstance(result, dict), f"{url} did not return a JSON object: {truncated_repr(result)}"
     node = result.get(curie)

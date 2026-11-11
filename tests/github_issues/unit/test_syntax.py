@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
-from src.babel_validation.core.testrow import TestStatus
+from babel_validation.core.testrow import TestStatus
 from tests.github_issues.unit._helpers import _mock_issue
 
 pytestmark = pytest.mark.unit
@@ -20,9 +20,7 @@ class TestInvalidAssertionNameDetection:
         return _mock_issue(f"{{{{BabelTest|{INVALID_NAME}|CHEBI:90926}}}}")
 
     def _yaml_issue(self):
-        return _mock_issue(
-            f"```yaml\nbabel_tests:\n  {INVALID_NAME}:\n  - CHEBI:90926\n```"
-        )
+        return _mock_issue(f"```yaml\nbabel_tests:\n  {INVALID_NAME}:\n  - CHEBI:90926\n```")
 
     # --- parsing: invalid names are extracted, not rejected ---
 
@@ -72,19 +70,14 @@ class TestTooManyParams:
             return list(tests[0].test_with_nameres(MagicMock(), MagicMock()))
 
     def test_haslabel_too_many_params(self, github_issues_test_cases):
-        results = self._results(
-            github_issues_test_cases,
-            "{{BabelTest|HasLabel|CHEBI:15365|aspirin|unexpected}}"
-        )
+        results = self._results(github_issues_test_cases, "{{BabelTest|HasLabel|CHEBI:15365|aspirin|unexpected}}")
         assert len(results) == 1
         assert results[0].status == TestStatus.Failed
         assert "exactly two" in results[0].message
 
     def test_searchbyname_too_many_params(self, github_issues_test_cases):
         results = self._results(
-            github_issues_test_cases,
-            "{{BabelTest|SearchByName|water|CHEBI:15377|unexpected}}",
-            service="nameres"
+            github_issues_test_cases, "{{BabelTest|SearchByName|water|CHEBI:15377|unexpected}}", service="nameres"
         )
         assert len(results) == 1
         assert results[0].status == TestStatus.Failed
@@ -102,17 +95,13 @@ class TestTooFewParams:
         return list(tests[0].test_with_nodenorm(MagicMock()))
 
     def test_resolveswith_single_curie_fails(self, github_issues_test_cases):
-        results = self._results(
-            github_issues_test_cases, "{{BabelTest|ResolvesWith|CHEBI:15365}}"
-        )
+        results = self._results(github_issues_test_cases, "{{BabelTest|ResolvesWith|CHEBI:15365}}")
         assert len(results) == 1
         assert results[0].status == TestStatus.Failed
         assert "at least two" in results[0].message
 
     def test_doesnotresolvewith_single_curie_fails(self, github_issues_test_cases):
-        results = self._results(
-            github_issues_test_cases, "{{BabelTest|DoesNotResolveWith|CHEBI:15365}}"
-        )
+        results = self._results(github_issues_test_cases, "{{BabelTest|DoesNotResolveWith|CHEBI:15365}}")
         assert len(results) == 1
         assert results[0].status == TestStatus.Failed
         assert "at least two" in results[0].message
@@ -137,11 +126,14 @@ class TestNonStringYamlParams:
     """YAML 1.1 resolves bare `no`/`123`/`1.5` to non-strings; reject them at parse
     time rather than letting them reach param.strip()."""
 
-    @pytest.mark.parametrize("literal, type_name", [
-        ("123", "int"),
-        ("no", "bool"),
-        ("1.5", "float"),
-    ])
+    @pytest.mark.parametrize(
+        "literal, type_name",
+        [
+            ("123", "int"),
+            ("no", "bool"),
+            ("1.5", "float"),
+        ],
+    )
     def test_non_string_param_raises(self, github_issues_test_cases, literal, type_name):
         mock = _mock_issue(f"```yaml\nbabel_tests:\n  HasLabel:\n  - [CHEBI:15365, {literal}]\n```")
         with pytest.raises(ValueError, match=f"expected a string, got {type_name}"):
@@ -249,6 +241,4 @@ class TestWikiMarkerCaseInsensitivity:
         assert tests[0].param_sets == [["CHEBI:15365"]]
 
     def test_wiki_marker_any_case_detected(self, github_issues_test_cases):
-        assert github_issues_test_cases.issue_has_tests(
-            _mock_issue("{{babeltest|Resolves|CHEBI:12345}}")
-        ) is True
+        assert github_issues_test_cases.issue_has_tests(_mock_issue("{{babeltest|Resolves|CHEBI:12345}}")) is True

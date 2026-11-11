@@ -45,4 +45,4 @@ When writing new tests:
 - **Don't assert on `caplog.text` for anything about control characters**: it does not carry
   them through, so such a test passes whatever the code does. Read `caplog.records` and
   `getMessage()` instead.
-- Import shared classes from `src.babel_validation.*` (e.g. `from src.babel_validation.services.nodenorm import CachedNodeNorm`)
+- Import shared classes from `babel_validation.*` (e.g. `from babel_validation.services.nodenorm import CachedNodeNorm`)

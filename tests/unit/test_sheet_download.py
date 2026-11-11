@@ -17,8 +17,8 @@ import io
 import pytest
 import requests
 
-from src.babel_validation.sources.google_sheets import fetch_sheet_csv
-from src.babel_validation.sources.google_sheets.blocklist import (
+from babel_validation.sources.google_sheets import fetch_sheet_csv
+from babel_validation.sources.google_sheets.blocklist import (
     load_blocklist_from_gsheet,
 )
 
@@ -157,9 +157,7 @@ def test_a_stale_cache_is_refetched(cache, monkeypatch):
         ),
         pytest.param(
             lambda url, timeout=None: (_ for _ in ()).throw(
-                requests.ConnectTimeout(
-                    f"Connection to docs.google.com timed out: {url}"
-                )
+                requests.ConnectTimeout(f"Connection to docs.google.com timed out: {url}")
             ),
             id="connect-timeout",
         ),

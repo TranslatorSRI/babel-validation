@@ -8,10 +8,14 @@ import pytest
 from filelock import FileLock
 from github import GithubException, Issue
 
-from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases, issue_id
+from babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases, issue_id
 from tests._pytest_helpers import (
     GITHUB_ISSUES_CACHE_FILE as _CACHE_FILE,
+)
+from tests._pytest_helpers import (
     GITHUB_ISSUES_LOCK_FILE as _LOCK_FILE,
+)
+from tests._pytest_helpers import (
     deselected_by_markexpr,
 )
 
@@ -27,12 +31,8 @@ _AUTH_HELP = (
 )
 
 _targets_config = configparser.ConfigParser()
-_targets_config.read(Path(__file__).parent.parent / 'targets.ini')
-_repos = [
-    r.strip()
-    for r in _targets_config['DEFAULT']['Repositories'].splitlines()
-    if r.strip()
-]
+_targets_config.read(Path(__file__).parent.parent / "targets.ini")
+_repos = [r.strip() for r in _targets_config["DEFAULT"]["Repositories"].splitlines() if r.strip()]
 _github_issues_test_cases = None
 
 # Module-level cache to avoid re-fetching issues already retrieved during collection.
@@ -46,7 +46,7 @@ def _get_github_issues_test_cases() -> GitHubIssuesTestCases:
         return _github_issues_test_cases
     if _github_token is None:
         dotenv.load_dotenv()
-        _github_token = os.getenv('GITHUB_TOKEN') or ''
+        _github_token = os.getenv("GITHUB_TOKEN") or ""
     if not _github_token:
         pytest.skip(
             "GITHUB_TOKEN environment variable not set; skipping GitHub issues tests.",

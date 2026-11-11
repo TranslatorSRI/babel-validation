@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from src.babel_validation.tools import generate_report
-from src.babel_validation.tools.generate_report import (
+from babel_validation.tools import generate_report
+from babel_validation.tools.generate_report import (
     append_history,
     build_results,
     classify_record,
@@ -29,9 +29,7 @@ TARGETS = ["prod", "test", "ci", "ci-es", "dev", "exp"]
 ALLOWLIST = ["ncatstranslator/babel", "translatorsri/babel-validation"]
 
 
-def _record(
-    nodeid, outcome="passed", when="call", wasxfail=False, msg=None, props=None
-):
+def _record(nodeid, outcome="passed", when="call", wasxfail=False, msg=None, props=None):
     return {
         "id": nodeid,
         "when": when,
@@ -64,15 +62,13 @@ class TestTargetExtraction:
 
     def test_parse_nodeid_strips_target_from_key(self):
         key, target, rest = parse_nodeid(
-            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
-            "[dev-test_nodenorm_from_gsheet.test_row:row=131]",
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-test_nodenorm_from_gsheet.test_row:row=131]",
             TARGETS,
         )
         assert target == "dev"
         assert rest == "test_nodenorm_from_gsheet.test_row:row=131"
         assert key == (
-            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
-            "[test_nodenorm_from_gsheet.test_row:row=131]"
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nodenorm_from_gsheet.test_row:row=131]"
         )
 
     def test_parse_nodeid_strips_the_rootdir_relative_tests_prefix(self):
@@ -135,10 +131,7 @@ class TestClassification:
 
 class TestLinkValidation:
     def test_issue_id_allowlisted(self):
-        assert (
-            validate_issue_id("NCATSTranslator/Babel#12", ALLOWLIST)
-            == "NCATSTranslator/Babel#12"
-        )
+        assert validate_issue_id("NCATSTranslator/Babel#12", ALLOWLIST) == "NCATSTranslator/Babel#12"
 
     @pytest.mark.parametrize(
         "issue_id",
@@ -177,8 +170,7 @@ class TestLinkValidation:
 class TestResultAnnotation:
     def test_gsheet_row_and_props(self):
         nodeid = (
-            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
-            "[dev-test_nodenorm_from_gsheet.test_row:row=131]"
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-test_nodenorm_from_gsheet.test_row:row=131]"
         )
         records = [
             _record(
@@ -200,9 +192,7 @@ class TestResultAnnotation:
         assert result["row"] == 131
         assert result["category"] == "Diseases"
         assert result["query_id"] == "MONDO:0005148"
-        assert (
-            result["source_url"] == "https://github.com/NCATSTranslator/Babel/issues/12"
-        )
+        assert result["source_url"] == "https://github.com/NCATSTranslator/Babel/issues/12"
 
     def test_gsheet_props_merged_across_targets(self):
         # dev errors during setup, before record_property runs, so its records
@@ -218,19 +208,13 @@ class TestResultAnnotation:
 
     def test_gsheet_bad_source_url_omitted(self):
         nodeid = "nameres/test_nameres_from_gsheet.py::test_label[prod-x:row=5]"
-        records = [
-            _record(
-                nodeid, "failed", msg="m", props={"source_url": "https://evil.example/"}
-            )
-        ]
+        records = [_record(nodeid, "failed", msg="m", props={"source_url": "https://evil.example/"})]
         results, _, _ = build_results(records, TARGETS, ALLOWLIST)
         (result,) = results.values()
         assert "source_url" not in result
 
     def test_issue_not_in_allowlist_becomes_other_without_link(self):
-        nodeid = (
-            "github_issues/test_github_issues.py::test_github_issue[dev-evil/repo#1]"
-        )
+        nodeid = "github_issues/test_github_issues.py::test_github_issue[dev-evil/repo#1]"
         results, _, ran = build_results([_record(nodeid, "passed")], TARGETS, ALLOWLIST)
         (result,) = results.values()
         assert result["kind"] == "other"
@@ -262,9 +246,7 @@ class TestResultAnnotation:
         base = "nameres/test_blocklist.py::test_blocklist_entry"
         records = [
             _record(f"{base}[dev-blocklist_entry0]", "failed", msg="secret entry text"),
-            _record(
-                f"{base}[prod-blocklist_entry0]", "failed", msg="secret entry text"
-            ),
+            _record(f"{base}[prod-blocklist_entry0]", "failed", msg="secret entry text"),
         ]
         results, _, _ = build_results(records, TARGETS, ALLOWLIST)
         (result,) = results.values()
@@ -281,9 +263,7 @@ class TestNoSheetLeak:
         # the environment and check it cannot surface in the output.
         sheet_id = "FAKE-SHEET-ID-FOR-LEAK-TEST-0123456789"
         monkeypatch.setenv("BABEL_VALIDATION_SHEET_ID", sheet_id)
-        monkeypatch.setattr(
-            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
-        )
+        monkeypatch.setattr(generate_report, "fetch_status", lambda url, service: {"status": "ok"})
         records = [
             _record(
                 "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-x:row=42]",
@@ -294,12 +274,8 @@ class TestNoSheetLeak:
         ]
         results, counts, ran = build_results(records, TARGETS, ALLOWLIST)
         config = configparser.ConfigParser()
-        config.read_string(
-            "[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n"
-        )
-        report = generate_report.build_report(
-            results, counts, ran, ["dev"], ALLOWLIST, config
-        )
+        config.read_string("[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n")
+        report = generate_report.build_report(results, counts, ran, ["dev"], ALLOWLIST, config)
         dumped = json.dumps(report)
         assert sheet_id not in dumped
         assert "docs.google.com" not in dumped
@@ -347,9 +323,7 @@ class TestTrimStatus:
         assert "\x1b" not in trimmed["status"]
         assert len(trimmed["babel_version"]) < 100
         assert trimmed["databases"]["eq_id_to_id_db"]["count"] == 12345
-        assert (
-            len(trimmed["databases"]["eq_id_to_id_db"]["used_memory_rss_human"]) <= 32
-        )
+        assert len(trimmed["databases"]["eq_id_to_id_db"]["used_memory_rss_human"]) <= 32
         assert "weird" not in trimmed["databases"]
         assert trimmed["recent_queries"] == {"p95_ms": 12.5}
         assert trimmed["index"] == {"numDocs": 7, "size": "1 GB"}
@@ -371,15 +345,11 @@ class TestTrimStatus:
         }
         expected = {"numDocs": 7, "size": "1 GB", **dates}
         # Before NameRes v1.7, the index stats were under "solr".
-        before = trim_status(
-            {"solr": {"numDocs": 7, "size": "1 GB", **dates}}, "nameres"
-        )
+        before = trim_status({"solr": {"numDocs": 7, "size": "1 GB", **dates}}, "nameres")
         assert before["index"] == expected
         # From v1.7 they are at the top level, including the index's own
         # "version" counter, which must not pass for the service's version.
-        after = trim_status(
-            {"numDocs": "7", "size": "1 GB", "version": 68618, **dates}, "nameres"
-        )
+        after = trim_status({"numDocs": "7", "size": "1 GB", "version": 68618, **dates}, "nameres")
         assert after["index"] == expected
         assert "version" not in after
         # NameRes ES reports a top-level index too; 0 is a real value there.
@@ -422,24 +392,18 @@ class TestTrimStatus:
         assert trimmed["babel_available_versions"] == ["2025sep1", "2026jul22"]
 
     @pytest.mark.parametrize("available", ["2026jul22", 3, True])
-    def test_babel_releases_served_in_an_unknown_shape_is_logged(
-        self, available, caplog
-    ):
+    def test_babel_releases_served_in_an_unknown_shape_is_logged(self, available, caplog):
         # Dropping it silently hid the row, which reads as a NodeNorm that serves
         # only its default release.
         trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
         assert "babel_available_versions" not in trimmed
-        assert any(
-            "available_versions" in r.getMessage() for r in caplog.records
-        ), caplog.records
+        assert any("available_versions" in r.getMessage() for r in caplog.records), caplog.records
 
     def test_babel_releases_served_with_no_real_release_is_logged(self, caplog):
         available = {"latest": "", "\x1b[2J": ""}
         trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
         assert trimmed["babel_available_versions"] == []
-        assert any(
-            "none a Babel release" in r.getMessage() for r in caplog.records
-        ), caplog.records
+        assert any("none a Babel release" in r.getMessage() for r in caplog.records), caplog.records
 
     def test_babel_releases_served_absent_is_quiet(self, caplog):
         trimmed = trim_status({"babel": {"default_version": "2025sep1"}}, "nodenorm")
@@ -475,9 +439,7 @@ class TestTrimStatus:
         # lexically smallest rather than the newest.
         nodes = {
             f"es-{i}": {"version": version}
-            for i, version in enumerate(
-                ["8.10.0", "8.9.0", "8.2.0", "8.11.1", "8.8.0", "8.1.0", "8.10.0-rc1"]
-            )
+            for i, version in enumerate(["8.10.0", "8.9.0", "8.2.0", "8.11.1", "8.8.0", "8.1.0", "8.10.0-rc1"])
         }
         trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
         assert trimmed["elasticsearch"]["versions"] == [
@@ -502,10 +464,7 @@ class TestTrimStatus:
         assert trimmed["elasticsearch"] == {"nodes": 0}
 
     def test_elasticsearch_summary_is_bounded_and_escaped(self):
-        nodes = {
-            f"es-{i}": {"version": "\x1b[2J9" * 20, "disk.used_percent": "1"}
-            for i in range(1000)
-        }
+        nodes = {f"es-{i}": {"version": "\x1b[2J9" * 20, "disk.used_percent": "1"} for i in range(1000)}
         nodes["es-0"]["version"] = "\x1b[2J" + "9" * 100
         for i in range(10):
             nodes[f"es-{i}"]["version"] = f"9.{i}"
@@ -541,15 +500,11 @@ class TestTrimStatus:
 
 class TestAllTargetsUnreachable:
     def test_all_unreachable_means_the_run_broke(self):
-        report = {
-            "targets": {"dev": {"unreachable": True}, "prod": {"unreachable": True}}
-        }
+        report = {"targets": {"dev": {"unreachable": True}, "prod": {"unreachable": True}}}
         assert generate_report.all_targets_unreachable(report) is True
 
     def test_one_reachable_target_is_enough(self):
-        report = {
-            "targets": {"dev": {"unreachable": True}, "prod": {"unreachable": False}}
-        }
+        report = {"targets": {"dev": {"unreachable": True}, "prod": {"unreachable": False}}}
         assert generate_report.all_targets_unreachable(report) is False
 
 
@@ -573,9 +528,7 @@ class TestHistory:
 
     def test_missing_history_file(self):
         run = _run("2026-08-26")
-        assert append_history("/nonexistent/history.jsonl", run) == (
-            json.dumps(run) + "\n"
-        )
+        assert append_history("/nonexistent/history.jsonl", run) == (json.dumps(run) + "\n")
 
     def test_run_without_any_test_results_is_dropped(self, tmp_path):
         # The shakedown run that died before pytest reported anything: real
@@ -595,10 +548,7 @@ class TestHistory:
 class TestBadInputIsSkippedNotFatal:
     def test_non_string_id_is_skipped(self, tmp_path, caplog):
         (tmp_path / "raw.jsonl").write_text(
-            json.dumps({"id": 5})
-            + "\n"
-            + json.dumps(_record("a/b.py::t[dev-x]"))
-            + "\n",
+            json.dumps({"id": 5}) + "\n" + json.dumps(_record("a/b.py::t[dev-x]")) + "\n",
             encoding="utf-8",
         )
         records = read_raw_records(str(tmp_path))
@@ -660,9 +610,7 @@ class TestBadInputIsSkippedNotFatal:
 
 class TestServiceLinks:
     def test_build_report_links_each_service_by_its_backend(self, monkeypatch):
-        monkeypatch.setattr(
-            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
-        )
+        monkeypatch.setattr(generate_report, "fetch_status", lambda url, service: {"status": "ok"})
         config = configparser.ConfigParser()
         config.read_string(
             "[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n"
@@ -670,9 +618,7 @@ class TestServiceLinks:
             "NameResURL = https://nr-es.example/\nNameResBackend = elasticsearch\n"
         )
         counts = collections.defaultdict(collections.Counter)
-        targets = generate_report.build_report(
-            {}, counts, True, ["dev", "ci"], ALLOWLIST, config
-        )["targets"]
+        targets = generate_report.build_report({}, counts, True, ["dev", "ci"], ALLOWLIST, config)["targets"]
         assert targets["dev"]["nodenorm_backend"] == "redis"
         assert targets["dev"]["nameres_backend"] == "solr"
         assert targets["dev"]["nodenorm_docs_url"] == "https://nn.example/docs"
@@ -683,15 +629,11 @@ class TestServiceLinks:
         assert targets["ci"]["nodenorm_status_url"] == "https://nn-es.example/status"
 
     def test_a_service_without_a_url_has_no_backend(self, monkeypatch):
-        monkeypatch.setattr(
-            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
-        )
+        monkeypatch.setattr(generate_report, "fetch_status", lambda url, service: {"status": "ok"})
         config = configparser.ConfigParser()
         config.read_string("[test]\nNodeNormURL = https://nn.example/\n")
         counts = collections.defaultdict(collections.Counter)
-        test = generate_report.build_report(
-            {}, counts, True, ["test"], ALLOWLIST, config
-        )["targets"]["test"]
+        test = generate_report.build_report({}, counts, True, ["test"], ALLOWLIST, config)["targets"]["test"]
         assert test["nodenorm_backend"] == "redis"
         assert test["nameres_backend"] is None
 
@@ -719,12 +661,8 @@ class TestServiceLinks:
     def test_a_missing_url_has_no_links(self):
         assert generate_report.service_links(None, "redis") == (None, None)
 
-    def test_side_branch_of_comes_from_targets_ini_and_is_checked(
-        self, monkeypatch, caplog
-    ):
-        monkeypatch.setattr(
-            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
-        )
+    def test_side_branch_of_comes_from_targets_ini_and_is_checked(self, monkeypatch, caplog):
+        monkeypatch.setattr(generate_report, "fetch_status", lambda url, service: {"status": "ok"})
         config = configparser.ConfigParser()
         config.read_string(
             "[ci]\nNodeNormURL = https://nn.example/\n"
@@ -734,9 +672,7 @@ class TestServiceLinks:
         )
         targets = ["ci", "ci-nr", "self", "gone"]
         counts = collections.defaultdict(collections.Counter)
-        sections = generate_report.build_report(
-            {}, counts, True, targets, ALLOWLIST, config
-        )["targets"]
+        sections = generate_report.build_report({}, counts, True, targets, ALLOWLIST, config)["targets"]
         assert {t: s["side_branch_of"] for t, s in sections.items()} == {
             "ci": None,
             "ci-nr": "ci",
@@ -773,8 +709,10 @@ class TestReadTargets:
     def test_it_keeps_the_order_the_file_gives(self, tmp_path):
         # The site sorts by DEPLOYMENT_ORDER, but the workflow runs them in this
         # order, and a report is easier to read against the file it came from.
-        path = self._ini(tmp_path, "".join(f"[{name}]\nNodeNormURL = https://{name}.example/\n\n"
-                                           for name in ("exp", "dev", "ci", "prod")))
+        path = self._ini(
+            tmp_path,
+            "".join(f"[{name}]\nNodeNormURL = https://{name}.example/\n\n" for name in ("exp", "dev", "ci", "prod")),
+        )
 
         assert read_targets(path)[0] == ["exp", "dev", "ci", "prod"]
 

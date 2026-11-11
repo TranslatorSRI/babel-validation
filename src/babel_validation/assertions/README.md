@@ -1,5 +1,5 @@
 <!-- AUTO-GENERATED — do not edit by hand.
-     Regenerate with: uv run python -m src.babel_validation.assertions.gen_docs -->
+     Regenerate with: uv run python -m babel_validation.assertions.gen_docs -->
 
 # BabelTest Assertion Types
 
@@ -287,5 +287,5 @@ babel_tests:
 5. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
    matter — this file groups handlers by the service they test.
 
-6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
+6. Run `uv run python -m babel_validation.assertions.gen_docs` to regenerate `README.md`,
    and `uv run pytest -m unit` to confirm the checked-in copy is in sync.

@@ -24,12 +24,12 @@ The layout, for orientation while reading the code:
 """
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator
 
-from src.babel_validation.core.testrow import TestResult, TestStatus
-from src.babel_validation.services.nameres import NameResService
-from src.babel_validation.services.nodenorm import NodeNormService
+from babel_validation.core.testrow import TestResult, TestStatus
+from babel_validation.services.nameres import NameResService
+from babel_validation.services.nodenorm import NodeNormService
 
 # The parameters of a single assertion invocation, e.g. ["CHEBI:15365", "aspirin"]
 # for {{BabelTest|HasLabel|CHEBI:15365|aspirin}}. What each element means depends
@@ -42,7 +42,7 @@ _COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
 
 
 def _count(n: int) -> str:
-    """"two" for small n, "17" for larger, plus the correctly pluralized noun."""
+    """ "two" for small n, "17" for larger, plus the correctly pluralized noun."""
     return f"{_COUNT_WORDS.get(n, n)} parameter" + ("" if n == 1 else "s")
 
 
@@ -54,6 +54,7 @@ class PreparedParamsList:
     params_list was rejected before reaching the service and *failure* is the
     TestResult to report in its place.
     """
+
     params: ParamsList
     failure: TestResult | None = None
 
@@ -70,11 +71,11 @@ class AssertionHandler:
     rather than optional commentary.
     """
 
-    NAME: str                  # lowercase assertion name as used in issue bodies
-    DESCRIPTION: str           # one-line human-readable description
-    PARAMETERS: str            # markdown describing what each param means
-    WIKI_EXAMPLES: list[str]   # complete {{BabelTest|...}} lines, shown verbatim
-    YAML_PARAMS: str           # indented YAML list entries for the babel_tests example
+    NAME: str  # lowercase assertion name as used in issue bodies
+    DESCRIPTION: str  # one-line human-readable description
+    PARAMETERS: str  # markdown describing what each param means
+    WIKI_EXAMPLES: list[str]  # complete {{BabelTest|...}} lines, shown verbatim
+    YAML_PARAMS: str  # indented YAML list entries for the babel_tests example
 
     # How many params a params_list must have. MAX_PARAMS None means no upper bound.
     # Checked during preparation: an assertion invoked with the wrong number of
@@ -86,7 +87,7 @@ class AssertionHandler:
     # Assertions about deliberately-invalid identifiers turn this off.
     VALIDATE_CURIES = True
 
-    _CURIE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$')
+    _CURIE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*:[^\s]+$")
 
     # Params can come from an unreviewed GitHub issue body, so they are checked before reaching
     # a service. 1000 characters is far past any real CURIE (under 100) or Biolink type (under
@@ -126,9 +127,9 @@ class AssertionHandler:
         Default: all params are CURIEs. Subclasses override when some params are non-CURIEs."""
         return params
 
-    def prepare_params_lists(self, params_lists: list[ParamsList],
-                             nodenorm: NodeNormService,
-                             label: str = "") -> list[PreparedParamsList]:
+    def prepare_params_lists(
+        self, params_lists: list[ParamsList], nodenorm: NodeNormService, label: str = ""
+    ) -> list[PreparedParamsList]:
         """Strip params, reject unusable params_lists, and warm the NodeNorm cache.
 
         :param params_lists: the params_lists to prepare, as parsed from the issue.
@@ -150,11 +151,7 @@ class AssertionHandler:
 
         # Warm the cache in a single request, deduplicated; skip if empty
         # (normalize_curies raises ValueError on an empty list).
-        curies_to_warm = list({
-            curie
-            for p in prepared if p.failure is None
-            for curie in self.curie_params(p.params)
-        })
+        curies_to_warm = list({curie for p in prepared if p.failure is None for curie in self.curie_params(p.params)})
         if curies_to_warm:
             nodenorm.normalize_curies(curies_to_warm)
 
@@ -190,8 +187,7 @@ class AssertionHandler:
             # enormous, and this message is kept in pytest's report.
             shown = param[:100] + "..." if len(param) > 100 else param
             return self.failed(f"Parameter {shown!r} in params_list {index} in {label} {problem}")
-        if len(params) < self.MIN_PARAMS or (
-                self.MAX_PARAMS is not None and len(params) > self.MAX_PARAMS):
+        if len(params) < self.MIN_PARAMS or (self.MAX_PARAMS is not None and len(params) > self.MAX_PARAMS):
             return self.failed(
                 f"{self.display_name()} requires {self._describe_arity()} "
                 f"per params_list in {label}, but params_list {index} has "
@@ -207,9 +203,9 @@ class AssertionHandler:
             )
         return None
 
-    def test_with_nodenorm(self, params_lists: list[ParamsList],
-                           nodenorm: NodeNormService,
-                           label: str = "") -> Iterator[TestResult]:
+    def test_with_nodenorm(
+        self, params_lists: list[ParamsList], nodenorm: NodeNormService, label: str = ""
+    ) -> Iterator[TestResult]:
         """Evaluate this assertion against NodeNorm, yielding one TestResult per check.
 
         The base implementation yields nothing, which is how an assertion declares
@@ -226,10 +222,14 @@ class AssertionHandler:
         """
         return iter([])
 
-    def test_with_nameres(self, params_lists: list[ParamsList],
-                          nodenorm: NodeNormService, nameres: NameResService,
-                          pass_if_found_in_top: int = 5,
-                          label: str = "") -> Iterator[TestResult]:
+    def test_with_nameres(
+        self,
+        params_lists: list[ParamsList],
+        nodenorm: NodeNormService,
+        nameres: NameResService,
+        pass_if_found_in_top: int = 5,
+        label: str = "",
+    ) -> Iterator[TestResult]:
         """Evaluate this assertion against NameRes, yielding one TestResult per check.
 
         As with test_with_nodenorm(), yielding nothing means "not applicable".
@@ -255,9 +255,9 @@ class NodeNormTest(AssertionHandler):
     Subclasses implement test_params_list() instead of test_with_nodenorm().
     """
 
-    def test_with_nodenorm(self, params_lists: list[ParamsList],
-                           nodenorm: NodeNormService,
-                           label: str = "") -> Iterator[TestResult]:
+    def test_with_nodenorm(
+        self, params_lists: list[ParamsList], nodenorm: NodeNormService, label: str = ""
+    ) -> Iterator[TestResult]:
         if not params_lists:
             yield self.failed(f"No parameters provided in {label}")
             return
@@ -272,8 +272,7 @@ class NodeNormTest(AssertionHandler):
             return
         yield from results
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService, label: str = "") -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per params_list.
 
         *params* already satisfies everything declared on the class: its length is
@@ -296,7 +295,7 @@ class NodeNormTest(AssertionHandler):
     # Deliberately unlike any real type: current ones are prefixed ("biolink:Gene")
     # and older ones were lowercase prose ("chemical entity"), so shouting it in
     # caps keeps a reader from mistaking the placeholder for a type Babel returned.
-    NO_TYPE = 'NO TYPE RETURNED'
+    NO_TYPE = "NO TYPE RETURNED"
 
     @staticmethod
     def first_type(result: dict) -> str:
@@ -304,19 +303,20 @@ class NodeNormTest(AssertionHandler):
 
         NodeNorm normally returns a non-empty `type` list, but guard against an empty
         (or missing) one so message formatting never raises IndexError/KeyError."""
-        types = result.get('type') or []
+        types = result.get("type") or []
         return types[0] if types else NodeNormTest.NO_TYPE
 
-    def resolved_message(self, curie: str, result: dict,
-                         nodenorm: NodeNormService) -> str:
+    def resolved_message(self, curie: str, result: dict, nodenorm: NodeNormService) -> str:
         """Standard pass-message when a CURIE resolves.
 
         *result* is one entry of a NodeNorm get_normalized_nodes response, i.e. a
         non-None value from normalize_curie()/normalize_curies().
         """
-        return (f"Resolved {curie} to {result['id']['identifier']} "
-                f"({self.first_type(result)}, \"{result['id'].get('label', '')}\") "
-                f"with NodeNormalization service {nodenorm}")
+        return (
+            f"Resolved {curie} to {result['id']['identifier']} "
+            f'({self.first_type(result)}, "{result["id"].get("label", "")}") '
+            f"with NodeNormalization service {nodenorm}"
+        )
 
 
 class NameResTest(AssertionHandler):
@@ -325,10 +325,14 @@ class NameResTest(AssertionHandler):
     Subclasses implement test_params_list() instead of test_with_nameres().
     """
 
-    def test_with_nameres(self, params_lists: list[ParamsList],
-                          nodenorm: NodeNormService, nameres: NameResService,
-                          pass_if_found_in_top: int = 5,
-                          label: str = "") -> Iterator[TestResult]:
+    def test_with_nameres(
+        self,
+        params_lists: list[ParamsList],
+        nodenorm: NodeNormService,
+        nameres: NameResService,
+        pass_if_found_in_top: int = 5,
+        label: str = "",
+    ) -> Iterator[TestResult]:
         if not params_lists:
             yield self.failed(f"No parameters provided in {label}")
             return
@@ -337,16 +341,20 @@ class NameResTest(AssertionHandler):
             if prepared.failure:
                 results.append(prepared.failure)
                 continue
-            results.extend(
-                self.test_params_list(prepared.params, nodenorm, nameres, pass_if_found_in_top, label))
+            results.extend(self.test_params_list(prepared.params, nodenorm, nameres, pass_if_found_in_top, label))
         if not results:
             yield self.failed(f"No test results returned in {label}")
             return
         yield from results
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         nameres: NameResService, pass_if_found_in_top: int,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(
+        self,
+        params: ParamsList,
+        nodenorm: NodeNormService,
+        nameres: NameResService,
+        pass_if_found_in_top: int,
+        label: str = "",
+    ) -> Iterator[TestResult]:
         """Override this to implement the assertion. Called once per params_list.
 
         *params* satisfies MIN_PARAMS/MAX_PARAMS and is stripped, with the params
@@ -358,12 +366,17 @@ class NameResTest(AssertionHandler):
 
 
 # Registry — import submodules after base classes are defined to avoid circular imports.
-from src.babel_validation.assertions.nodenorm import (  # noqa: E402
-    ResolvesHandler, DoesNotResolveHandler, ResolvesWithHandler,
-    ResolvesWithTypeHandler, DoesNotResolveWithHandler, HasLabelHandler,
+from babel_validation.assertions.common import NeededHandler  # noqa: E402
+from babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
+from babel_validation.assertions.nodenorm import (  # noqa: E402
+    DoesNotResolveHandler,
+    DoesNotResolveWithHandler,
+    HasLabelHandler,
+    ResolvesHandler,
+    ResolvesWithHandler,
+    ResolvesWithTypeHandler,
 )
-from src.babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
-from src.babel_validation.assertions.common import NeededHandler  # noqa: E402
+
 
 def _register(handlers: list[AssertionHandler]) -> dict[str, AssertionHandler]:
     """Index *handlers* by NAME, rejecting what a dict comprehension would hide.
@@ -377,13 +390,10 @@ def _register(handlers: list[AssertionHandler]) -> dict[str, AssertionHandler]:
     for handler in handlers:
         name = handler.NAME
         if not name or name != name.lower():
-            raise ValueError(
-                f"{type(handler).__name__}.NAME must be a non-empty lowercase string, got {name!r}"
-            )
+            raise ValueError(f"{type(handler).__name__}.NAME must be a non-empty lowercase string, got {name!r}")
         if name in registry:
             raise ValueError(
-                f"{type(handler).__name__}.NAME {name!r} is already registered "
-                f"by {type(registry[name]).__name__}"
+                f"{type(handler).__name__}.NAME {name!r} is already registered by {type(registry[name]).__name__}"
             )
         registry[name] = handler
     return registry
@@ -392,13 +402,15 @@ def _register(handlers: list[AssertionHandler]) -> dict[str, AssertionHandler]:
 # Every assertion type the parser will recognise, keyed by its lowercase NAME.
 # Registration order is irrelevant — README.md groups handlers by the service they
 # test, not by their position here.
-ASSERTION_HANDLERS: dict[str, AssertionHandler] = _register([
-    ResolvesHandler(),
-    DoesNotResolveHandler(),
-    ResolvesWithHandler(),
-    DoesNotResolveWithHandler(),
-    HasLabelHandler(),
-    ResolvesWithTypeHandler(),
-    SearchByNameHandler(),
-    NeededHandler(),
-])
+ASSERTION_HANDLERS: dict[str, AssertionHandler] = _register(
+    [
+        ResolvesHandler(),
+        DoesNotResolveHandler(),
+        ResolvesWithHandler(),
+        DoesNotResolveWithHandler(),
+        HasLabelHandler(),
+        ResolvesWithTypeHandler(),
+        SearchByNameHandler(),
+        NeededHandler(),
+    ]
+)

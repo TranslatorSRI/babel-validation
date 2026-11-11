@@ -4,8 +4,8 @@ fetch something unexpected."""
 
 import pytest
 
-from src.babel_validation.sources.google_sheets import resolve_sheet_id
-from src.babel_validation.sources.google_sheets.google_sheet_test_cases import (
+from babel_validation.sources.google_sheets import resolve_sheet_id
+from babel_validation.sources.google_sheets.google_sheet_test_cases import (
     GoogleSheetTestCases,
 )
 

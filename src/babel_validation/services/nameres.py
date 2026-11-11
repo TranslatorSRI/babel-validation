@@ -3,9 +3,26 @@ Cached client for the NameRes ``bulk-lookup`` and ``lookup`` APIs.
 
 Caching model
 -------------
-Each response is stored under the key ``(query, frozenset(params.items()))``.
-Entries are never evicted automatically; call ``invalidate_query()`` to force
-a fresh lookup for a specific query string.
+Each response is stored under the key
+``(endpoint, query, frozenset(params.items()))``.  Entries are never evicted
+automatically; call ``invalidate_query()`` to force a fresh lookup for a
+specific query string.
+
+``lookup()`` and ``bulk_lookup()`` keep separate entries, because the two
+endpoints do not answer the same request the same way, so a result from one is
+not a valid answer for the other.  As of NameRes in 2026-11
+(``api/server.py``):
+
+- They name the type filter differently -- ``biolink_type`` on ``/lookup``,
+  ``biolink_types`` on ``/bulk-lookup`` -- and each silently ignores the other
+  name, so the same keyword arguments filter on one endpoint and not the other.
+- ``/lookup`` rejects a query shorter than NameRes's minimum length with an
+  HTTP 422, where ``/bulk-lookup`` returns an empty list for it.
+
+They used to share one keyspace, on the premise that equal parameters gave
+equal hits.  Both differences above broke that, and a ``bulk_lookup()`` could
+then hand unfiltered hits, or an ``[]`` in place of an error, to a later
+``lookup()``.  Do not merge them again.
 
 Cache-warming pattern
 ---------------------
@@ -13,13 +30,14 @@ When you need to look up many query strings for the same logical task, call
 ``bulk_lookup()`` once with the full list.  That issues a single HTTP POST to
 the ``bulk-lookup`` endpoint and populates the cache.  Subsequent
 ``bulk_lookup()`` calls for any subset of those queries are served from cache.
+This does not warm ``lookup()``, for the reasons above.
 
 Endpoint differences
 --------------------
 ``bulk_lookup()`` targets ``/bulk-lookup`` and sends the query list as a JSON
 body.  ``lookup()`` targets the separate ``/lookup`` endpoint and sends its
-parameters as a URL query string.  These are distinct API endpoints with
-different response shapes; ``lookup()`` does NOT delegate to ``bulk_lookup()``.
+parameters as a URL query string.  Their return types differ accordingly --
+a ``{query: hits}`` mapping against a bare list of hits.
 """
 
 import logging
@@ -29,6 +47,10 @@ from typing import Protocol
 import requests
 
 cached_nameres_by_url = {}
+
+# The first element of every cache key, recording which endpoint produced the entry.
+LOOKUP = "lookup"
+BULK_LOOKUP = "bulk-lookup"
 
 
 class NameResService(Protocol):
@@ -54,7 +76,7 @@ class CachedNameRes:
         return f"CachedNameRes({self.nameres_url})"
 
     @staticmethod
-    def from_url(nameres_url: str) -> 'CachedNameRes':
+    def from_url(nameres_url: str) -> "CachedNameRes":
         """Return the singleton ``CachedNameRes`` for *nameres_url*.
 
         The singleton ensures that cache entries accumulated during one part of
@@ -86,28 +108,46 @@ class CachedNameRes:
         time_started = time.time_ns()
         params_key = frozenset(params.items())
         queries_set = set(queries)
-        cached_queries = {q for q in queries_set if (q, params_key) in self.cache}
+        cached_queries = {q for q in queries_set if (BULK_LOOKUP, q, params_key) in self.cache}
         queries_to_be_queried = queries_set - cached_queries
 
         result = {}
         if queries_to_be_queried:
             api_params = dict(params)
-            api_params['strings'] = list(queries_to_be_queried)
+            api_params["strings"] = list(queries_to_be_queried)
 
             self.logger.debug("Called NameRes %s with params %s", self, api_params)
             response = requests.post(self.nameres_url + "bulk-lookup", json=api_params, timeout=30)
             response.raise_for_status()
             result = response.json()
 
-            for query in queries_to_be_queried:
-                self.cache[(query, params_key)] = result.get(query, None)
+            # /bulk-lookup answers every string it is sent, so a missing one means a response we
+            # do not understand. Leave it out of the result and the cache rather than caching
+            # None, which would be handed back forever as if it were a list of hits.
+            missing = queries_to_be_queried - result.keys()
+            if missing:
+                self.logger.warning(
+                    "NameRes %s returned no result for %d of %d strings, e.g. %r; not caching them",
+                    self,
+                    len(missing),
+                    len(queries_to_be_queried),
+                    sorted(missing)[0][:100],
+                )
+            for query in queries_to_be_queried - missing:
+                self.cache[(BULK_LOOKUP, query, params_key)] = result[query]
 
         for query in cached_queries:
-            result[query] = self.cache[(query, params_key)]
+            result[query] = self.cache[(BULK_LOOKUP, query, params_key)]
 
-        time_taken_sec = (time.time_ns() - time_started) / 1E9
-        self.logger.info("Looked up %d queries (with %d cached) with params %s on %s in %.3fs",
-                         len(queries_to_be_queried), len(cached_queries), params, self, time_taken_sec)
+        time_taken_sec = (time.time_ns() - time_started) / 1e9
+        self.logger.info(
+            "Looked up %d queries (with %d cached) with params %s on %s in %.3fs",
+            len(queries_to_be_queried),
+            len(cached_queries),
+            params,
+            self,
+            time_taken_sec,
+        )
 
         return result
 
@@ -117,17 +157,19 @@ class CachedNameRes:
         This targets a different endpoint from ``bulk_lookup()`` — parameters
         are sent as URL query string fields, and the response is a list of
         result dicts rather than a mapping.  Results are cached per
-        ``(query, params)`` combination.
+        ``(query, params)`` combination, separately from ``bulk_lookup()``'s:
+        the two endpoints can answer the same parameters differently (see the
+        module docstring), so neither serves the other from cache.
 
-        This method does NOT delegate to ``bulk_lookup()``.  To cache-warm for
-        single lookups, call this method (or ``bulk_lookup()``) upfront.
+        This method does NOT delegate to ``bulk_lookup()``, for the same
+        reason.  To cache-warm for single lookups, call this method upfront.
         """
-        cache_key = (query, frozenset(params.items()))
+        cache_key = (LOOKUP, query, frozenset(params.items()))
         if cache_key in self.cache:
             return self.cache[cache_key]
 
         api_params = dict(params)
-        api_params['string'] = query
+        api_params["string"] = query
         self.logger.debug("Querying NameRes with params %s", api_params)
 
         response = requests.post(self.nameres_url + "lookup", params=api_params, timeout=30)
@@ -138,11 +180,11 @@ class CachedNameRes:
         return result
 
     def invalidate_query(self, query: str) -> None:
-        """Remove all cached results for *query* (across every param variant).
+        """Remove all cached results for *query* (across every param variant and both endpoints).
 
         The next call to ``lookup()`` or ``bulk_lookup()`` for this query will
         issue a fresh HTTP request.
         """
-        keys_to_delete = [k for k in self.cache if k[0] == query]
+        keys_to_delete = [k for k in self.cache if k[1] == query]
         for k in keys_to_delete:
             del self.cache[k]
