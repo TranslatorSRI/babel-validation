@@ -1,11 +1,11 @@
 """Offline tests for the caching in CachedNodeNorm and CachedNameRes.
 
-These are the only tests in this repository that exercise
-``babel_validation.services``; every other test calls NodeNorm and NameRes
-through ``requests`` directly. Since the caching is what those classes exist
-for -- and a cache that silently stops caching just makes a run slower rather
-than failing it -- the behaviour is pinned here rather than left to be noticed
-in production.
+The live tests that use these classes (the GitHub issue tests, through
+``babel_validation.assertions``, and ``tests/test_environment``) only see
+whether an answer was right, not whether it came from the cache or the right
+endpoint. A cache that silently stops caching just makes a run slower, and one
+that answers from the wrong entry looks like a NameRes or NodeNorm bug, so the
+caching itself is pinned here.
 
 ``requests.post`` is replaced by a recorder, so nothing here touches the
 network.
@@ -61,6 +61,13 @@ def echo_curies(kwargs):
 def echo_strings(kwargs):
     """A NameRes bulk-lookup response returning one stub hit per requested string."""
     return {string: [{"curie": f"CURIE:{string}"}] for string in kwargs["json"]["strings"]}
+
+
+def either_endpoint(kwargs):
+    """Answer /bulk-lookup (a JSON body) and /lookup (a query string) alike, as NameRes would."""
+    if "json" in kwargs:
+        return echo_strings(kwargs)
+    return [{"curie": f"CURIE:{kwargs['params']['string']}"}]
 
 
 @pytest.fixture
@@ -227,40 +234,50 @@ def test_lookup_sends_a_query_string_to_the_lookup_endpoint(monkeypatch):
     assert recorder.call_count == 1
 
 
-def test_lookup_and_bulk_lookup_share_one_cache_namespace(monkeypatch):
-    """The shared keyspace is deliberate; this pins it so a change is noticed.
+@pytest.mark.parametrize("first", ["lookup", "bulk_lookup"])
+def test_lookup_and_bulk_lookup_keep_separate_caches(monkeypatch, first):
+    """A result from one endpoint is never served as the other's.
 
-    Both methods key the cache on ``(query, params)`` with no note of which
-    endpoint produced the entry, so a `lookup()` result is handed straight back
-    to a later `bulk_lookup()` for the same query and params, with no request
-    made. That is correct as long as the two endpoints stay interchangeable for
-    equal parameters -- `/lookup` returns a list of hits, `/bulk-lookup` returns
-    that same list under the string it was asked about -- which is the premise
-    the module docstring now records.
-
-    If NameRes ever makes them disagree, this test fails, which is the point.
+    The endpoints are not interchangeable: /lookup filters on `biolink_type`
+    and /bulk-lookup on `biolink_types`, each ignoring the other's name, and
+    /lookup rejects a too-short query with a 422 where /bulk-lookup returns
+    []. So with a shared cache, `bulk_lookup(["diabetes"],
+    biolink_type="biolink:Disease")` would cache unfiltered hits for a later
+    `lookup()` with the same arguments to return. This test is offline and
+    cannot see those differences itself; it checks that the cache keeps the
+    endpoints apart, which is what stops them mattering.
     """
-    recorder = Recorder([{"curie": "MONDO:0005148"}])
+    recorder = Recorder(either_endpoint)
     monkeypatch.setattr(nameres_module.requests, "post", recorder)
     nr = CachedNameRes("https://nameres.example/")
+    calls = {
+        "lookup": lambda: nr.lookup("diabetes", biolink_type="biolink:Disease"),
+        "bulk_lookup": lambda: nr.bulk_lookup(["diabetes"], biolink_type="biolink:Disease"),
+    }
+    second = "bulk_lookup" if first == "lookup" else "lookup"
 
-    from_lookup = nr.lookup("diabetes")
-    from_bulk = nr.bulk_lookup(["diabetes"])
+    calls[first]()
+    calls[second]()
 
-    assert recorder.call_count == 1, "bulk_lookup reused the /lookup cache entry"
-    assert from_bulk == {"diabetes": from_lookup}
+    assert [url.rsplit("/", 1)[1] for url, _ in recorder.calls] == [
+        first.replace("_", "-"),
+        second.replace("_", "-"),
+    ], "the second endpoint was answered from the first one's cache entry"
 
 
 def test_invalidate_query_clears_both_endpoints(monkeypatch):
-    recorder = Recorder([{"curie": "MONDO:0005148"}])
+    recorder = Recorder(either_endpoint)
     monkeypatch.setattr(nameres_module.requests, "post", recorder)
     nr = CachedNameRes("https://nameres.example/")
 
     nr.lookup("diabetes")
+    nr.bulk_lookup(["diabetes", "asthma"])
     nr.invalidate_query("diabetes")
     nr.lookup("diabetes")
+    nr.bulk_lookup(["diabetes", "asthma"])
 
-    assert recorder.call_count == 2
+    assert recorder.call_count == 4, "invalidation must drop the entries from both endpoints"
+    assert recorder.calls[3][1]["json"]["strings"] == ["diabetes"], "invalidating one query flushed another"
 
 
 @pytest.mark.parametrize("bad", [[], "diabetes", ("diabetes",)])
