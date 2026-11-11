@@ -19,7 +19,7 @@ jobs:
     name: Lint and format check with ruff
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       # version-file so CI runs the ruff in uv.lock. Without it the action installs the latest
       # release, so a ruff that nobody has locally can fail this job on a PR that did not touch
       # any Python. ruff is a standalone binary, so no setup-python step is needed.
