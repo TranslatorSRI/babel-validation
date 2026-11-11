@@ -39,7 +39,7 @@ describe('what changed since the previous run', () => {
       run('2026-08-27', '2025oct1', 20),
     ]);
     expect(wrapper.vm.changes).toEqual([
-      { target: 'dev', label: 'babel version', from: '2025sep1', to: '2025oct1' },
+      { target: 'dev', label: 'NodeNorm Babel version', from: '2025sep1', to: '2025oct1' },
       { target: 'dev', label: 'failed', delta: 8, worse: true, to: '20' },
     ]);
     expect(wrapper.text()).toContain('+8');
@@ -55,7 +55,7 @@ describe('what changed since the previous run', () => {
       });
     const wrapper = await mountWith([line('2026-11-08', '2025sep1'), line('2026-11-09', '2026jul22')]);
     expect(wrapper.vm.changes).toEqual([
-      { target: 'prod', label: 'nameres babel version', from: '2025sep1', to: '2026jul22' },
+      { target: 'prod', label: 'NameRes Babel version', from: '2025sep1', to: '2026jul22' },
     ]);
     // The table names NameRes's release only on the run where it differs.
     const cells = wrapper.findAll('tbody td.small').map((td) => td.text());

@@ -18,6 +18,13 @@ import { fetchHistory, formatCount } from '../reportData.js';
 // and moves nothing else used to report "Nothing changed".
 const COUNTS = ['failed', 'error', 'xpassed', 'passed'];
 
+// The version fields the diff compares, and how each change is labelled.
+const VERSION_FIELDS = [
+  ['babel_version', 'NodeNorm Babel version'],
+  ['nameres_babel_version', 'NameRes Babel version'],
+  ['nameres_version', 'NameRes version'],
+];
+
 export default {
   props: {
     dataUrl: { type: String, required: true },
@@ -69,14 +76,16 @@ export default {
           continue;
         }
         // babel_version is NodeNorm's; NameRes's is recorded separately
-        // because the two are promoted separately. A field the previous run
-        // did not record yet (nameres_babel_version, before 2026-11) is not
-        // a change.
-        for (const field of ['babel_version', 'nameres_babel_version', 'nameres_version']) {
+        // because the two are promoted separately. Each label names its
+        // service: a bare "babel version" beside "nameres babel version" read
+        // as the whole environment's release when only NodeNorm had moved. A
+        // field the previous run did not record yet (nameres_babel_version,
+        // before 2026-11) is not a change.
+        for (const [field, label] of VERSION_FIELDS) {
           if (Object.hasOwn(before, field) && now[field] !== before[field]) {
             changes.push({
               target,
-              label: field.replaceAll('_', ' '),
+              label,
               from: before[field] ?? '—',
               to: now[field] ?? '—',
             });
