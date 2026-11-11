@@ -209,6 +209,14 @@ def _trimmed_float(value):
     return value if math.isfinite(value) else None
 
 
+def _version_key(version):
+    """
+    Sort key for a version string such as "9.3.1": its numbers compared as
+    numbers, then the whole string to break ties ("9.3.1-SNAPSHOT").
+    """
+    return [int(n) for n in re.findall(r"[0-9]+", version)], version
+
+
 def trim_status(raw, service):
     """
     Whitelist the fields of a NodeNorm or NameRes ("nodenorm" or "nameres")
@@ -290,7 +298,10 @@ def trim_status(raw, service):
         }
         trimmed_es = {"nodes": len(node_list)}
         if versions:
-            trimmed_es["versions"] = sorted(versions)[:5]
+            # Oldest first, compared as numbers: as strings, 8.10.0 sorts before
+            # 8.9.0. The cut to five keeps the newest, and is only a bound on
+            # hostile input: a real cluster runs one version, or two mid-upgrade.
+            trimmed_es["versions"] = sorted(versions, key=_version_key)[-5:]
         if disk:
             trimmed_es["max_disk_used_percent"] = max(disk)
         trimmed["elasticsearch"] = trimmed_es

@@ -434,6 +434,24 @@ class TestTrimStatus:
         trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
         assert trimmed["elasticsearch"]["versions"] == ["8.19.0", "9.3.1"]
 
+    def test_elasticsearch_versions_are_ordered_as_numbers(self):
+        # As strings, 8.10.0 sorted before 8.9.0, and the cut to five kept the
+        # lexically smallest rather than the newest.
+        nodes = {
+            f"es-{i}": {"version": version}
+            for i, version in enumerate(
+                ["8.10.0", "8.9.0", "8.2.0", "8.11.1", "8.8.0", "8.1.0", "8.10.0-rc1"]
+            )
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"]["versions"] == [
+            "8.8.0",
+            "8.9.0",
+            "8.10.0",
+            "8.10.0-rc1",
+            "8.11.1",
+        ]
+
     def test_elasticsearch_node_with_null_version_is_skipped(self):
         # A node mid-restart can report "version": null. Sorting None among
         # strings raised TypeError, which turned the whole NodeNorm status into
