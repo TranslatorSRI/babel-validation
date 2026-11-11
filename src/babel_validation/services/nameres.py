@@ -121,8 +121,20 @@ class CachedNameRes:
             response.raise_for_status()
             result = response.json()
 
-            for query in queries_to_be_queried:
-                self.cache[(BULK_LOOKUP, query, params_key)] = result.get(query, None)
+            # /bulk-lookup answers every string it is sent, so a missing one means a response we
+            # do not understand. Leave it out of the result and the cache rather than caching
+            # None, which would be handed back forever as if it were a list of hits.
+            missing = queries_to_be_queried - result.keys()
+            if missing:
+                self.logger.warning(
+                    "NameRes %s returned no result for %d of %d strings, e.g. %r; not caching them",
+                    self,
+                    len(missing),
+                    len(queries_to_be_queried),
+                    sorted(missing)[0][:100],
+                )
+            for query in queries_to_be_queried - missing:
+                self.cache[(BULK_LOOKUP, query, params_key)] = result[query]
 
         for query in cached_queries:
             result[query] = self.cache[(BULK_LOOKUP, query, params_key)]
