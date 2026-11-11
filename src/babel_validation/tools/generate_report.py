@@ -349,10 +349,12 @@ def trim_status(raw, service):
         }
     # NameRes's search index: under "solr" before v1.7, at the top level from
     # v1.7 on, and at the top level in NameRes ES (which reports numDocs and
-    # size, both 0 on ci-nameres-es). One "index" key whichever it was.
+    # size, both 0 on ci-nameres-es). One "index" key whichever it was. Keyed
+    # on the service as well as the shape, as "version" is above: a NodeNorm
+    # body carrying a numDocs is not a NameRes index.
     solr = raw.get("solr")
     index = solr if isinstance(solr, dict) else raw
-    if isinstance(solr, dict) or "numDocs" in raw:
+    if service == "nameres" and (isinstance(solr, dict) or "numDocs" in raw):
         trimmed_index = {}
         num_docs = _trimmed_int(index.get("numDocs"))
         if num_docs is not None:

@@ -388,6 +388,12 @@ class TestTrimStatus:
             "size": "0",
         }
 
+    def test_nodenorm_never_gets_a_nameres_index(self):
+        # Keyed on the service, as "version" is: the shape alone would give a
+        # NodeNorm body that happens to carry numDocs a NameRes index.
+        for body in ({"numDocs": 7, "size": "1 GB"}, {"solr": {"numDocs": 7}}):
+            assert "index" not in trim_status(body, "nodenorm")
+
     def test_babel_releases_served_are_validated_and_ordered(self):
         available = {
             "2026jul22": "https://example/2026jul22",
