@@ -45,6 +45,7 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Run from
 # With -n (xdist), always pass the tests path explicitly (`pytest tests -n 8 ...`):
 # without it, workers do not load tests/conftest.py early enough to know the
 # custom options, and every worker dies at argparse — or collects nothing.
+pytest -m unit                         # Offline unit tests only — no network, no live services (what CI runs)
 pytest --target dev                    # Run all tests against dev environment (default if no --target)
 pytest --target prod                   # Run against production
 pytest --target dev --target prod      # Run against multiple targets
@@ -57,20 +58,20 @@ pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
 pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nodenorm_from_gsheet.test_row:row=42-dev]"
 ```
 
+`-m unit` and `--category "Unit Tests"` are unrelated despite the names. `-m unit` selects the
+offline tests marked `unit`; `--category "Unit Tests"` selects Google Sheet rows whose Category
+column says "Unit Tests", and those still call a live NodeNorm or NameRes.
+
 ### Code Formatting
 
 ```bash
-black tests/    # Format Python test code
+uv run ruff check --fix .   # Lint (import sorting, pyupgrade, pyflakes) and auto-fix
+uv run ruff format .        # Format Python code
 ```
 
-Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
-~30 files it would reformat. Running `black` across the tree would bury a real change in
-unrelated churn, so format only the files you touch, or match the surrounding style.
-"Files you touch" means files that are already black-clean:
-`src/babel_validation/services/service_checks.py`, `src/babel_validation/core/babel_release.py`,
-`tests/unit/test_service_checks.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
-and running `black` on them after a ten-line edit rewrote every string in the file. Check
-`black --check <file>` on the committed version first; if it is not clean, edit by hand.
+Both run on every pull request (`tests.yaml`), over the whole tree, so the tree is always
+ruff-clean and running them never reformats code you did not touch. Settings live in
+`pyproject.toml` and are kept in sync with [Babel](https://github.com/NCATSTranslator/Babel).
 
 ### Dashboard Website (website/)
 
@@ -126,6 +127,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
+- `tests/unit/` (and `tests/github_issues/unit/`) — Offline tests for the library in `src/babel_validation/`: service caching, Google Sheet parsing and downloading, the report generator, the issue parser. Marked `unit`; these are the only tests that run without network access, so they are the ones CI runs on every PR
 - `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm, one or more GitHub issues each; `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
 
 ### Dashboard Website
@@ -254,7 +256,7 @@ the two halves of the codebase disagreed about where the cache was.
 
 ## Key Dependencies
 
-- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, black
+- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, ruff
 - `uv` for Python dependency management (no requirements.txt — uses pyproject.toml)
 
 ## Testing Patterns
