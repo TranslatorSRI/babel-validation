@@ -22,7 +22,11 @@ The offline subset needs no services at all and runs in well under a second:
 $ uv run pytest -m unit
 ```
 
-These are the tests in [`./tests/unit`](./tests/unit/), covering the library in `src/babel_validation/`.
+These are the tests marked `unit`, wherever they are: most are in [`./tests/unit`](./tests/unit/),
+covering the library in `src/babel_validation/`, but others sit beside the code they test, such as
+[`./tests/github_issues/unit`](./tests/github_issues/unit/) and [`./tests/test_environment`](./tests/test_environment/).
+The marker, not the directory, is what decides whether a test is offline, so a new offline test needs
+`pytestmark = pytest.mark.unit` wherever you put it.
 They are what GitHub Actions runs on every pull request, alongside `ruff check` and `ruff format --check`.
 Everything else needs a live NodeNorm or NameRes, and is run on demand against a chosen target.
 
