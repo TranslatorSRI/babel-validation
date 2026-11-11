@@ -34,6 +34,10 @@ packages = ["src/babel_validation"]
 # Without testpaths, a bare `pytest` would also scan the website directories
 # (including node_modules) during collection.
 testpaths = ["tests"]
+# Import babel_validation from the source tree, whatever is installed. The wheel packages only
+# src/babel_validation, so an editable install made when it packaged all of src/ still points
+# at the repository root, and collection failed with "No module named 'babel_validation'"
+# until `uv sync` was re-run. This also lets a bare `pytest` run with no install at all.
 pythonpath = ["src"]
 timeout = 300
 # Canonical marker definitions. Every test that talks to a live service or downloads the
