@@ -30,10 +30,13 @@ export default {
     targetNames() {
       return sortByDeploymentOrder(Object.keys(this.report?.targets ?? {}));
     },
-    // The Environments table's columns: side branches beside their parents.
-    // See SIDE_BRANCHES in deploymentOrder.js.
+    // The Environments table's columns: side branches beside their parents,
+    // as targets.ini's SideBranchOf names them. See sortBesideParents.
     environmentColumns() {
-      return sortBesideParents(this.targetNames);
+      return sortBesideParents(
+        this.targetNames,
+        (name) => this.report.targets[name].side_branch_of ?? null,
+      );
     },
     unreachableTargets() {
       return this.targetNames.filter((t) => this.report.targets[t].unreachable);

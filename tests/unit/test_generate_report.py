@@ -719,6 +719,32 @@ class TestServiceLinks:
     def test_a_missing_url_has_no_links(self):
         assert generate_report.service_links(None, "redis") == (None, None)
 
+    def test_side_branch_of_comes_from_targets_ini_and_is_checked(
+        self, monkeypatch, caplog
+    ):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[ci]\nNodeNormURL = https://nn.example/\n"
+            "[ci-nr]\nSideBranchOf = ci\nNodeNormURL = https://nn.example/\n"
+            "[self]\nSideBranchOf = self\n"
+            "[gone]\nSideBranchOf = localhost\n"
+        )
+        targets = ["ci", "ci-nr", "self", "gone"]
+        counts = collections.defaultdict(collections.Counter)
+        sections = generate_report.build_report(
+            {}, counts, True, targets, ALLOWLIST, config
+        )["targets"]
+        assert {t: s["side_branch_of"] for t, s in sections.items()} == {
+            "ci": None,
+            "ci-nr": "ci",
+            "self": None,
+            "gone": None,
+        }
+        assert sum("SideBranchOf" in r.getMessage() for r in caplog.records) == 2
+
 
 # read_targets is the single source of truth for which environments exist: as of
 # the dashboard workflow taking its loop from it, a section it returns is one that

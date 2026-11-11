@@ -14,18 +14,24 @@ const DEPLOYMENT_ORDER = ['exp', 'dev', 'ci', 'test', 'prod', 'ci-nameres-es'];
 // so beside ci its NodeNorm cells match and its NameRes ones sit next to the
 // Solr NameRes it is meant to replace. Every other table keeps the pipeline
 // order above, for the reason given there.
-const SIDE_BRANCHES = new Map([['ci-nameres-es', 'ci']]);
+//
+// Which target a branch comes from is not kept here: targets.ini states it as
+// SideBranchOf, beside the URLs that make it true, and the report passes it on
+// as each target's side_branch_of. tests/unit/test_targets_ini.py fails if two
+// targets share a service without one saying so.
 
 // sortByDeploymentOrder, then each side branch moved to just after the target
-// it branches from. A branch whose parent is not in the list stays where the
-// deployment order put it.
-export function sortBesideParents(targetNames) {
+// it branches from. parentOf(name) returns that target's name, or null. A
+// branch whose parent is not in the list stays where the deployment order put
+// it.
+export function sortBesideParents(targetNames, parentOf) {
   const sorted = sortByDeploymentOrder(targetNames);
   const present = new Set(sorted);
+  const parents = new Map(sorted.map((name) => [name, parentOf(name)]));
   const out = [];
   for (const name of sorted) {
-    if (present.has(SIDE_BRANCHES.get(name))) continue;
-    out.push(name, ...sorted.filter((branch) => SIDE_BRANCHES.get(branch) === name));
+    if (present.has(parents.get(name))) continue;
+    out.push(name, ...sorted.filter((branch) => parents.get(branch) === name));
   }
   return out;
 }

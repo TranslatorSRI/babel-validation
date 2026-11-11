@@ -527,6 +527,24 @@ def _annotate_result(result, key, rest, test_records, allowlist):
     result["kind"] = "other"
 
 
+def side_branch_of(section, target, targets):
+    """
+    The target this one's targets.ini section names as SideBranchOf, or None.
+    The Environments table shows a side branch beside its parent, so the name
+    must be another deployed target; anything else is logged and ignored, and
+    the branch keeps its place in the deployment order.
+    """
+    parent = section.get("SideBranchOf")
+    if parent is None:
+        return None
+    if parent == target or parent not in targets:
+        logger.warning(
+            "[%s] has SideBranchOf = %r, which is not another target", target, parent
+        )
+        return None
+    return parent
+
+
 def build_report(results, counts, github_issues_ran, targets, allowlist, config):
     now = datetime.datetime.now(datetime.timezone.utc)
     target_sections = {}
@@ -551,6 +569,7 @@ def build_report(results, counts, github_issues_ran, targets, allowlist, config)
         target_counts = counts[target]
         total = sum(target_counts.values())
         target_sections[target] = {
+            "side_branch_of": side_branch_of(section, target, targets),
             "nodenorm_url": nodenorm_url,
             "nameres_url": nameres_url,
             "nodenorm_backend": nodenorm_backend,

@@ -90,7 +90,11 @@ describe('Overview', () => {
   it('puts a side branch beside its parent in the Environments table only', async () => {
     const report = {
       ...REPORT,
-      targets: { ...REPORT.targets, 'ci-nameres-es': target({}), ci: target({}) },
+      targets: {
+        ...REPORT.targets,
+        'ci-nameres-es': target({}, { side_branch_of: 'ci' }),
+        ci: target({}),
+      },
     };
     const wrapper = await mountOverview(report);
     const cards = wrapper.findAll('.col .card-body > .d-flex > .fw-semibold').map((el) => el.text());
