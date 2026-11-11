@@ -17,8 +17,8 @@ import io
 import pytest
 import requests
 
-from src.babel_validation.sources.google_sheets import fetch_sheet_csv
-from src.babel_validation.sources.google_sheets.blocklist import (
+from babel_validation.sources.google_sheets import fetch_sheet_csv
+from babel_validation.sources.google_sheets.blocklist import (
     load_blocklist_from_gsheet,
 )
 

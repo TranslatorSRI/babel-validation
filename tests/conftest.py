@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import configparser
 
-from src.babel_validation.core import cache_dir
+from babel_validation.core import cache_dir
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
 
 
@@ -100,7 +100,7 @@ def pytest_runtest_logreport(report):
     report, plus setup/teardown reports that did not pass (setup skips and
     errors). Raw pytest facts only — classification into
     passed/failed/xfailed/xpassed/skipped/error happens in
-    src.babel_validation.tools.generate_report, where it is unit-testable.
+    babel_validation.tools.generate_report, where it is unit-testable.
 
     longrepr may contain untrusted text (issue bodies, sheet cells, service
     responses); it is truncated here and repr-escaped by the report generator
@@ -157,7 +157,7 @@ def pytest_addoption(parser):
         '--report-jsonl',
         default=None,
         help="Append raw per-test outcome records (JSONL) to this file, for "
-             "src.babel_validation.tools.generate_report."
+             "babel_validation.tools.generate_report."
     )
 
     # Only test particular GitHub issues.

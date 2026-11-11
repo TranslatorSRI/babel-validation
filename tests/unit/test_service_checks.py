@@ -11,9 +11,9 @@ import datetime
 
 import pytest
 
-import src.babel_validation.services.service_checks as service_checks
-from src.babel_validation.core.babel_release import babel_release_date
-from src.babel_validation.services.service_checks import (
+import babel_validation.services.service_checks as service_checks
+from babel_validation.core.babel_release import babel_release_date
+from babel_validation.services.service_checks import (
     MAX_KEYS_LISTED,
     MAX_REPR_LENGTH,
     assert_backend,

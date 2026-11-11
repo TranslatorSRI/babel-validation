@@ -14,7 +14,7 @@
 # pass through a key whitelist, and blocklist test details are redacted entirely.
 #
 # Run as:
-#   uv run python -m src.babel_validation.tools.generate_report \
+#   uv run python -m babel_validation.tools.generate_report \
 #       --raw-dir raw --targets-ini tests/targets.ini \
 #       --history-in old_history.jsonl --out-dir website/public/data
 
@@ -32,7 +32,7 @@ from pathlib import Path
 
 import requests
 
-from src.babel_validation.core.babel_release import babel_release_date
+from babel_validation.core.babel_release import babel_release_date
 
 logger = logging.getLogger(__name__)
 

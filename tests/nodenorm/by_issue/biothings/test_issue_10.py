@@ -7,7 +7,7 @@ import urllib.parse
 import pytest
 import requests
 
-from src.babel_validation.services.service_checks import truncated_repr
+from babel_validation.services.service_checks import truncated_repr
 
 CURIE = "UNII:2ZM8CX04RZ"
 

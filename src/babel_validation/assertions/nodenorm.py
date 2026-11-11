@@ -1,8 +1,8 @@
 from typing import Iterator
 
-from src.babel_validation.assertions import NodeNormTest, ParamsList
-from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nodenorm import NodeNormService
+from babel_validation.assertions import NodeNormTest, ParamsList
+from babel_validation.core.testrow import TestResult
+from babel_validation.services.nodenorm import NodeNormService
 
 
 class ResolvesHandler(NodeNormTest):

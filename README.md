@@ -152,7 +152,7 @@ dashboard's purpose is to show *which* issues are visible in *which* environment
 The `.github/workflows/dashboard.yaml` workflow regenerates and deploys it daily (or on
 manual dispatch): it runs pytest per target with `--report-jsonl`, turns the raw outcomes
 and `/status` responses into `report.json` and `history.jsonl` with
-`src.babel_validation.tools.generate_report`, and publishes the built site to the
+`babel_validation.tools.generate_report`, and publishes the built site to the
 `gh-pages` branch.
 
 The Vue components' client-side logic (URL round-tripping, filtering, pagination, the
@@ -172,7 +172,7 @@ To regenerate it locally against a couple of environments:
 ```shell
 $ uv run pytest tests/nodenorm/test_nodenorm_from_gsheet.py tests/nameres/test_nameres_from_gsheet.py \
       --target dev --target prod -n 8 --report-jsonl raw/local.jsonl
-$ uv run python -m src.babel_validation.tools.generate_report --raw-dir raw \
+$ uv run python -m babel_validation.tools.generate_report --raw-dir raw \
       --targets-ini tests/targets.ini --out-dir website/public/data
 $ cd website && npm install && npm run dev
 ```

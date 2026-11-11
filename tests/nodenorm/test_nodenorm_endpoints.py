@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 import requests
 
-from src.babel_validation.services.service_checks import (
+from babel_validation.services.service_checks import (
     get_normalized_node,
     get_openapi,
     nodenorm_version,

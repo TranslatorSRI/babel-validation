@@ -1,9 +1,9 @@
 from typing import Iterator
 
-from src.babel_validation.assertions import AssertionHandler, ParamsList
-from src.babel_validation.core.testrow import TestResult
-from src.babel_validation.services.nameres import NameResService
-from src.babel_validation.services.nodenorm import NodeNormService
+from babel_validation.assertions import AssertionHandler, ParamsList
+from babel_validation.core.testrow import TestResult
+from babel_validation.services.nameres import NameResService
+from babel_validation.services.nodenorm import NodeNormService
 
 
 class NeededHandler(AssertionHandler):

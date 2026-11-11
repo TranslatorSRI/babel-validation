@@ -27,9 +27,9 @@ import re
 from dataclasses import dataclass
 from typing import Iterator
 
-from src.babel_validation.core.testrow import TestResult, TestStatus
-from src.babel_validation.services.nameres import NameResService
-from src.babel_validation.services.nodenorm import NodeNormService
+from babel_validation.core.testrow import TestResult, TestStatus
+from babel_validation.services.nameres import NameResService
+from babel_validation.services.nodenorm import NodeNormService
 
 # The parameters of a single assertion invocation, e.g. ["CHEBI:15365", "aspirin"]
 # for {{BabelTest|HasLabel|CHEBI:15365|aspirin}}. What each element means depends
@@ -358,12 +358,12 @@ class NameResTest(AssertionHandler):
 
 
 # Registry — import submodules after base classes are defined to avoid circular imports.
-from src.babel_validation.assertions.nodenorm import (  # noqa: E402
+from babel_validation.assertions.nodenorm import (  # noqa: E402
     ResolvesHandler, DoesNotResolveHandler, ResolvesWithHandler,
     ResolvesWithTypeHandler, DoesNotResolveWithHandler, HasLabelHandler,
 )
-from src.babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
-from src.babel_validation.assertions.common import NeededHandler  # noqa: E402
+from babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
+from babel_validation.assertions.common import NeededHandler  # noqa: E402
 
 def _register(handlers: list[AssertionHandler]) -> dict[str, AssertionHandler]:
     """Index *handlers* by NAME, rejecting what a dict comprehension would hide.

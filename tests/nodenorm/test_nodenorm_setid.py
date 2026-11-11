@@ -9,7 +9,7 @@
 import pytest
 import requests
 
-from src.babel_validation.services.service_checks import truncated_repr
+from babel_validation.services.service_checks import truncated_repr
 
 # Every request has a timeout, so a stalled get_setid fails naming its URL rather than holding
 # the test until pytest-timeout's 300s.

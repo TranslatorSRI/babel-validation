@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from src.babel_validation.tools import generate_report
-from src.babel_validation.tools.generate_report import (
+from babel_validation.tools import generate_report
+from babel_validation.tools.generate_report import (
     append_history,
     build_results,
     classify_record,

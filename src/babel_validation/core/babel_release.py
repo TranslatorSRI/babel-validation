@@ -8,7 +8,7 @@ change that.
 
 This module needs nothing beyond the standard library, so it can be used without the test
 suite. The checks that fail a test over a malformed release name are in
-`src.babel_validation.services.service_checks`.
+`babel_validation.services.service_checks`.
 """
 
 import datetime

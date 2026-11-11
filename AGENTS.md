@@ -301,7 +301,7 @@ issue, so they stay here:
   unauthenticated endpoint. If one of them fails or comes back different, that worker collects a
   different set of tests and xdist aborts the whole run before executing anything:
   `ERROR gw2 - Different tests were collected between gw0 and gw2`. Use
-  `src.babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
+  `babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
   `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
   mode reappears if a cache's TTL can expire *during* a run, which is why
   `pytest_configure` deletes `gsheet_*.csv` before collection starts.
