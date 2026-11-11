@@ -98,8 +98,10 @@ never reaches CI. Check `git status` shows new files as tracked.
 Shared library code used by the tests and potentially other consumers. Import it as
 `babel_validation`, never `src.babel_validation`. The `src.` form still resolves under pytest,
 because `tests/__init__.py` makes pytest put the repository root on `sys.path` and `src/` then
-counts as a namespace package, so a test using it passes. But the same import fails with "No
-module named 'src'" from anywhere else, including `python -m` from outside the repository.
+counts as a namespace package, so a test using it passes. But it loads a second copy of each
+module, so `from_url()` hands out a different instance with its own cache, and the same import
+fails with "No module named 'src'" from anywhere else, including `python -m` from outside the
+repository. `ruff check` rejects it (TID251, configured in `pyproject.toml`).
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
 - `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite

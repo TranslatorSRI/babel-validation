@@ -59,6 +59,7 @@ select = [
     "F",   # pyflakes
     "I",   # isort (import sorting)
     "UP",  # pyupgrade
+    "TID251",  # banned imports: see banned-api below. Ours alone, not part of the Babel settings.
 ]
 
 ignore = [
@@ -67,3 +68,11 @@ ignore = [
 
 fixable = ["ALL"]
 unfixable = []
+
+# Under pytest, `src.babel_validation` still resolves (tests/__init__.py puts the repository root
+# on sys.path, where src/ counts as a namespace package), so a test using it passes. But it loads a
+# second copy of every module, with its own from_url() singletons and caches, and the same import
+# fails with "No module named 'src'" anywhere outside pytest. Banning `src` catches every form:
+# `from src.babel_validation.x import y`, `import src.babel_validation.x` and `from src import ...`.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"src" = { msg = "Import babel_validation, not src.babel_validation (see AGENTS.md, 'Library')" }
