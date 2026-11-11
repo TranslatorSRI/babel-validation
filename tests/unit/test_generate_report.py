@@ -1,0 +1,825 @@
+"""Unit tests for the dashboard report generator. No network: everything is fed
+literal JSONL records and hostile inline payloads."""
+
+import collections
+import configparser
+import json
+
+import pytest
+
+from src.babel_validation.tools import generate_report
+from src.babel_validation.tools.generate_report import (
+    append_history,
+    build_results,
+    classify_record,
+    fetch_status,
+    parse_nodeid,
+    read_raw_records,
+    read_targets,
+    sanitize,
+    split_target,
+    trim_status,
+    validate_issue_id,
+    validate_source_url,
+)
+
+pytestmark = pytest.mark.unit
+
+TARGETS = ["prod", "test", "ci", "ci-es", "dev", "exp"]
+ALLOWLIST = ["ncatstranslator/babel", "translatorsri/babel-validation"]
+
+
+def _record(
+    nodeid, outcome="passed", when="call", wasxfail=False, msg=None, props=None
+):
+    return {
+        "id": nodeid,
+        "when": when,
+        "outcome": outcome,
+        "wasxfail": wasxfail,
+        "duration": 0.1,
+        "props": props or {},
+        "msg": msg,
+    }
+
+
+class TestTargetExtraction:
+    def test_hyphenated_target_matches_longest_first(self):
+        assert split_target("ci-es-foo:row=1", TARGETS) == ("ci-es", "foo:row=1")
+        assert split_target("ci-foo", TARGETS) == ("ci", "foo")
+
+    def test_target_as_suffix(self):
+        # Current pytest puts the module-level parametrize first, target last.
+        assert split_target("test_label:row=251-prod", TARGETS) == (
+            "prod",
+            "test_label:row=251",
+        )
+        assert split_target("test_label:row=251-ci-es", TARGETS) == (
+            "ci-es",
+            "test_label:row=251",
+        )
+
+    def test_unknown_target(self):
+        assert split_target("staging-foo", TARGETS) == (None, "staging-foo")
+
+    def test_parse_nodeid_strips_target_from_key(self):
+        key, target, rest = parse_nodeid(
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
+            "[dev-test_nodenorm_from_gsheet.test_row:row=131]",
+            TARGETS,
+        )
+        assert target == "dev"
+        assert rest == "test_nodenorm_from_gsheet.test_row:row=131"
+        assert key == (
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
+            "[test_nodenorm_from_gsheet.test_row:row=131]"
+        )
+
+    def test_parse_nodeid_strips_the_rootdir_relative_tests_prefix(self):
+        # `pytest tests --target dev` produces tests/-prefixed node IDs;
+        # `pytest tests/nodenorm/...` does not. Keys must be identical.
+        prefixed, _, _ = parse_nodeid(
+            "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[x:row=1-dev]",
+            TARGETS,
+        )
+        bare, _, _ = parse_nodeid(
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[x:row=1-dev]",
+            TARGETS,
+        )
+        assert prefixed == bare
+        assert prefixed.startswith("nodenorm/")
+
+    def test_parse_nodeid_without_params_goes_to_unknown_bucket(self):
+        key, target, rest = parse_nodeid("tests/test_cache_dir.py::test_mode", TARGETS)
+        assert (key, target) == ("test_cache_dir.py::test_mode", "?")
+
+    def test_parse_nodeid_unknown_target_does_not_crash(self):
+        key, target, rest = parse_nodeid("x.py::t[staging-row=1]", TARGETS)
+        assert target == "?"
+        assert key == "x.py::t[staging-row=1]"
+
+
+class TestClassification:
+    @pytest.mark.parametrize(
+        "outcome,when,wasxfail,msg,expected",
+        [
+            ("passed", "call", False, None, "passed"),
+            ("failed", "call", False, "AssertionError: nope", "failed"),
+            ("skipped", "call", True, "reason", "xfailed"),
+            ("passed", "call", True, None, "xpassed"),  # imperative pytest.xfail
+            ("failed", "call", False, "[XPASS(strict)] issue is open", "xpassed"),
+            ("skipped", "setup", False, "category filter", "skipped"),
+            ("failed", "setup", False, "fixture blew up", "error"),
+            ("failed", "teardown", False, "cleanup blew up", "error"),
+        ],
+    )
+    def test_single_record(self, outcome, when, wasxfail, msg, expected):
+        record = _record("x.py::t[dev-p]", outcome, when, wasxfail, msg)
+        assert classify_record(record) == expected
+
+    def test_subtest_aggregation_worst_wins_and_messages_join(self):
+        nodeid = "github_issues/test_github_issues.py::test_github_issue[dev-NCATSTranslator/Babel#12]"
+        records = [
+            _record(nodeid, "passed"),
+            _record(nodeid, "failed", msg="subtest one failed"),
+            _record(nodeid, "passed"),
+        ]
+        results, counts, ran = build_results(records, TARGETS, ALLOWLIST)
+        key = "github_issues/test_github_issues.py::test_github_issue[NCATSTranslator/Babel#12]"
+        assert results[key]["outcomes"]["dev"]["o"] == "failed"
+        assert "subtest one failed" in results[key]["outcomes"]["dev"]["msg"]
+        assert counts["dev"]["failed"] == 1
+        assert sum(counts["dev"].values()) == 1  # aggregated, not three tests
+        assert ran is True
+
+
+class TestLinkValidation:
+    def test_issue_id_allowlisted(self):
+        assert (
+            validate_issue_id("NCATSTranslator/Babel#12", ALLOWLIST)
+            == "NCATSTranslator/Babel#12"
+        )
+
+    @pytest.mark.parametrize(
+        "issue_id",
+        [
+            "evil/repo#1",
+            "NCATSTranslator/Babel#notanumber",
+            "NCATSTranslator/Babel/extra#1",
+            "../etc#1",
+            "",
+            None,
+        ],
+    )
+    def test_issue_id_rejected(self, issue_id):
+        assert validate_issue_id(issue_id, ALLOWLIST) is None
+
+    def test_source_url_allowlisted(self):
+        url = "https://github.com/NCATSTranslator/Babel/issues/12"
+        assert validate_source_url(url, ALLOWLIST) == url
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://github.com.evil.example/NCATSTranslator/Babel/issues/12",
+            "https://github.com/evil/repo/issues/1",
+            "https://github.com/NCATSTranslator",
+            "http://github.com/NCATSTranslator/Babel/issues/12",
+            "javascript:alert(1)",
+            "",
+            None,
+        ],
+    )
+    def test_source_url_rejected(self, url):
+        assert validate_source_url(url, ALLOWLIST) is None
+
+
+class TestResultAnnotation:
+    def test_gsheet_row_and_props(self):
+        nodeid = (
+            "nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
+            "[dev-test_nodenorm_from_gsheet.test_row:row=131]"
+        )
+        records = [
+            _record(
+                nodeid,
+                "failed",
+                msg="AssertionError: wrong id",
+                props={
+                    "category": "Diseases",
+                    "source": "hetio",
+                    "source_url": "https://github.com/NCATSTranslator/Babel/issues/12",
+                    "query_id": "MONDO:0005148",
+                    "query_label": "type 2 diabetes",
+                },
+            )
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["kind"] == "gsheet"
+        assert result["row"] == 131
+        assert result["category"] == "Diseases"
+        assert result["query_id"] == "MONDO:0005148"
+        assert (
+            result["source_url"] == "https://github.com/NCATSTranslator/Babel/issues/12"
+        )
+
+    def test_gsheet_props_merged_across_targets(self):
+        # dev errors during setup, before record_property runs, so its records
+        # carry no props. The row must still get its metadata from prod.
+        base = "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[%s-r:row=7]"
+        records = [
+            _record(base % "dev", "error", when="setup", msg="boom"),
+            _record(base % "prod", "passed", props={"category": "Genes"}),
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["category"] == "Genes"
+
+    def test_gsheet_bad_source_url_omitted(self):
+        nodeid = "nameres/test_nameres_from_gsheet.py::test_label[prod-x:row=5]"
+        records = [
+            _record(
+                nodeid, "failed", msg="m", props={"source_url": "https://evil.example/"}
+            )
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert "source_url" not in result
+
+    def test_issue_not_in_allowlist_becomes_other_without_link(self):
+        nodeid = (
+            "github_issues/test_github_issues.py::test_github_issue[dev-evil/repo#1]"
+        )
+        results, _, ran = build_results([_record(nodeid, "passed")], TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["kind"] == "other"
+        assert "issue" not in result
+        assert ran is True  # the suite ran even if the id was rejected
+
+    def test_no_issue_records_means_not_ran(self):
+        records = [_record("nodenorm/test_x.py::t[dev-p]", "passed")]
+        _, _, ran = build_results(records, TARGETS, ALLOWLIST)
+        assert ran is False
+
+    def test_issue_records_with_tests_prefix_count_as_ran(self):
+        # The exact shape the daily workflow produces (`pytest tests ...`).
+        nodeid = "tests/github_issues/test_github_issues.py::test_github_issue[NCATSTranslator/Babel#71-ci]"
+        results, _, ran = build_results([_record(nodeid, "passed")], TARGETS, ALLOWLIST)
+        assert ran is True
+        (result,) = results.values()
+        assert result["kind"] == "issue"
+        assert result["issue"] == "NCATSTranslator/Babel#71"
+
+    def test_issue_unit_tests_do_not_count_as_ran(self):
+        # github_issues/unit/ are unit tests of the parser: they run without a
+        # token, so they must not make the report claim the issue tests ran.
+        nodeid = "tests/github_issues/unit/test_syntax.py::TestX::test_y[some-param]"
+        _, _, ran = build_results([_record(nodeid, "passed")], TARGETS, ALLOWLIST)
+        assert ran is False
+
+    def test_blocklist_redacted_for_every_target(self):
+        base = "nameres/test_blocklist.py::test_blocklist_entry"
+        records = [
+            _record(f"{base}[dev-blocklist_entry0]", "failed", msg="secret entry text"),
+            _record(
+                f"{base}[prod-blocklist_entry0]", "failed", msg="secret entry text"
+            ),
+        ]
+        results, _, _ = build_results(records, TARGETS, ALLOWLIST)
+        (result,) = results.values()
+        assert result["kind"] == "blocklist"
+        assert "secret" not in json.dumps(results)
+        for cell in result["outcomes"].values():
+            assert "msg" not in cell
+
+
+class TestNoSheetLeak:
+    def test_report_never_contains_the_sheet_id_or_a_sheet_link(self, monkeypatch):
+        # The public report must not let casual observers find the Google Sheet.
+        # The generator must not read the sheet ID at all, so plant a fake one in
+        # the environment and check it cannot surface in the output.
+        sheet_id = "FAKE-SHEET-ID-FOR-LEAK-TEST-0123456789"
+        monkeypatch.setenv("BABEL_VALIDATION_SHEET_ID", sheet_id)
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        records = [
+            _record(
+                "nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-x:row=42]",
+                "failed",
+                msg="boom",
+                props={"category": "Diseases", "query_id": "MONDO:1"},
+            )
+        ]
+        results, counts, ran = build_results(records, TARGETS, ALLOWLIST)
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n"
+        )
+        report = generate_report.build_report(
+            results, counts, ran, ["dev"], ALLOWLIST, config
+        )
+        dumped = json.dumps(report)
+        assert sheet_id not in dumped
+        assert "docs.google.com" not in dumped
+
+
+class TestSanitize:
+    def test_truncates(self):
+        assert sanitize("a" * 1000).startswith("a" * 500)
+        assert sanitize("a" * 1000).endswith("[truncated]")
+
+    def test_escapes_ansi_and_controls(self):
+        hostile = "red \x1b[31malert\x07 ‮done"
+        cleaned = sanitize(hostile)
+        assert "\x1b" not in cleaned and "\x07" not in cleaned and "‮" not in cleaned
+        assert "\\x1b" in cleaned  # escaped, visibly, not silently stripped
+
+    def test_keeps_newlines_and_tabs(self):
+        assert sanitize("a\nb\tc") == "a\nb\tc"
+
+    def test_none(self):
+        assert sanitize(None) is None
+
+
+class TestTrimStatus:
+    def test_hostile_payload(self):
+        hostile = {
+            "status": "ok\x1b[2Jcleared",
+            "babel_version": "x" * 5000,
+            "babel_version_url": "https://evil.example/NCATSTranslator/",
+            "biolink_model": {"tag": "v4", "download_url": "https://evil.example/"},
+            "databases": {
+                "eq_id_to_id_db": {
+                    "count": "12345",
+                    "used_memory_rss_human": "9G" * 50,
+                },
+                "weird": "not a dict",
+            },
+            "recent_queries": {"mean_time_ms": "NaNish", "p95_ms": "12.5"},
+            "solr": {"numDocs": 7, "size": "1 GB", "jvm": {"secrets": True}},
+            "extra_key": {"anything": "dropped"},
+        }
+        trimmed = trim_status(hostile, "nameres")
+        assert "extra_key" not in trimmed
+        assert "babel_version_url" not in trimmed  # not the NCATSTranslator org
+        assert "\x1b" not in trimmed["status"]
+        assert len(trimmed["babel_version"]) < 100
+        assert trimmed["databases"]["eq_id_to_id_db"]["count"] == 12345
+        assert (
+            len(trimmed["databases"]["eq_id_to_id_db"]["used_memory_rss_human"]) <= 32
+        )
+        assert "weird" not in trimmed["databases"]
+        assert trimmed["recent_queries"] == {"p95_ms": 12.5}
+        assert trimmed["index"] == {"numDocs": 7, "size": "1 GB"}
+        assert trimmed["biolink_version"] == "v4"
+
+    def test_nodenorm_version_kept(self):
+        assert trim_status({"version": "2.5.1"}, "nodenorm")["version"] == "2.5.1"
+
+    def test_nameres_version_never_taken_from_top_level_version(self):
+        # A NameRes error body with no numDocs to show that "version" is the
+        # Solr index's counter.
+        trimmed = trim_status({"status": "error", "version": 68618}, "nameres")
+        assert "version" not in trimmed
+
+    def test_nameres_index_read_from_solr_or_top_level(self):
+        dates = {
+            "lastModified": "2026-10-08T22:16:21.135Z",
+            "startTime": "2026-10-14T17:14:16.138Z",
+        }
+        expected = {"numDocs": 7, "size": "1 GB", **dates}
+        # Before NameRes v1.7, the index stats were under "solr".
+        before = trim_status(
+            {"solr": {"numDocs": 7, "size": "1 GB", **dates}}, "nameres"
+        )
+        assert before["index"] == expected
+        # From v1.7 they are at the top level, including the index's own
+        # "version" counter, which must not pass for the service's version.
+        after = trim_status(
+            {"numDocs": "7", "size": "1 GB", "version": 68618, **dates}, "nameres"
+        )
+        assert after["index"] == expected
+        assert "version" not in after
+        # NameRes ES reports a top-level index too; 0 is a real value there.
+        assert trim_status({"numDocs": 0, "size": 0}, "nameres")["index"] == {
+            "numDocs": 0,
+            "size": "0",
+        }
+
+    def test_nodenorm_never_gets_a_nameres_index(self):
+        # Keyed on the service, as "version" is: the shape alone would give a
+        # NodeNorm body that happens to carry numDocs a NameRes index.
+        for body in ({"numDocs": 7, "size": "1 GB"}, {"solr": {"numDocs": 7}}):
+            assert "index" not in trim_status(body, "nodenorm")
+
+    def test_babel_releases_served_are_validated_and_ordered(self):
+        available = {
+            "2026jul22": "https://example/2026jul22",
+            "2025sep1": "https://example/2025sep1",
+            "2026feb30": "not a real date",
+            "\x1b[2Jlatest": "hostile",
+        }
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == ["2025sep1", "2026jul22"]
+
+    def test_babel_releases_served_keeps_the_newest_of_a_long_list(self):
+        # Oldest first, with junk ahead of them: the cut must not drop the
+        # current releases at the end.
+        junk = {f"junk{i}": "" for i in range(60)}
+        old = {f"2020jan{d}": "" for d in range(1, 29)}
+        old.update({f"2020feb{d}": "" for d in range(1, 29)})
+        available = {**junk, **old, "2026jul22": ""}
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        releases = trimmed["babel_available_versions"]
+        assert len(releases) == 50
+        assert releases[-1] == "2026jul22"
+
+    def test_babel_releases_served_read_from_a_list_too(self):
+        available = ["2026jul22", "2025sep1", "2025sep1", {"not": "hashable"}, None]
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == ["2025sep1", "2026jul22"]
+
+    @pytest.mark.parametrize("available", ["2026jul22", 3, True])
+    def test_babel_releases_served_in_an_unknown_shape_is_logged(
+        self, available, caplog
+    ):
+        # Dropping it silently hid the row, which reads as a NodeNorm that serves
+        # only its default release.
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert "babel_available_versions" not in trimmed
+        assert any(
+            "available_versions" in r.getMessage() for r in caplog.records
+        ), caplog.records
+
+    def test_babel_releases_served_with_no_real_release_is_logged(self, caplog):
+        available = {"latest": "", "\x1b[2J": ""}
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == []
+        assert any(
+            "none a Babel release" in r.getMessage() for r in caplog.records
+        ), caplog.records
+
+    def test_babel_releases_served_absent_is_quiet(self, caplog):
+        trimmed = trim_status({"babel": {"default_version": "2025sep1"}}, "nodenorm")
+        assert "babel_available_versions" not in trimmed
+        assert not caplog.records
+
+    def test_elasticsearch_nodes_are_summarised(self):
+        nodes = {
+            "es-0": {"version": "9.3.1", "disk.used_percent": "69.93"},
+            "es-1": {"version": "9.3.1", "disk.used_percent": "71.5"},
+            "es-2": {"version": "9.3.1", "disk.used_percent": "NaN"},
+            "bad": "not a dict",
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {
+            "nodes": 3,
+            "versions": ["9.3.1"],
+            "max_disk_used_percent": 71.5,
+        }
+
+    def test_elasticsearch_mixed_versions_are_all_reported(self):
+        # Mid rolling upgrade: the first node alone would hide the old ones.
+        nodes = {
+            "es-0": {"version": "9.3.1"},
+            "es-1": {"version": "8.19.0"},
+            "es-2": {"version": "8.19.0"},
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"]["versions"] == ["8.19.0", "9.3.1"]
+
+    def test_elasticsearch_versions_are_ordered_as_numbers(self):
+        # As strings, 8.10.0 sorted before 8.9.0, and the cut to five kept the
+        # lexically smallest rather than the newest.
+        nodes = {
+            f"es-{i}": {"version": version}
+            for i, version in enumerate(
+                ["8.10.0", "8.9.0", "8.2.0", "8.11.1", "8.8.0", "8.1.0", "8.10.0-rc1"]
+            )
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"]["versions"] == [
+            "8.8.0",
+            "8.9.0",
+            "8.10.0",
+            "8.10.0-rc1",
+            "8.11.1",
+        ]
+
+    def test_elasticsearch_node_with_null_version_is_skipped(self):
+        # A node mid-restart can report "version": null. Sorting None among
+        # strings raised TypeError, which turned the whole NodeNorm status into
+        # an error over one field.
+        nodes = {"es-0": {"version": "9.3.1"}, "es-1": {"version": None}}
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {"nodes": 2, "versions": ["9.3.1"]}
+
+    def test_elasticsearch_with_no_nodes_is_kept(self):
+        # A cluster with no nodes is a finding, not missing data.
+        trimmed = trim_status({"elasticsearch": {"nodes": {}}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {"nodes": 0}
+
+    def test_elasticsearch_summary_is_bounded_and_escaped(self):
+        nodes = {
+            f"es-{i}": {"version": "\x1b[2J9" * 20, "disk.used_percent": "1"}
+            for i in range(1000)
+        }
+        nodes["es-0"]["version"] = "\x1b[2J" + "9" * 100
+        for i in range(10):
+            nodes[f"es-{i}"]["version"] = f"9.{i}"
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        trimmed = trimmed["elasticsearch"]
+        # Every node is counted; only the list of distinct versions is cut.
+        assert trimmed["nodes"] == 1000
+        assert len(trimmed["versions"]) == 5
+        for version in trimmed["versions"]:
+            assert "\x1b" not in version
+            assert len(version) < 50
+
+    def test_valid_babel_version_url_kept(self):
+        trimmed = trim_status(
+            {"babel_version_url": "https://github.com/ncatstranslator/Babel/blob/x.md"},
+            "nodenorm",
+        )
+        assert trimmed["babel_version_url"].startswith("https://github.com/")
+
+    def test_not_a_dict(self):
+        assert trim_status(["nope"], "nodenorm") == {"error": "InvalidStatus"}
+
+    @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", float("inf")])
+    def test_non_finite_numbers_are_dropped(self, value):
+        # float() accepts all of these, and json.dump would then write the bare
+        # tokens NaN/Infinity — valid Python, invalid JSON. JSON.parse rejects
+        # the file, so one bad latency from one service blanks every page.
+        trimmed = trim_status({"recent_queries": {"p95_ms": value}}, "nameres")
+        assert trimmed["recent_queries"] == {}
+        trimmed = trim_status({"solr": {"numDocs": value, "size": "1 GB"}}, "nameres")
+        assert trimmed["index"] == {"size": "1 GB"}
+
+
+class TestAllTargetsUnreachable:
+    def test_all_unreachable_means_the_run_broke(self):
+        report = {
+            "targets": {"dev": {"unreachable": True}, "prod": {"unreachable": True}}
+        }
+        assert generate_report.all_targets_unreachable(report) is True
+
+    def test_one_reachable_target_is_enough(self):
+        report = {
+            "targets": {"dev": {"unreachable": True}, "prod": {"unreachable": False}}
+        }
+        assert generate_report.all_targets_unreachable(report) is False
+
+
+def _run(date, passed=1):
+    return {"date": date, "targets": {"dev": {"counts": {"passed": passed}}}}
+
+
+class TestHistory:
+    def test_append_keeps_old_lines_verbatim(self, tmp_path):
+        old = tmp_path / "history.jsonl"
+        line1 = json.dumps(_run("2026-08-24"))
+        line2 = json.dumps(_run("2026-08-25"))
+        old.write_text(f"{line1}\n{line2}\nnot json\n", encoding="utf-8")
+        new_line = _run("2026-08-26")
+        content = append_history(str(old), new_line)
+        lines = content.strip().split("\n")
+        assert lines[0] == line1
+        assert lines[1] == line2
+        assert json.loads(lines[2]) == new_line
+        assert len(lines) == 3  # the bad line is dropped
+
+    def test_missing_history_file(self):
+        run = _run("2026-08-26")
+        assert append_history("/nonexistent/history.jsonl", run) == (
+            json.dumps(run) + "\n"
+        )
+
+    def test_run_without_any_test_results_is_dropped(self, tmp_path):
+        # The shakedown run that died before pytest reported anything: real
+        # /status values, every count zero. History carries lines forward
+        # forever, so it has to be dropped rather than merely not written.
+        empty = {
+            "date": "2026-08-27",
+            "targets": {"dev": {"babel_version": "2025sep1", "counts": {"passed": 0}}},
+        }
+        old = tmp_path / "history.jsonl"
+        old.write_text(json.dumps(empty) + "\n", encoding="utf-8")
+        real = _run("2026-08-28")
+        assert append_history(str(old), real) == json.dumps(real) + "\n"
+        assert append_history(str(old), empty) == ""
+
+
+class TestBadInputIsSkippedNotFatal:
+    def test_non_string_id_is_skipped(self, tmp_path, caplog):
+        (tmp_path / "raw.jsonl").write_text(
+            json.dumps({"id": 5})
+            + "\n"
+            + json.dumps(_record("a/b.py::t[dev-x]"))
+            + "\n",
+            encoding="utf-8",
+        )
+        records = read_raw_records(str(tmp_path))
+        assert [r["id"] for r in records] == ["a/b.py::t[dev-x]"]
+
+    def test_non_string_msg_costs_one_record_not_the_report(self):
+        # read_raw_records validates only that a record is a dict with a string
+        # id, so a hand-edited or truncated raw file can put anything in msg. It
+        # must not take the whole generator down with it: classify_record and the
+        # message join both see the raw value.
+        nodeid = "nodenorm/test_x.py::t[dev-row=1]"
+        records = [
+            _record(nodeid, "failed", msg=123),
+            _record("nodenorm/test_y.py::t[dev-row=2]", "passed"),
+        ]
+        results, counts, _ = build_results(records, TARGETS, ALLOWLIST)
+        assert len(results) == 2
+        assert results["nodenorm/test_x.py::t[row=1]"]["outcomes"]["dev"] == {
+            "o": "failed",
+            "msg": "123",
+        }
+
+    def test_history_line_without_targets_is_dropped(self, tmp_path):
+        old = tmp_path / "history.jsonl"
+        good = json.dumps(_run("2026-08-24"))
+        old.write_text(f"{good}\nnull\n123\n{{}}\n", encoding="utf-8")
+        lines = append_history(str(old), _run("2026-08-26")).strip().split("\n")
+        assert lines[0] == good
+        assert len(lines) == 2
+
+    def test_missing_url_does_not_reach_the_network(self):
+        assert fetch_status(None, "nodenorm") == {"error": "NoURL"}
+
+    def test_response_time_is_recorded(self, monkeypatch):
+        # The time includes reading the body, not just the headers.
+        clock = iter([100.0, 101.2344])
+        monkeypatch.setattr(generate_report.time, "monotonic", lambda: next(clock))
+
+        class Response:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"status": "ok"}
+
+        urls = []
+
+        def fake_get(url, timeout):
+            urls.append(url)
+            return Response()
+
+        monkeypatch.setattr(generate_report.requests, "get", fake_get)
+        assert fetch_status("https://nn.example/status", "nodenorm") == {
+            "status": "ok",
+            "response_ms": 1234,
+        }
+        assert urls == ["https://nn.example/status"]
+
+
+class TestServiceLinks:
+    def test_build_report_links_each_service_by_its_backend(self, monkeypatch):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n"
+            "[ci]\nNodeNormURL = https://nn-es.example/\nNodeNormBackend = elasticsearch\n"
+            "NameResURL = https://nr-es.example/\nNameResBackend = elasticsearch\n"
+        )
+        counts = collections.defaultdict(collections.Counter)
+        targets = generate_report.build_report(
+            {}, counts, True, ["dev", "ci"], ALLOWLIST, config
+        )["targets"]
+        assert targets["dev"]["nodenorm_backend"] == "redis"
+        assert targets["dev"]["nameres_backend"] == "solr"
+        assert targets["dev"]["nodenorm_docs_url"] == "https://nn.example/docs"
+        assert targets["dev"]["nameres_status_url"] == "https://nr.example/status"
+        # The Elasticsearch services serve Swagger UI at their root, not /docs.
+        assert targets["ci"]["nodenorm_docs_url"] == "https://nn-es.example/"
+        assert targets["ci"]["nameres_docs_url"] == "https://nr-es.example/"
+        assert targets["ci"]["nodenorm_status_url"] == "https://nn-es.example/status"
+
+    def test_a_service_without_a_url_has_no_backend(self, monkeypatch):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string("[test]\nNodeNormURL = https://nn.example/\n")
+        counts = collections.defaultdict(collections.Counter)
+        test = generate_report.build_report(
+            {}, counts, True, ["test"], ALLOWLIST, config
+        )["targets"]["test"]
+        assert test["nodenorm_backend"] == "redis"
+        assert test["nameres_backend"] is None
+
+    def test_history_line_reads_the_nameres_index_from_either_backend(self):
+        report = {
+            "generated_at": "2026-11-09T00:00:00+00:00",
+            "run": {"github_run_id": "1"},
+            "targets": {
+                "ci": {
+                    "nodenorm_status": {},
+                    "nameres_status": {
+                        **trim_status({"numDocs": 5, "size": "2 GB"}, "nameres"),
+                        "babel_version": "2026jul22",
+                    },
+                    "counts": {},
+                }
+            },
+        }
+        line = generate_report.build_history_line(report)["targets"]["ci"]
+        assert (line["solr_docs"], line["solr_size"]) == (5, "2 GB")
+        # NameRes's Babel release is recorded apart from NodeNorm's.
+        assert line["nameres_babel_version"] == "2026jul22"
+        assert line["babel_version"] is None
+
+    def test_a_missing_url_has_no_links(self):
+        assert generate_report.service_links(None, "redis") == (None, None)
+
+    def test_side_branch_of_comes_from_targets_ini_and_is_checked(
+        self, monkeypatch, caplog
+    ):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[ci]\nNodeNormURL = https://nn.example/\n"
+            "[ci-nr]\nSideBranchOf = ci\nNodeNormURL = https://nn.example/\n"
+            "[self]\nSideBranchOf = self\n"
+            "[gone]\nSideBranchOf = localhost\n"
+        )
+        targets = ["ci", "ci-nr", "self", "gone"]
+        counts = collections.defaultdict(collections.Counter)
+        sections = generate_report.build_report(
+            {}, counts, True, targets, ALLOWLIST, config
+        )["targets"]
+        assert {t: s["side_branch_of"] for t, s in sections.items()} == {
+            "ci": None,
+            "ci-nr": "ci",
+            "self": None,
+            "gone": None,
+        }
+        assert sum("SideBranchOf" in r.getMessage() for r in caplog.records) == 2
+
+
+# read_targets is the single source of truth for which environments exist: as of
+# the dashboard workflow taking its loop from it, a section it returns is one that
+# gets run, and one it drops is never mentioned again. When those two disagreed,
+# the extra target reached the site as a permanently unreachable column.
+class TestReadTargets:
+    def _ini(self, tmp_path, text):
+        path = tmp_path / "targets.ini"
+        path.write_text(text, encoding="utf8")
+        return path
+
+    def test_it_returns_every_section_except_localhost(self, tmp_path):
+        path = self._ini(
+            tmp_path,
+            "[DEFAULT]\nRepositories =\n    org/one\n\n"
+            "[prod]\nNodeNormURL = https://prod.example/\n\n"
+            "[test-redis]\nNodeNormURL = https://redis.example/\n\n"
+            "[localhost]\nNodeNormURL = http://localhost:2434/\n",
+        )
+
+        targets, allowlist, _ = read_targets(path)
+
+        assert targets == ["prod", "test-redis"]
+        assert allowlist == ["org/one"]
+
+    def test_it_keeps_the_order_the_file_gives(self, tmp_path):
+        # The site sorts by DEPLOYMENT_ORDER, but the workflow runs them in this
+        # order, and a report is easier to read against the file it came from.
+        path = self._ini(tmp_path, "".join(f"[{name}]\nNodeNormURL = https://{name}.example/\n\n"
+                                           for name in ("exp", "dev", "ci", "prod")))
+
+        assert read_targets(path)[0] == ["exp", "dev", "ci", "prod"]
+
+    def test_the_repository_allowlist_is_lowercased_and_stripped(self, tmp_path):
+        path = self._ini(
+            tmp_path,
+            "[DEFAULT]\nRepositories =\n    NCATSTranslator/Babel\n   \n    TranslatorSRI/Babel-Explorer\n\n"
+            "[prod]\nNodeNormURL = https://prod.example/\n",
+        )
+
+        assert read_targets(path)[1] == ["ncatstranslator/babel", "translatorsri/babel-explorer"]
+
+    def test_the_checked_in_targets_ini_has_no_localhost_and_is_not_empty(self):
+        targets, _, _ = read_targets("tests/targets.ini")
+
+        assert "localhost" not in targets
+        assert targets, "the workflow builds its run loop from this list"
+
+
+class TestUnattributedResults:
+    """
+    A test whose node ID names no target lands in the "?" bucket. The site has no
+    column for it — Results.vue renders one per entry of report["targets"] — so
+    such a row would appear on /results/ with a label and every cell blank, and
+    nothing on that page explains why. It is reported through
+    unattributed_counts instead.
+    """
+
+    def test_unattributed_test_is_counted_but_not_a_row(self):
+        records = [
+            _record("test_environment/test_env.py::test_sheet_has_cases", "failed"),
+            _record("nodenorm/test_x.py::t[dev-row=1]", "passed"),
+        ]
+        results, counts, _ = build_results(records, TARGETS, ALLOWLIST)
+        assert list(results) == ["nodenorm/test_x.py::t[row=1]"]
+        assert counts["?"]["failed"] == 1
+
+    def test_a_row_keeps_the_targets_it_does_have(self):
+        # Only the unattributed cell is dropped, not the whole result: the same
+        # key can appear both with and without a parseable target.
+        key = "nodenorm/test_x.py::t"
+        records = [
+            _record(f"{key}[dev-row=1]", "failed"),
+            _record(f"{key}[row=1]", "passed"),
+        ]
+        results, counts, _ = build_results(records, TARGETS, ALLOWLIST)
+        assert list(results[f"{key}[row=1]"]["outcomes"]) == ["dev"]
+        assert counts["?"]["passed"] == 1

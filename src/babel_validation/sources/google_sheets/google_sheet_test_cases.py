@@ -1,20 +1,19 @@
-# We store Babel test cases in Google Sheets at
-# https://docs.google.com/spreadsheets/d/11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no/edit?usp=sharing
+# We store Babel test cases in the Babel Validation Google Sheet.
+#
+# The sheet ID is deliberately not checked in: it is the capability that grants
+# access to the sheet, so it lives in the BABEL_VALIDATION_SHEET_ID environment
+# variable (via .env locally, a repository secret in GitHub Actions) and must
+# never appear in the code, the Git history, or anything we publish.
 #
 # This library contains classes and methods for accessing those test cases.
 import csv
-import hashlib
 import io
-import tempfile
-import time
 from collections import Counter
-from pathlib import Path
 
 import pytest
-import requests
 from _pytest.mark import ParameterSet
-from filelock import FileLock
 
+from . import fetch_sheet_csv
 from ...core.testrow import TestRow
 
 
@@ -24,32 +23,28 @@ class GoogleSheetTestCases:
     """
 
     def __str__(self):
-        return f"Google Sheet Test Cases ({len(self.rows)} test cases from {self.google_sheet_id})"
+        # No sheet ID here: this string ends up in assertion messages and pytest
+        # output, which the dashboard publishes.
+        return f"Google Sheet Test Cases ({len(self.rows)} test cases)"
 
-    def __init__(self, google_sheet_id="11zebx8Qs1Tc3ShQR9nh4HRW8QSoo8k65w_xIaftN0no", cache_ttl_seconds: int = 3600):
+    def __init__(self, google_sheet_id=None, cache_ttl_seconds: int = 3600):
         """Create a Google Sheet test case.
 
-        :param google_sheet_id: The Google Sheet identifier to download test cases from.
+        :param google_sheet_id: The Google Sheet identifier to download test cases from. Defaults to
+            the BABEL_VALIDATION_SHEET_ID environment variable (loaded from .env if present).
         :param cache_ttl_seconds: How long a cached download stays valid. pytest deletes the cache at the
             start of every run (see tests/conftest.py), so this TTL mainly protects other consumers
             (e.g. csv-to-babeltests) from reading stale data forever.
         """
 
-        self.google_sheet_id = google_sheet_id
-
-        sheet_hash = hashlib.md5(google_sheet_id.encode()).hexdigest()
-        cache_file = Path(tempfile.gettempdir()) / f"babel_validation_gsheet_{sheet_hash}.csv"
-        lock_file = cache_file.with_suffix(".lock")
-
-        with FileLock(lock_file):
-            if cache_file.exists() and time.time() - cache_file.stat().st_mtime < cache_ttl_seconds:
-                self.csv_content = cache_file.read_text(encoding="utf-8")
-            else:
-                csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
-                response = requests.get(csv_url, timeout=30)
-                response.raise_for_status()
-                self.csv_content = response.text
-                cache_file.write_text(self.csv_content, encoding="utf-8")
+        # The ID is deliberately not kept on the instance: nothing reads it, and
+        # this object's str() ends up in assertion messages the dashboard publishes.
+        self.csv_content = fetch_sheet_csv(
+            "BABEL_VALIDATION_SHEET_ID",
+            "Tests",
+            sheet_id=google_sheet_id,
+            cache_ttl_seconds=cache_ttl_seconds,
+        )
 
         self.rows = []
         with io.StringIO(self.csv_content) as f:
@@ -58,7 +53,10 @@ class GoogleSheetTestCases:
                 self.rows.append(row)
 
     def test_rows(
-        self, test_id_prefix: str, test_nodenorm: bool = False, test_nameres: bool = False
+        self,
+        test_id_prefix: str,
+        test_nodenorm: bool = False,
+        test_nameres: bool = False,
     ) -> list[ParameterSet]:
         """
         self.rows is the raw list of rows we got back from the Google Sheets. This method transforms that into

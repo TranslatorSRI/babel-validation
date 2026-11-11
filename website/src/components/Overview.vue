@@ -1,0 +1,254 @@
+<!--
+  Overview.vue - the landing page: is anything broken, and where?
+
+  Environments read left to right in promotion order, so a failure that has
+  reached prod but not exp is visible as a shape rather than as a number.
+
+  Report values are untrusted: {{ }} only, never v-html. The links into the
+  results page carry an environment name that came from targets.ini, and are
+  built with URLSearchParams rather than string concatenation.
+-->
+<script>
+import { sortBesideParents, sortByDeploymentOrder, unknownTargets } from '../deploymentOrder.js';
+import DriftPanel from './DriftPanel.vue';
+import StatusMatrix from './StatusMatrix.vue';
+import { fetchReport, formatCount, isInteresting, runLink } from '../reportData.js';
+
+// NodeNorm and NameRes are loaded separately, so they can be on different
+// Babel releases while one is promoted. Unlabelled when both report the
+// same release, and when only NodeNorm reports one: the card showed
+// NodeNorm's release before NameRes's was read, and older NameRes Solr
+// releases (or one that timed out) report none, so labelling that case put
+// "NN" on cards where nothing differs. NameRes's release alone is still
+// labelled, so with NodeNorm down it is not read as the environment's.
+function babelVersion(section) {
+  const { nodenorm_status: nn, nameres_status: nr } = section;
+  const nodenorm = nn?.babel_version;
+  const nameres = nr?.babel_version;
+  if (nodenorm && nodenorm === nameres) {
+    return { lines: [nodenorm], title: `Babel ${nodenorm}` };
+  }
+  if (nodenorm && !nameres) {
+    return {
+      lines: [nodenorm],
+      title: `NodeNorm on Babel ${nodenorm}; NameRes did not report a release`,
+    };
+  }
+  if (!nodenorm && !nameres) return { lines: ['—'], title: null };
+  const lines = [];
+  const titles = [];
+  if (nodenorm) {
+    lines.push(`NN ${nodenorm}`);
+    titles.push(`NodeNorm ${nodenorm}`);
+  }
+  if (nameres) {
+    lines.push(`NR ${nameres}`);
+    titles.push(`NameRes ${nameres}`);
+  }
+  return { lines, title: titles.join(', ') };
+}
+
+export default {
+  components: { DriftPanel, StatusMatrix },
+  props: {
+    dataUrl: { type: String, required: true },
+    resultsUrl: { type: String, required: true },
+  },
+  data() {
+    return { report: null, loadError: null };
+  },
+  async mounted() {
+    await this.load();
+  },
+  computed: {
+    targetNames() {
+      return sortByDeploymentOrder(Object.keys(this.report?.targets ?? {}));
+    },
+    // The Environments table's columns: side branches beside their parents,
+    // as targets.ini's SideBranchOf names them. See sortBesideParents.
+    environmentColumns() {
+      return sortBesideParents(
+        this.targetNames,
+        (name) => this.report.targets[name].side_branch_of ?? null,
+      );
+    },
+    // Each card's Babel release, worked out once per report: the card reads
+    // both its tooltip and its lines from the same result.
+    babelVersions() {
+      return Object.fromEntries(
+        this.targetNames.map((t) => [t, babelVersion(this.report.targets[t])]),
+      );
+    },
+    unreachableTargets() {
+      return this.targetNames.filter((t) => this.report.targets[t].unreachable);
+    },
+    unorderedTargets() {
+      return unknownTargets(this.targetNames);
+    },
+    orderedTargets() {
+      return this.targetNames.filter((t) => !this.unorderedTargets.includes(t));
+    },
+    totalResults() {
+      return Object.keys(this.report?.results ?? {}).length;
+    },
+    totalInteresting() {
+      if (!this.report) return 0;
+      return Object.values(this.report.results).filter(isInteresting).length;
+    },
+    unattributed() {
+      const counts = this.report?.unattributed_counts ?? {};
+      const total = Object.values(counts).reduce((sum, n) => sum + (n || 0), 0);
+      return total;
+    },
+  },
+  methods: {
+    formatCount,
+    runLink,
+    async load() {
+      this.loadError = null;
+      try {
+        this.report = await fetchReport(this.dataUrl);
+      } catch (e) {
+        this.loadError = String(e);
+      }
+    },
+    counts(target) {
+      return this.report.targets[target].counts;
+    },
+    resultsLink(params) {
+      return `${this.resultsUrl}?${new URLSearchParams(params).toString()}`;
+    },
+  },
+};
+</script>
+
+<template>
+  <div v-if="loadError" class="card border-danger">
+    <div class="card-body">
+      <h2 class="h5 card-title">Could not load the test report</h2>
+      <p class="mb-3"><code>{{ dataUrl }}</code> — {{ loadError }}</p>
+      <button type="button" class="btn btn-sm btn-outline-danger" @click="load">Try again</button>
+    </div>
+  </div>
+
+  <div v-else-if="!report" class="card placeholder-glow" aria-busy="true">
+    <div class="card-body">
+      <span class="placeholder col-4 mb-3"></span>
+      <span v-for="n in 5" :key="n" class="placeholder col-12 mb-2"></span>
+      <span class="visually-hidden">Loading the test report…</span>
+    </div>
+  </div>
+
+  <div v-else>
+    <p class="text-body-secondary small">
+      Generated {{ report.generated_at }}
+      <template v-if="runLink(report.run.github_run_id)">
+        by <a :href="runLink(report.run.github_run_id)">run {{ report.run.github_run_id }}</a>
+      </template>
+      <template v-if="report.run.git_sha">
+        · {{ report.run.git_sha.slice(0, 8) }}
+      </template>
+    </p>
+
+    <div v-if="!report.github_issues_ran" class="alert alert-warning">
+      The GitHub issue tests did not run (no results found) — probably a missing GitHub token. A
+      green board proves nothing about them.
+    </div>
+    <div v-if="unreachableTargets.length" class="alert alert-warning">
+      No test results for: {{ unreachableTargets.join(', ') }}. These environments may have been
+      unreachable during the run.
+    </div>
+
+    <div v-if="unorderedTargets.length" class="alert alert-warning">
+      Not in the known promotion order: {{ unorderedTargets.join(', ') }}. They are shown last,
+      wherever they actually sit in the pipeline. Add them to <code>DEPLOYMENT_ORDER</code> in
+      <code>deploymentOrder.js</code>.
+    </div>
+
+    <p v-if="orderedTargets.length > 1" class="small text-body-secondary mb-2">
+      Environments in promotion order — a new Babel version reaches
+      {{ orderedTargets[0] }} first and {{ orderedTargets[orderedTargets.length - 1] }} last.
+    </p>
+    <!-- A grid, not a flex row: the cards must stay one per environment across,
+         so the pipeline reads left to right rather than wrapping mid-sequence. -->
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-3 mb-4">
+      <div v-for="target in targetNames" :key="target" class="col">
+        <div class="card h-100">
+          <div class="card-body py-2 px-3">
+            <div class="d-flex justify-content-between align-items-baseline gap-2">
+              <span class="fw-semibold">{{ target }}</span>
+              <span class="small text-body-secondary text-end" :title="babelVersions[target].title">
+                <span v-for="line in babelVersions[target].lines" :key="line" class="d-block">
+                  {{ line }}
+                </span>
+              </span>
+            </div>
+            <template v-if="report.targets[target].unreachable">
+              <div class="fs-5 fw-semibold text-body-secondary">no results</div>
+              <div class="small text-body-secondary">unreachable during the run</div>
+            </template>
+            <template v-else>
+              <div class="fs-5 fw-semibold">
+                <a
+                  class="link-danger text-decoration-none"
+                  :href="resultsLink({ env: target, has: 'failed' })"
+                >
+                  {{ formatCount(counts(target).failed) }} failed
+                </a>
+              </div>
+              <!-- Only when there are any: an error is rare and actionable, and
+                   a "0 errors" line on all six cards would read as noise. A
+                   target with passing tests and one setup error is not healthy,
+                   but with only the failed headline above it looked it. -->
+              <div v-if="counts(target).error" class="small">
+                <a
+                  class="link-danger text-decoration-none"
+                  :href="resultsLink({ env: target, has: 'error' })"
+                >
+                  {{ formatCount(counts(target).error) }} errored
+                </a>
+              </div>
+              <div class="small">
+                <a
+                  class="link-warning text-decoration-none"
+                  :href="resultsLink({ env: target, has: 'xpassed' })"
+                >
+                  {{ formatCount(counts(target).xpassed) }} unexpectedly passing
+                </a>
+              </div>
+              <div class="small text-body-secondary">
+                {{ formatCount(counts(target).passed) }} passed ·
+                {{ formatCount(counts(target).xfailed) }} xfailed ·
+                {{ formatCount(counts(target).skipped) }} skipped
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <DriftPanel
+      :results="report.results"
+      :target-names="targetNames"
+      :results-url="resultsUrl"
+    />
+
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>Environments</span>
+        <a class="btn btn-sm btn-outline-secondary" :href="resultsUrl">
+          {{ formatCount(totalInteresting) }} of {{ formatCount(totalResults) }} tests need a look →
+        </a>
+      </div>
+      <!-- Scrolls sideways on its own, rather than widening the whole page,
+           when a phone is narrower than six environments' columns. -->
+      <div class="card-body overflow-x-auto">
+        <StatusMatrix :report="report" :target-names="environmentColumns" />
+        <p v-if="unattributed" class="small text-body-secondary mt-3 mb-0">
+          {{ formatCount(unattributed) }} test result(s) could not be attributed to an environment,
+          and are not counted above.
+        </p>
+      </div>
+    </div>
+  </div>
+</template>

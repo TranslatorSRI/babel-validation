@@ -1,34 +1,81 @@
 ---
-// Load properties
+// The one layout: page shell, navigation, footer, and the theme boot script.
+//
+// Content sits in cards on --bs-body-bg, over a --bs-body-tertiary page. That
+// tint difference is the whole visual hierarchy; keep new sections in cards.
+import 'bootstrap/dist/css/bootstrap.css';
+import '../styles/theme.css';
+import NavBar from '../components/NavBar.astro';
+
 interface Props {
-	title: string;
-	description: string;
+  title: string;
+  description: string;
+  active?: 'dashboard' | 'results' | 'history';
 }
 
-const { title, description } = Astro.props;
+const { title, description, active } = Astro.props;
+const base = import.meta.env.BASE_URL;
 
-// Load Bootstrap
-import 'bootstrap/dist/css/bootstrap.css'
+const footerLinks = [
+  { label: 'babel-validation', href: 'https://github.com/TranslatorSRI/babel-validation' },
+  { label: 'Babel', href: 'https://github.com/NCATSTranslator/Babel' },
+  { label: 'Babel Explorer', href: 'https://translatorsri.github.io/babel-explorer/' },
+  { label: 'NodeNorm', href: 'https://github.com/NCATSTranslator/NodeNormalization' },
+  { label: 'NodeNorm API', href: 'https://nodenorm.transltr.io/docs' },
+  { label: 'NameRes', href: 'https://github.com/NCATSTranslator/NameResolution' },
+  { label: 'NameRes API', href: 'https://name-lookup.transltr.io/docs' },
+];
 ---
 
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="description" content={description} />
-		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="generator" content={Astro.generator} />
-		<base href={import.meta.env.BASE_URL} />
-		<title>{title}</title>
-	</head>
-	<body>
-		<div class="container-fluid">
-			<slot />
-		</div>
-	</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href={base + 'favicon.svg'} />
+    <meta name="generator" content={Astro.generator} />
+    <base href={base} />
+    <title>{title}</title>
+    <script is:inline>
+      // Runs before the body renders, or the page flashes the wrong theme.
+      (() => {
+        let choice = 'auto';
+        try {
+          const stored = localStorage.getItem('theme');
+          if (stored === 'light' || stored === 'dark') choice = stored;
+        } catch {
+          // Storage unavailable: fall back to the system preference.
+        }
+        const dark =
+          choice === 'dark' ||
+          (choice === 'auto' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute(
+          'data-bs-theme',
+          dark ? 'dark' : 'light'
+        );
+      })();
+    </script>
+  </head>
+  <body class="bg-body-tertiary d-flex flex-column min-vh-100">
+    <NavBar active={active} />
+
+    <main class="container-xxl flex-grow-1 pb-4">
+      <slot />
+    </main>
+
+    <footer class="site-footer mt-4 py-3 bg-body">
+      <div class="container-xxl d-flex flex-wrap gap-3 align-items-center">
+        <span class="text-body-secondary">Babel Validation</span>
+        {
+          footerLinks.map((link) => (
+            <a class="link-secondary" href={link.href} target="_blank" rel="noopener">
+              {link.label}
+            </a>
+          ))
+        }
+      </div>
+    </footer>
+  </body>
 </html>
-<style is:global>
-	body {
-	}
-</style>

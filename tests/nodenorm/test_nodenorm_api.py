@@ -6,21 +6,153 @@ import urllib.parse
 
 import pytest
 import requests
-from openapi_spec_validator import validate_url
+from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
+
+from src.babel_validation.services.service_checks import (
+    assert_backend,
+    assert_x_translator,
+    get_openapi,
+    get_status,
+    parse_babel_version,
+    truncated_repr,
+)
+
+# The backends a NodeNorm deployment can report in /status.
+KNOWN_BACKENDS = {'redis', 'elasticsearch'}
+
+# Where each Babel release's notes are published. NodeNorm links to them on `master`,
+# which GitHub redirects now that Babel's default branch is `main`; either is correct.
+# The notes are moving from `releases/<version>.md` into `releases/<version>/README.md`
+# (NCATSTranslator/Babel#1021); the old path is a redirect stub until every deployment
+# links to the new one, so both are correct for now. Drop the old shape once Babel
+# deletes the stubs.
+BABEL_RELEASE_NOTES_URLS = (
+    'https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}/README.md',
+    'https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}.md',
+)
+BABEL_RELEASE_NOTES_BRANCHES = ('main', 'master')
+
+# Each backend is its own information resource, per biolink/information-resource-registry#140.
+INFORES_BY_BACKEND = {
+    'redis': 'infores:sri-node-normalizer',
+    'elasticsearch': 'infores:nodenorm',
+}
 
 
 def test_openapi_json(target_info):
-    nodenorm_url = target_info["NodeNormURL"]
-
-    url = urllib.parse.urljoin(nodenorm_url, "openapi.json")
-    response = requests.get(url)
-    assert response.ok, f"Could not GET {url}: {response}"
-
-    openapi_json = response.json()
-    assert openapi_json["info"]["x-translator"]["infores"] == "infores:sri-node-normalizer"
+    url, openapi_json = get_openapi(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath')
+    assert_x_translator(
+        url, openapi_json, INFORES_BY_BACKEND[target_info['NodeNormBackend']]
+    )
 
     try:
-        validate_url(url)
+        # Validate the document we already parsed as JSON, rather than validate_url(url),
+        # which re-fetches it and reads it as YAML. YAML 1.1 requires a '.' and a signed
+        # exponent in a float, so it parses this service's `1e-06` as the *string*
+        # '1e-06' and reports "'1e-06' is not of type 'number'" against a document whose
+        # JSON is perfectly valid. That is a spurious failure, and it hid a real one.
+        validate(openapi_json, base_uri=url)
     except OpenAPIValidationError as e:
         pytest.fail(f"Could not validate OpenAPI at {url}: {e}")
+
+
+def test_status_backend(target_info):
+    """
+    Test that /status reports the backend this target is configured to be talking to.
+
+    NodeNorm's Redis- and Elasticsearch-backed deployments are both supported, and
+    checking that they don't drift apart is a purpose of this repo — so a target moving
+    from one to the other should be a deliberate edit to targets.ini, not something
+    discovered later through an unrelated test failing for a reason that doesn't name it.
+
+    :param target_info: The target information for this set of tests.
+    """
+    url, status_json = get_status(target_info)
+    expected_backend = target_info['NodeNormBackend']
+
+    if 'backend' not in status_json:
+        # There is nothing to compare with targets.ini. The missing field is itself a
+        # failure, but test_status_backend_is_known reports it, so failing here too would
+        # only report the same problem twice.
+        pytest.skip(
+            f"{url} does not report a backend, so this target cannot be checked against its "
+            f"configured backend of {expected_backend!r}. test_status_backend_is_known fails "
+            f"for the missing field."
+        )
+
+    assert_backend(url, status_json, expected_backend)
+
+
+def test_status_backend_is_known(target_info):
+    """
+    Test that /status reports its backend, and that it is one NodeNorm has.
+
+    Unlike test_status_backend, which skips a deployment that does not report a backend
+    because it cannot be checked against targets.ini, this fails it: every current
+    NodeNorm release reports one, so a deployment that doesn't is out of date.
+
+    :param target_info: The target information for this set of tests.
+    """
+    url, status_json = get_status(target_info)
+
+    assert 'backend' in status_json, (
+        f"{url} does not report a backend: it should be one of {sorted(KNOWN_BACKENDS)}."
+    )
+    assert status_json['backend'] in KNOWN_BACKENDS, (
+        f"{url} reports backend {truncated_repr(status_json['backend'])}, which is not one of "
+        f"{sorted(KNOWN_BACKENDS)}."
+    )
+
+
+def test_status_babel_version(target_info):
+    """
+    Test that /status reports the Babel release it is serving, by its release name.
+
+    ORION and DINGO read babel_version to decide when their normalization is out of date,
+    so a malformed one is not cosmetic. NodeNorm ES has reported one twice: '1.9'
+    (biothings/NodeNormalizationAPI#24, fixed in biothings/NodeNormalizationAPI#30), and
+    later 'VERSION.txt' on nodenorm-es.ci.
+
+    :param target_info: The target information for this set of tests.
+    """
+    url, status_json = get_status(target_info)
+    parse_babel_version(url, status_json)
+
+
+def test_status_babel_version_url(target_info):
+    """
+    Test that /status links to the release notes for the Babel release it is serving.
+
+    We never fetch the babel_version_url as given, since it comes off the network: we
+    build the URLs we would accept from the (validated) babel_version, check that the one
+    reported is among them, and fetch our own copy of it. The notes are sometimes written
+    after a release is deployed, so a brand-new release fails here until they are published.
+
+    :param target_info: The target information for this set of tests.
+    """
+    url, status_json = get_status(target_info)
+    babel_version = parse_babel_version(url, status_json)
+    expected_urls = [
+        template.format(branch=branch, version=babel_version)
+        for template in BABEL_RELEASE_NOTES_URLS
+        for branch in BABEL_RELEASE_NOTES_BRANCHES
+    ]
+
+    assert 'babel_version_url' in status_json, f"{url} does not report a babel_version_url."
+    babel_version_url = status_json['babel_version_url']
+    matching_urls = [
+        u for u in expected_urls
+        if isinstance(babel_version_url, str) and u.casefold() == babel_version_url.casefold()
+    ]
+    assert matching_urls, (
+        f"{url} reports babel_version_url {truncated_repr(babel_version_url)}, but the release "
+        f"notes for {babel_version!r} are at {expected_urls[0]}."
+    )
+
+    expected_url = matching_urls[0]
+    response = requests.get(expected_url)
+    assert response.ok, (
+        f"{url} links to the release notes for Babel {babel_version!r}, but GET {expected_url} "
+        f"returned {response}. If this release is new, its notes may not have been published yet."
+    )

@@ -7,8 +7,8 @@ empty string, and a mis-numbered row yields a test ID that points a maintainer
 at the wrong line of the sheet -- so the mapping and the numbering are pinned
 here.
 
-``requests.get`` is replaced with a canned CSV, so nothing here touches the
-network.
+The download is replaced with a canned CSV, so nothing here touches the
+network. Downloading and caching the sheet are tested in test_sheet_download.py.
 """
 
 from types import SimpleNamespace
@@ -57,19 +57,12 @@ SHEET_CSV = (
 
 
 @pytest.fixture
-def gsheet(monkeypatch, tmp_path):
+def gsheet(monkeypatch):
     """A GoogleSheetTestCases built from SHEET_CSV instead of a download."""
 
-    class FakeResponse:
-        text = SHEET_CSV
-
-        def raise_for_status(self):
-            pass
-
-    monkeypatch.setattr(gsheet_module.requests, "get", lambda url, timeout: FakeResponse())
-    # Keep the on-disk CSV cache out of the real temp directory, so a previous
-    # run of this test cannot serve a stale sheet to this one.
-    monkeypatch.setattr(gsheet_module.tempfile, "gettempdir", lambda: str(tmp_path))
+    # Replaced where the loader looks it up, so neither the network nor the
+    # on-disk cache is touched.
+    monkeypatch.setattr(gsheet_module, "fetch_sheet_csv", lambda *args, **kwargs: SHEET_CSV)
     return GoogleSheetTestCases(google_sheet_id="unit-test-sheet")
 
 

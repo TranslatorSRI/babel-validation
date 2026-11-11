@@ -1,0 +1,307 @@
+# AGENTS.md
+
+This file provides guidance to coding agents (Claude Code, Codex and the like) when working with code in this repository.
+
+## Project Overview
+
+Babel Validation is a test suite and web tools for validating outputs from [Babel](https://github.com/TranslatorSRI/Babel), which powers the Translator [Node Normalization (NodeNorm)](https://nodenorm.transltr.io/docs) and [Name Resolver (NameRes)](https://name-lookup.transltr.io/docs) services.
+
+## About these files
+
+Agent instructions live in `AGENTS.md` files: this one, `tests/AGENTS.md` (writing tests),
+`website/AGENTS.md` (the dashboard) and `tests/nodenorm/by_issue/biothings/AGENTS.md` (NodeNorm
+ES investigations). **Before writing or changing anything under `tests/` or `website/`, read
+that directory's `AGENTS.md`**, because not every agent loads it for you. Claude Code loads a
+subdirectory's file only when it opens a file there with the Read tool, so writing a new file
+there does not load it; some other agents load only the files between the repository root and
+their working directory.
+
+Claude Code reads `AGENTS.md` directly from v2.1.277 (v2.1.281 on Amazon Bedrock or with
+telemetry disabled), possibly not until the second session after an upgrade:
+https://code.claude.com/docs/en/memory#agents-md. An interactive session that loaded it shows
+`no CLAUDE.md found; AGENTS.md loaded: …` near its start. If yours does not, update Claude Code
+rather than adding a `CLAUDE.md`.
+
+- **Do not add a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` anywhere in the
+  repository.** By default Claude Code reads `AGENTS.md` only when there is none of those in the
+  working directory or above, so a single one makes it ignore every file listed above. Even a
+  one-line `@AGENTS.md` shim would bring in this file but none of the subdirectory ones.
+  `~/.claude/CLAUDE.md` does not count. `tests.yaml` fails a PR that commits one, but cannot see
+  an untracked `CLAUDE.local.md`: for personal instructions in this repo, set **Project
+  instructions** to `claude-md-and-agents-md` in `/config` first.
+- **Move a rule into a subdirectory's file only if nobody can break it without first opening a
+  file in that directory.** Creating a file there, running a command, or writing code elsewhere
+  does not count. So a rule that guards one of those (a new test file's marker, a new
+  directory's name, a dependency change, filing an issue, reading `.env`), or states a principle
+  that applies to new code anywhere, stays here.
+
+## Commands
+
+### Python Tests (primary)
+
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Run from repo root:
+
+```bash
+# With -n (xdist), always pass the tests path explicitly (`pytest tests -n 8 ...`):
+# without it, workers do not load tests/conftest.py early enough to know the
+# custom options, and every worker dies at argparse — or collects nothing.
+pytest --target dev                    # Run all tests against dev environment (default if no --target)
+pytest --target prod                   # Run against production
+pytest --target dev --target prod      # Run against multiple targets
+pytest --target all                    # Run against all targets in targets.ini
+pytest --category "Unit Tests"         # Filter by Google Sheet category
+pytest --category-exclude "Slow"       # Exclude a category
+pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
+# Run a specific test row: -k rejects '=' in its expression, so use the full node ID
+# (the target name's position in the parametrize id varies; ask pytest with --collect-only -q)
+pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nodenorm_from_gsheet.test_row:row=42-dev]"
+```
+
+### Code Formatting
+
+```bash
+black tests/    # Format Python test code
+```
+
+Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
+~30 files it would reformat. Running `black` across the tree would bury a real change in
+unrelated churn, so format only the files you touch, or match the surrounding style.
+"Files you touch" means files that are already black-clean:
+`src/babel_validation/services/service_checks.py`, `src/babel_validation/core/babel_release.py`,
+`tests/unit/test_service_checks.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
+and running `black` on them after a ten-line edit rewrote every string in the file. Check
+`black --check <file>` on the committed version first; if it is not clean, edit by hand.
+
+### Dashboard Website (website/)
+
+Commands and the frontend's own security rules are in `website/AGENTS.md`. These two traps
+stay here, because a dependency change or a new directory hits them without opening a file in
+`website/`:
+
+CI installs with `npm ci`, which is far stricter than the `npm install` you run locally: it
+refuses a lockfile that does not match `package.json`, and it fails on platform-specific
+packages that npm 11 writes into the lock without `optional: true` when the runner's npm is
+10 (`EBADPLATFORM` on an Android build of lightningcss). Both workflows therefore pin
+`node-version: 24`. After changing any dependency, run `npm ci` locally — not just
+`npm test` — or the failure surfaces only on the runner, and in `dashboard.yaml` it surfaces
+four hours in, at the build step, after every test has been paid for.
+
+Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* directory named
+`lib`, anywhere in the tree, including `website/src/lib/` — a file there builds locally but
+never reaches CI. Check `git status` shows new files as tracked.
+
+## Architecture
+
+### Library (`src/babel_validation/`)
+
+Shared library code used by the tests and potentially other consumers.
+
+- `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
+- `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
+- `services/service_checks.py` — test-facing checks over NodeNorm/NameRes responses: the cached `/status` and OpenAPI document fetches (`get_status()`, `get_openapi()`), `nodenorm_version()` and `require_babel_release()` for gating a test on a release, the OpenAPI `x-translator` and backend checks, `get_normalized_node()`, and `truncated_repr()` for putting service output into an assertion message
+- `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
+- `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
+- `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
+
+Before writing a `requests` call to NodeNorm or NameRes and its checks — in a test, a tool such
+as `generate_report.py`, or the library itself — look in `services/service_checks.py`:
+`get_status()`, `get_openapi()`, `get_normalized_node()` and `assert_x_translator()` already
+check the response's shape and escape what the service returned, and the `/status` and OpenAPI
+fetches are cached per target.
+
+### Test Framework (`tests/`)
+
+The core of this project. Tests validate NodeNorm and NameRes services across multiple deployment environments.
+
+**Target system:** `tests/targets.ini` defines endpoints for each environment (dev, prod, test, ci, exp, localhost). Tests use `target_info` fixture to get URLs. The `conftest.py` parametrizes tests across targets via `--target` CLI option; default is `dev`.
+
+**Google Sheet integration:** ~2000+ test cases are pulled from the shared Babel Validation
+Google Sheet. Its ID comes from the `BABEL_VALIDATION_SHEET_ID` environment variable (`.env`
+locally, a repository secret in Actions) and is deliberately not checked in.
+`src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses
+the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
+
+**Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
+
+**Test modules:**
+- `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
+- `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
+- `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm, one or more GitHub issues each; `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
+
+### Dashboard Website
+
+- **`website/`** — Astro + Vue site deployed to GitHub Pages
+  (https://translatorsri.github.io/babel-validation/). Three pages under one `Layout.astro`
+  shell (nav bar, cards on a tinted page, `data-bs-theme` dark mode, all custom CSS in
+  `src/styles/theme.css`): `/` renders the environment cards, the promotion-drift panel and
+  the `/status` matrix from `report.json`; `/results/` renders the tests-by-environment
+  matrix behind a sticky filter bar; `/history/` renders `history.jsonl` plus a diff against
+  the previous run. Everything about the report that is not markup — link builders, labels,
+  the interestingness predicate — lives in `src/reportData.js`. Regenerated daily by `.github/workflows/dashboard.yaml`: pytest per target with
+  `--report-jsonl` (a `pytest_runtest_logreport` hook in `tests/conftest.py`), then
+  `src/babel_validation/tools/generate_report.py` aggregates the raw outcomes, fetches each
+  target's `/status`, and writes both data files into `website/public/data/`.
+- **`scala-validation/`** — Legacy, unmaintained
+
+### Scratch space
+
+`data/` is gitignored scratch space for investigations: files people send us (an ORION
+schema diff, a colleague's message describing a discrepancy), downloaded Babel compendia,
+one-off comparison output. Name a subdirectory for the investigation and date
+(`data/nodenorm-discrepency-2026sep29/`). Nothing there survives a fresh clone, so anything
+worth keeping — what was learned, how to reproduce it — goes into a tracked file: a
+regression test, a directory `AGENTS.md` (see `tests/nodenorm/by_issue/biothings/AGENTS.md`
+for the NodeNorm ES-vs-Redis investigation notes), or the issue itself.
+
+## Untrusted Input
+
+Most of what this project reads was written by someone else and reviewed by nobody. Treat it as
+hostile, not merely as data that might be malformed:
+
+- **GitHub issue bodies** (`src/babel_validation/sources/github/`) — anyone with a GitHub account
+  can write one, and we parse it into live NodeNorm/NameRes calls.
+- **The Google Sheet** (`src/babel_validation/sources/google_sheets/`) — anyone with edit access.
+- **Anything off the network**, including a service's response.
+
+`tests/targets.ini` is the exception: its URLs and its `Repositories` list are checked-in config,
+so they are trusted, and guards belong on what the issue supplies rather than on them.
+
+Every failure mode below was real, and found in this code. These are the shapes to look for.
+
+**A regex over untrusted text can hang the process.** `\s+ .*? \s+` before a literal is three
+nested backtracking quantifiers, and matched in cubic time: 53s on an 8KB body, hours at GitHub's
+65536-character limit. Avoid adjacent quantifiers that can match the same characters — anchor on
+something disjoint, such as a newline or a literal. Note that `pytest --timeout` only wraps test
+execution, so anything running at **collection** time has no timeout at all.
+
+**`yaml.safe_load` is not a safe parser, only a non-executing one.** It still resolves anchors,
+aliases and merge keys, and PyYAML shares the aliased nodes rather than copying them — so the load
+looks cheap and the blow-up lands on whatever formats the result afterwards. 337 bytes became a
+25MB error message. Use `_NoAliasSafeLoader` in `sources/github/github_issues_test_cases.py`.
+
+**Format untrusted text with `%r` / `!r`, never `%s` / `{}`.** `repr()` escapes exactly the
+characters `str.isprintable()` rejects — ANSI escapes, C0/C1 controls, bidi overrides, zero-width
+characters — so it is the whole defence for anything reaching a terminal, a log line or a pytest
+ID. Truncate before `repr()`ing anything that might be large: the message is kept in pytest's
+report.
+
+**A guard that runs after the value was logged is too late.** Validate at the one choke point that
+sees every value before anything formats it. For assertion params that is
+`AssertionHandler._rejection()`, because the per-handler CURIE check skips whatever
+`curie_params()` excludes and is turned off entirely by `VALIDATE_CURIES = False`.
+
+**Never let outside text choose what we fetch.** `get_issues_by_ids()` takes an ID that decides
+which repository we read assertions from, and its `[^#]+` group admits slashes — so check the
+allowlist *before* the call, or the value reaches the GitHub API as a URL path.
+
+**Fail loudly; skipping looks like passing.** Reject a bad issue rather than silently running a
+truncated part of it. The same goes for missing credentials: the GitHub issue tests *skip* without
+a token, so a green run may have tested nothing.
+
+**The dashboard publishes untrusted text on a public website.**
+`src/babel_validation/tools/generate_report.py` is the choke point between the raw pytest
+outcomes and `report.json`: it repr-escapes and truncates all text, passes `/status`
+responses through a key whitelist, only emits issue ids and source URLs that match the
+`targets.ini` `Repositories` allowlist, and withholds blocklist test details entirely (that
+sheet may not be public — do not add `ids=` to the blocklist parametrize or link to it).
+Anything that aggregates over `results`, in Python or in the website, must exclude blocklist
+rows the same way. The Vue components that render the report have rules of their own, in
+`website/AGENTS.md`.
+
+**Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
+Git commit must not contain the test-case sheet's ID or a link to either sheet — casual
+observers of the public site must not be able to find them, and the ID is the capability
+that grants access (the sheets are shared as "anyone with the link", because the CSV fetch
+is unauthenticated). The IDs live only in the `BABEL_VALIDATION_SHEET_ID` and
+`BABEL_VALIDATION_BLOCKLIST_SHEET_ID` environment variables (`.env` locally — gitignored —
+and repository secrets in Actions), resolved through
+`src/babel_validation/sources/google_sheets/resolve_sheet_id()`. Refer to it as the
+"Babel Validation Google Sheet"; sheet *content* (row numbers, queried/expected CURIEs and
+labels, category, source — often a GitHub issue link) is fine to publish once it passes the
+generator's validation. The sheet is expected to be fully replaced by the GitHub issue
+system over the next few months, at which point it can be removed from this repo entirely.
+
+**Do not read `.env`, and do not print the variables it sets.** Everything a coding agent
+reads goes into a transcript that is stored, replayed and pasted into issues, so `cat .env`,
+`Read`ing it, `grep`ping it, `echo $BABEL_VALIDATION_SHEET_ID` or printing a CSV export URL
+turns a secret into a logged one. This holds even when the user asks for help with the
+values: `env.default` documents every variable, so there is no reason to look at the filled-in
+copy. Writing is fine — `cp env.default .env`, or appending a line the user dictates — it is
+reading back that leaks. To check whether something is set without revealing it, print a
+boolean and nothing else:
+
+```bash
+uv run python -c "import os, dotenv; dotenv.load_dotenv(); print('BABEL_VALIDATION_SHEET_ID' in os.environ)"
+```
+
+If a value does end up in the transcript, say so plainly rather than carrying on: the sheet is
+shared as "anyone with the link", so an exposed ID means re-sharing that sheet under a new ID
+and rotating the repository secret.
+
+**A `requests` exception message contains the URL, and the URL contains the sheet ID.** So a
+429 or a connect timeout on a sheet download published the capability into a public Actions
+log. `fetch_sheet_csv()` catches `RequestException` and re-raises with only the status line —
+and with `from None`, because pytest prints an exception chain in full, so a merely-attached
+context leaks the original message anyway. Any new outbound call built from a secret needs the
+same treatment.
+
+**Caches belong in `cache_dir()`** (`src/babel_validation/core/__init__.py`), a 0700 directory
+under the user's home — never a fixed name in the shared temp directory. On a CI runner or a
+shared machine anyone can pre-create such a file, and the issue cache decides what a later run
+fetches and executes. `cache_dir()` loads `.env` itself (once per process): it used to read
+`os.environ` directly, so its answer depended on whether `resolve_sheet_id()` had run yet, and
+the two halves of the codebase disagreed about where the cache was.
+
+## Key Dependencies
+
+- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, black
+- `uv` for Python dependency management (no requirements.txt — uses pyproject.toml)
+
+## Testing Patterns
+
+Rules for *writing* tests — fixtures, xfail markers, where a new test goes, what it may
+assert — are in `tests/AGENTS.md`. These ones apply whenever you create a test file, validate
+an OpenAPI document anywhere in the repo, run the suite, change what it fetches, or file an
+issue, so they stay here:
+
+- **A new unit test needs `pytestmark = pytest.mark.unit`, or CI never runs it.** The only pytest
+  job in `tests.yaml` is `pytest -m unit`, so an unmarked file is silently deselected — it looks
+  like a passing suite while testing nothing. This is not hypothetical: `test_milestones_page.py`
+  in #112 had six tests that had never run.
+- **Validate an OpenAPI document with `validate(parsed_json, base_uri=url)`, never
+  `validate_url(url)`.** `validate_url` re-fetches the URL and reads it as YAML, and YAML 1.1 needs
+  both a `.` and a signed exponent in a float — so NodeNorm's `1e-06` parses as the *string*
+  `'1e-06'` and the validator reports `'1e-06' is not of type 'number'` against JSON that is
+  perfectly valid. The spurious error is also first, so it masks the real one further down the
+  document.
+- **`pytest tests/github_issues` is expected to be red, and that is the tool working.** An open
+  issue whose assertions all pass is a strict XPASS, meaning it looks closeable; a closed issue
+  with failing assertions means it looks like it should be reopened. Those results are findings
+  about Babel, not defects in this repo — do not "fix" them by editing the assertions. Only a
+  hard ERROR (an unknown assertion name, a rejected issue body) is a problem here.
+- When checking that a new test really fails without its fix, **clear `__pycache__` between runs**.
+  A same-length edit (`%r` for `%s`, say) leaves the source's size unchanged, and if the mtime lands
+  in the same granularity the `.pyc` is not invalidated — so the mutation appears to pass a test
+  that never saw it.
+- **Never put a complete `{{BabelTest|...}}` marker or a fenced `babel_tests:` block into a GitHub
+  issue you file** — not even in prose explaining the syntax. `TranslatorSRI/babel-validation` is
+  itself in the scanned `Repositories` list, so the harness collects the marker and runs it: an
+  issue that merely *describes* an assertion becomes a test of that assertion. Because a new issue
+  is open, an assertion that passes then reports as a strict XPASS failure. This is not
+  hypothetical — issue #115 was filed with a marker in it and immediately failed the live suite.
+  Quote a partial marker instead, dropping the closing `}}`, which the pattern needs to match. A
+  one-line ```` ```yaml babel_tests: ``` ```` in prose is already safe: the block pattern requires a
+  newline after the key.
+- To check behaviour when no GitHub token is available, run with `GITHUB_TOKEN=` (set but
+  empty) rather than unsetting it: `dotenv.load_dotenv()` will not override a key already
+  present in `os.environ`, so this defeats the token in the developer's `.env` file
+- **Anything fetched at collection time must go through a shared cache.**
+  `pytest_generate_tests` runs in *every* xdist worker, so an uncached download is one request
+  per worker (8 in `dashboard.yaml`, 14 on a laptop with `-n auto`), fired simultaneously at an
+  unauthenticated endpoint. If one of them fails or comes back different, that worker collects a
+  different set of tests and xdist aborts the whole run before executing anything:
+  `ERROR gw2 - Different tests were collected between gw0 and gw2`. Use
+  `src.babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
+  `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
+  mode reappears if a cache's TTL can expire *during* a run, which is why
+  `pytest_configure` deletes `gsheet_*.csv` before collection starts.

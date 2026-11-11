@@ -1,8 +1,9 @@
 import csv
 import io
 from dataclasses import dataclass
+from typing import Optional
 
-import requests
+from . import fetch_sheet_csv
 
 
 # The Translator Blocklist is stored in a private GitHub repository; however,
@@ -16,14 +17,14 @@ class BlocklistEntry:
     A single Blocklist entry.
     """
 
-    Query: str | None = None
-    CURIE: str | None = None
-    Blocked: str | None = None
-    Status: str | None = None
-    Issue: str | None = None
-    TreatsOnly: str | None = None
-    Submitter: str | None = None
-    Comment: str | None = None
+    Query: Optional[str] = None
+    CURIE: Optional[str] = None
+    Blocked: Optional[str] = None
+    Status: Optional[str] = None
+    Issue: Optional[str] = None
+    TreatsOnly: Optional[str] = None
+    Submitter: Optional[str] = None
+    Comment: Optional[str] = None
 
     def is_blocked(self):
         """Is this term supposed to be blocked?"""
@@ -57,12 +58,12 @@ def load_blocklist_from_gsheet():
 
     :return: A list of BlocklistEntry.
     """
-    google_sheet_id = "1UR2eplHBvFRwaSIVOhlB44wpfNPY1z7AVzUkqzDqIWA"
-    csv_url = f"https://docs.google.com/spreadsheets/d/{google_sheet_id}/gviz/tq?tqx=out:csv&sheet=Tests"
-
-    response = requests.get(csv_url, timeout=10)
-    response.raise_for_status()
-    csv_content = response.text
+    # This sheet logs "Red Team" offensive terms, so its ID is doubly a secret:
+    # it comes only from the environment and must never be checked in.
+    #
+    # This runs at collection time in every xdist worker, so it must go through
+    # the cached, locked helper: see the note on fetch_sheet_csv().
+    csv_content = fetch_sheet_csv("BABEL_VALIDATION_BLOCKLIST_SHEET_ID", "Tests")
 
     rows = []
     with io.StringIO(csv_content) as f:

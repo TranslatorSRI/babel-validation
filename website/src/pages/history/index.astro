@@ -1,0 +1,18 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import History from '../../components/History.vue';
+---
+
+<Layout
+  title="Babel Validation: run history"
+  description="Babel versions, database sizes and test counts per environment over time."
+  active="history"
+>
+  <h1 class="h3 mt-4 mb-2">Run history</h1>
+  <p class="text-body-secondary mb-4" style="max-width: 60rem">
+    One row per daily validation run: Babel and NameRes versions, database sizes, NameRes p95
+    latency and test counts for each environment.
+  </p>
+
+  <History client:only="vue" dataUrl={import.meta.env.BASE_URL + 'data/history.jsonl'} />
+</Layout>
