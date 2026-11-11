@@ -2,7 +2,6 @@
 # Tests for the NodeNorm API
 # These tests are intended to ensure that all the API endpoints on NodeNorm are working as intended.
 #
-import urllib.parse
 
 import pytest
 import requests

@@ -13,8 +13,8 @@ from collections import Counter
 import pytest
 from _pytest.mark import ParameterSet
 
-from . import fetch_sheet_csv
 from ...core.testrow import TestRow
+from . import fetch_sheet_csv
 
 
 class GoogleSheetTestCases:

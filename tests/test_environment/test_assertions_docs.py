@@ -1,6 +1,6 @@
 import pytest
 
-from babel_validation.assertions.gen_docs import generate_readme, README_PATH
+from babel_validation.assertions.gen_docs import README_PATH, generate_readme
 
 
 @pytest.mark.unit

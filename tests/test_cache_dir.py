@@ -9,8 +9,8 @@ import pytest
 
 import babel_validation.core as core
 from babel_validation.core import cache_dir
-from tests.conftest import unlink_if_exists
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
+from tests.conftest import unlink_if_exists
 
 pytestmark = pytest.mark.unit
 

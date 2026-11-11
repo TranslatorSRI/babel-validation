@@ -4,7 +4,6 @@
 # Fixed upstream (the issue is closed); kept as a regression test, so no xfail.
 import urllib.parse
 
-import pytest
 import requests
 
 from babel_validation.services.service_checks import truncated_repr

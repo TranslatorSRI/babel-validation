@@ -9,7 +9,10 @@ import pytest
 from babel_validation.assertions import ASSERTION_HANDLERS, NodeNormTest, _register
 from babel_validation.assertions.gen_docs import generate_readme
 from babel_validation.assertions.nodenorm import (
-    DoesNotResolveHandler, DoesNotResolveWithHandler, ResolvesHandler, ResolvesWithHandler,
+    DoesNotResolveHandler,
+    DoesNotResolveWithHandler,
+    ResolvesHandler,
+    ResolvesWithHandler,
 )
 from babel_validation.core.testrow import TestStatus
 from babel_validation.services import nodenorm as nodenorm_service

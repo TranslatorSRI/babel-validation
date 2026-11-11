@@ -25,11 +25,10 @@ param_sets  — The full list of param_sets for one assertion in one issue.
 
 import logging
 import re
-from typing import Iterator
+from collections.abc import Iterator
 
 import yaml
-
-from github import Github, Auth, Issue
+from github import Auth, Github, Issue
 
 from babel_validation.assertions import ASSERTION_HANDLERS
 from babel_validation.core.testrow import TestResult
