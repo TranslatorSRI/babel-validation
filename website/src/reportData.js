@@ -73,62 +73,140 @@ export function formatCount(value) {
   return typeof value === 'number' ? value.toLocaleString('en-US') : null;
 }
 
-// One row per /status value; adding a row here is all it takes to show a new
-// one. `value` receives one entry of report.targets; null renders as an em
-// dash. `href` may return a generator-validated URL to link the value to.
+// The Environments table: one section per service, each a header row of docs
+// and /status links followed by one row per /status value. Adding a row here is
+// all it takes to show a new one. `value` receives one entry of report.targets;
+// null renders as an em dash, and a row that is null in every environment is
+// hidden. `title` may return a tooltip for the cell, for a value shortened to
+// keep the table narrow. `href` may return a generator-validated URL to link
+// the value to. The section's `docsUrl` and each service's
+// `<service>_status_url` are built by the generator from targets.ini, so they
+// are safe to link.
 //
 // `compare` marks the rows where environments are *supposed* to agree, and so
 // where a minority value is a finding. Record counts, index sizes and latencies
 // differ between environments by nature; shading them made every row amber and
 // taught the reader to ignore the colour.
-export const STATUS_ROWS = [
-  {
-    label: 'Babel version',
-    value: (t) => t.nodenorm_status.babel_version,
-    href: (t) => t.nodenorm_status.babel_version_url,
-    compare: true,
-  },
-  {
-    label: 'Biolink model',
-    value: (t) => t.nodenorm_status.biolink_version,
-    compare: true,
-  },
-  {
-    label: 'NodeNorm status',
-    value: (t) => t.nodenorm_status.error ?? t.nodenorm_status.status,
-    danger: (t) => Boolean(t.nodenorm_status.error),
-    compare: true,
-  },
-  {
-    label: 'NodeNorm records',
-    value: (t) => formatCount(t.nodenorm_status.databases?.eq_id_to_id_db?.count),
-  },
-  {
-    label: 'NodeNorm memory',
-    value: (t) => t.nodenorm_status.databases?.eq_id_to_id_db?.used_memory_rss_human,
-  },
-  {
-    label: 'NameRes status',
-    value: (t) => t.nameres_status.error ?? t.nameres_status.status,
-    danger: (t) => Boolean(t.nameres_status.error),
-    compare: true,
-  },
-  {
-    label: 'NameRes version',
-    value: (t) => t.nameres_status.nameres_version,
-    compare: true,
-  },
-  {
-    label: 'Solr documents',
-    value: (t) => formatCount(t.nameres_status.solr?.numDocs),
-  },
-  { label: 'Solr index size', value: (t) => t.nameres_status.solr?.size },
-  {
-    label: 'NameRes p95 latency',
-    value: (t) => {
-      const p95 = t.nameres_status.recent_queries?.p95_ms;
-      return p95 == null ? null : `${p95} ms`;
+//
+// NodeNorm and NameRes each get their own Babel version and Biolink model rows
+// because they are loaded separately and can be on different releases.
+const RELEASES_SHOWN = 3;
+const dateOnly = (iso) => (typeof iso === 'string' ? iso.slice(0, 10) : null);
+const millis = (ms) => (ms == null ? null : `${formatCount(ms)} ms`);
+
+function commonRows(service) {
+  const status = (t) => t[`${service}_status`];
+  return [
+    {
+      label: 'Status',
+      value: (t) => status(t).error ?? status(t).status,
+      // The full /status response, of which this table shows a whitelisted
+      // part. Linked on an error too: that's when the raw response helps most.
+      href: (t) => t[`${service}_status_url`],
+      danger: (t) => Boolean(status(t).error),
+      compare: true,
     },
+    {
+      label: 'Babel version',
+      value: (t) => status(t).babel_version,
+      href: (t) => status(t).babel_version_url,
+      compare: true,
+    },
+    {
+      label: 'Biolink model',
+      value: (t) => status(t).biolink_version,
+      compare: true,
+    },
+  ];
+}
+
+export const STATUS_SECTIONS = [
+  {
+    key: 'nodenorm',
+    title: 'NodeNorm',
+    docsUrl: (t) => t.nodenorm_docs_url,
+    rows: [
+      ...commonRows('nodenorm'),
+      // Not compared: NodeNorm Redis (2.x) and NodeNorm ES (1.x) are separate
+      // codebases, so their version numbers say nothing about each other.
+      { label: 'Version', value: (t) => t.nodenorm_status.version },
+      { label: 'Backend', value: (t) => t.nodenorm_backend },
+      {
+        // NodeNorm ES from 1.2.0 can serve several Babel releases, picked per
+        // request; the Babel version row above is its default. The generator
+        // keeps up to 50, oldest first, and the cells don't wrap, so a long
+        // list would push every other environment off-screen: the cell shows
+        // the newest few and the tooltip lists them all.
+        label: 'Babel releases served',
+        value: (t) => {
+          const releases = t.nodenorm_status.babel_available_versions;
+          if (!releases?.length) return null;
+          const newest = releases.slice(-RELEASES_SHOWN).reverse().join(', ');
+          const older = releases.length - RELEASES_SHOWN;
+          return older > 0 ? `${newest} +${older} older` : newest;
+        },
+        title: (t) => t.nodenorm_status.babel_available_versions?.join(', ') || null,
+      },
+      {
+        label: 'Records',
+        value: (t) => formatCount(t.nodenorm_status.databases?.eq_id_to_id_db?.count),
+      },
+      {
+        label: 'Redis memory',
+        value: (t) => t.nodenorm_status.databases?.eq_id_to_id_db?.used_memory_rss_human,
+      },
+      {
+        label: 'Elasticsearch',
+        value: (t) => {
+          const es = t.nodenorm_status.elasticsearch;
+          // == null, not falsy: a cluster reporting no nodes is the state this
+          // row most needs to show, not missing data.
+          if (es?.nodes == null) return null;
+          if (es.nodes === 0) return 'no nodes';
+          // Several versions mean a cluster mid-upgrade.
+          return `${es.nodes} × ${es.versions?.join(', ') || '?'}`;
+        },
+        danger: (t) => t.nodenorm_status.elasticsearch?.nodes === 0,
+      },
+      {
+        label: 'ES disk used',
+        value: (t) => {
+          const pct = t.nodenorm_status.elasticsearch?.max_disk_used_percent;
+          return pct == null ? null : `${pct}%`;
+        },
+      },
+      { label: '/status time', value: (t) => millis(t.nodenorm_status.response_ms) },
+    ],
+  },
+  {
+    key: 'nameres',
+    title: 'NameRes',
+    docsUrl: (t) => t.nameres_docs_url,
+    rows: [
+      ...commonRows('nameres'),
+      // Not compared, for the same reason as NodeNorm's: NameRes Solr and NameRes
+      // ES are separate codebases with unrelated version numbers.
+      { label: 'Version', value: (t) => t.nameres_status.nameres_version },
+      { label: 'Backend', value: (t) => t.nameres_backend },
+      {
+        label: 'Documents',
+        value: (t) => formatCount(t.nameres_status.index?.numDocs),
+      },
+      {
+        label: 'Index size',
+        value: (t) => t.nameres_status.index?.size,
+      },
+      {
+        label: 'Index last modified',
+        value: (t) => dateOnly(t.nameres_status.index?.lastModified),
+      },
+      { label: 'Index up since', value: (t) => dateOnly(t.nameres_status.index?.startTime) },
+      {
+        label: 'p95 latency',
+        value: (t) => millis(t.nameres_status.recent_queries?.p95_ms),
+      },
+      { label: '/status time', value: (t) => millis(t.nameres_status.response_ms) },
+    ],
   },
 ];
 

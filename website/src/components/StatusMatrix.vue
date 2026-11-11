@@ -1,15 +1,21 @@
 <!--
   StatusMatrix.vue - the /status of every environment, side by side in
   deployment order, so that a value differing from its neighbours stands out.
+  NodeNorm and NameRes get a section each, since they are loaded separately and
+  can be on different Babel releases; a third section holds the test counts.
 
   Report values are untrusted: render them with {{ }} only, never v-html, and
-  link only to URLs the generator validated (the `href` in STATUS_ROWS).
+  link only to URLs the generator built or validated (a section's `docsUrl`,
+  from targets.ini, and a row's `href` in STATUS_SECTIONS).
+
+  Shading uses theme.css's .cell-differs and .cell-broken, not Bootstrap's
+  .table-warning and .table-danger, which keep their light colours in dark mode.
 -->
 <script>
 import {
   ALL_OUTCOMES,
   OUTCOME_LABELS,
-  STATUS_ROWS,
+  STATUS_SECTIONS,
   formatCount,
 } from '../reportData.js';
 
@@ -18,10 +24,17 @@ export default {
     report: { type: Object, required: true },
     targetNames: { type: Array, required: true },
   },
-  data() {
-    return { statusRows: STATUS_ROWS };
-  },
   computed: {
+    sections() {
+      // Hide a row no environment has a value for: the Elasticsearch rows on a
+      // day with no NodeNorm ES target, say, would otherwise be a line of dashes.
+      return STATUS_SECTIONS.map((section) => ({
+        ...section,
+        rows: section.rows.filter((row) =>
+          this.targetNames.some((t) => this.statusValue(row, t) != null)
+        ),
+      }));
+    },
     countRows() {
       // Always show the outcomes that carry meaning; the rarer ones only when
       // they occurred somewhere.
@@ -57,9 +70,13 @@ export default {
     },
     statusCellClass(statusRow, target) {
       const info = this.report.targets[target];
-      if (statusRow.danger?.(info)) return 'table-danger';
-      // Only rows the environments should agree on: see `compare` in STATUS_ROWS.
+      if (statusRow.danger?.(info)) return 'cell-broken';
+      // Only rows the environments should agree on: see `compare` in STATUS_SECTIONS.
       if (!statusRow.compare) return '';
+      // A service that reports nothing is not an odd one out: the majority is
+      // found among reported values only, and shading the em dash too made it
+      // look like a disagreement, but only on days the others disagreed.
+      if (this.statusValue(statusRow, target) == null) return '';
       // Highlight the odd ones out when environments disagree, e.g. every
       // environment on Babel 2025sep1 except exp.
       const values = this.targetNames.map((t) => this.statusValue(statusRow, t));
@@ -76,7 +93,7 @@ export default {
       // to say nothing.
       if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) return '';
       const majority = ranked[0][0];
-      return this.statusValue(statusRow, target) === majority ? '' : 'table-warning';
+      return this.statusValue(statusRow, target) === majority ? '' : 'cell-differs';
     },
     database(target, name) {
       return this.report.targets[target].nodenorm_status.databases?.[name] ?? null;
@@ -94,32 +111,53 @@ export default {
           v-for="target in targetNames"
           :key="target"
           class="text-center"
-          :class="{ 'table-warning': report.targets[target].unreachable }"
+          :class="{ 'cell-differs': report.targets[target].unreachable }"
         >
           {{ target }}
-          <span v-if="report.targets[target].unreachable" class="badge text-bg-warning">
+          <span
+            v-if="report.targets[target].unreachable"
+            class="badge bg-warning-subtle text-warning-emphasis"
+          >
             no results
           </span>
         </th>
       </tr>
     </thead>
     <tbody>
-      <tr v-for="statusRow in statusRows" :key="statusRow.label">
-        <th class="text-nowrap fw-normal text-body-secondary">{{ statusRow.label }}</th>
-        <td
-          v-for="target in targetNames"
-          :key="target"
-          class="text-center text-nowrap"
-          :class="statusCellClass(statusRow, target)"
-        >
-          <a v-if="statusHref(statusRow, target)" :href="statusHref(statusRow, target)">
-            {{ statusValue(statusRow, target) }}
-          </a>
-          <template v-else>{{ statusValue(statusRow, target) ?? '—' }}</template>
-        </td>
+      <template v-for="section in sections" :key="section.key">
+        <tr class="table-group" :data-section="section.key">
+          <th class="text-nowrap">{{ section.title }}</th>
+          <td v-for="target in targetNames" :key="target" class="text-center text-nowrap small">
+            <!-- Each service's /status is linked from its Status row below.
+                 "API", not "docs": this is the service's Swagger UI, which a
+                 reader could mistake for the written API documentation each
+                 service keeps in its repository. -->
+            <a v-if="section.docsUrl(report.targets[target])" :href="section.docsUrl(report.targets[target])">
+              API
+            </a>
+          </td>
+        </tr>
+        <tr v-for="statusRow in section.rows" :key="statusRow.label" :data-section="section.key">
+          <th class="text-nowrap fw-normal text-body-secondary ps-3">{{ statusRow.label }}</th>
+          <td
+            v-for="target in targetNames"
+            :key="target"
+            class="text-center text-nowrap"
+            :class="statusCellClass(statusRow, target)"
+            :title="statusRow.title?.(report.targets[target]) ?? undefined"
+          >
+            <a v-if="statusHref(statusRow, target)" :href="statusHref(statusRow, target)">
+              {{ statusValue(statusRow, target) }}
+            </a>
+            <template v-else>{{ statusValue(statusRow, target) ?? '—' }}</template>
+          </td>
+        </tr>
+      </template>
+      <tr class="table-group" data-section="tests">
+        <th class="text-nowrap" :colspan="targetNames.length + 1">Tests</th>
       </tr>
-      <tr v-for="outcome in countRows" :key="outcome">
-        <th class="text-nowrap fw-normal text-body-secondary">{{ outcome }} tests</th>
+      <tr v-for="outcome in countRows" :key="outcome" data-section="tests">
+        <th class="text-nowrap fw-normal text-body-secondary ps-3">{{ outcome }} tests</th>
         <td v-for="target in targetNames" :key="target" class="text-center">
           <span
             v-if="report.targets[target].counts[outcome] > 0"

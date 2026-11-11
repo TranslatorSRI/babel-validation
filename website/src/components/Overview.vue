@@ -9,10 +9,44 @@
   built with URLSearchParams rather than string concatenation.
 -->
 <script>
-import { sortByDeploymentOrder, unknownTargets } from '../deploymentOrder.js';
+import { sortBesideParents, sortByDeploymentOrder, unknownTargets } from '../deploymentOrder.js';
 import DriftPanel from './DriftPanel.vue';
 import StatusMatrix from './StatusMatrix.vue';
 import { fetchReport, formatCount, isInteresting, runLink } from '../reportData.js';
+
+// NodeNorm and NameRes are loaded separately, so they can be on different
+// Babel releases while one is promoted. Unlabelled when both report the
+// same release, and when only NodeNorm reports one: the card showed
+// NodeNorm's release before NameRes's was read, and older NameRes Solr
+// releases (or one that timed out) report none, so labelling that case put
+// "NN" on cards where nothing differs. NameRes's release alone is still
+// labelled, so with NodeNorm down it is not read as the environment's.
+function babelVersion(section) {
+  const { nodenorm_status: nn, nameres_status: nr } = section;
+  const nodenorm = nn?.babel_version;
+  const nameres = nr?.babel_version;
+  if (nodenorm && nodenorm === nameres) {
+    return { lines: [nodenorm], title: `Babel ${nodenorm}` };
+  }
+  if (nodenorm && !nameres) {
+    return {
+      lines: [nodenorm],
+      title: `NodeNorm on Babel ${nodenorm}; NameRes did not report a release`,
+    };
+  }
+  if (!nodenorm && !nameres) return { lines: ['—'], title: null };
+  const lines = [];
+  const titles = [];
+  if (nodenorm) {
+    lines.push(`NN ${nodenorm}`);
+    titles.push(`NodeNorm ${nodenorm}`);
+  }
+  if (nameres) {
+    lines.push(`NR ${nameres}`);
+    titles.push(`NameRes ${nameres}`);
+  }
+  return { lines, title: titles.join(', ') };
+}
 
 export default {
   components: { DriftPanel, StatusMatrix },
@@ -29,6 +63,21 @@ export default {
   computed: {
     targetNames() {
       return sortByDeploymentOrder(Object.keys(this.report?.targets ?? {}));
+    },
+    // The Environments table's columns: side branches beside their parents,
+    // as targets.ini's SideBranchOf names them. See sortBesideParents.
+    environmentColumns() {
+      return sortBesideParents(
+        this.targetNames,
+        (name) => this.report.targets[name].side_branch_of ?? null,
+      );
+    },
+    // Each card's Babel release, worked out once per report: the card reads
+    // both its tooltip and its lines from the same result.
+    babelVersions() {
+      return Object.fromEntries(
+        this.targetNames.map((t) => [t, babelVersion(this.report.targets[t])]),
+      );
     },
     unreachableTargets() {
       return this.targetNames.filter((t) => this.report.targets[t].unreachable);
@@ -65,9 +114,6 @@ export default {
     },
     counts(target) {
       return this.report.targets[target].counts;
-    },
-    babelVersion(target) {
-      return this.report.targets[target].nodenorm_status.babel_version;
     },
     resultsLink(params) {
       return `${this.resultsUrl}?${new URLSearchParams(params).toString()}`;
@@ -129,9 +175,13 @@ export default {
       <div v-for="target in targetNames" :key="target" class="col">
         <div class="card h-100">
           <div class="card-body py-2 px-3">
-            <div class="d-flex justify-content-between align-items-baseline">
+            <div class="d-flex justify-content-between align-items-baseline gap-2">
               <span class="fw-semibold">{{ target }}</span>
-              <span class="small text-body-secondary">{{ babelVersion(target) ?? '—' }}</span>
+              <span class="small text-body-secondary text-end" :title="babelVersions[target].title">
+                <span v-for="line in babelVersions[target].lines" :key="line" class="d-block">
+                  {{ line }}
+                </span>
+              </span>
             </div>
             <template v-if="report.targets[target].unreachable">
               <div class="fs-5 fw-semibold text-body-secondary">no results</div>
@@ -190,8 +240,10 @@ export default {
           {{ formatCount(totalInteresting) }} of {{ formatCount(totalResults) }} tests need a look →
         </a>
       </div>
-      <div class="card-body">
-        <StatusMatrix :report="report" :target-names="targetNames" />
+      <!-- Scrolls sideways on its own, rather than widening the whole page,
+           when a phone is narrower than six environments' columns. -->
+      <div class="card-body overflow-x-auto">
+        <StatusMatrix :report="report" :target-names="environmentColumns" />
         <p v-if="unattributed" class="small text-body-secondary mt-3 mb-0">
           {{ formatCount(unattributed) }} test result(s) could not be attributed to an environment,
           and are not counted above.

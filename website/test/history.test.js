@@ -39,10 +39,37 @@ describe('what changed since the previous run', () => {
       run('2026-08-27', '2025oct1', 20),
     ]);
     expect(wrapper.vm.changes).toEqual([
-      { target: 'dev', label: 'babel version', from: '2025sep1', to: '2025oct1' },
+      { target: 'dev', label: 'NodeNorm Babel version', from: '2025sep1', to: '2025oct1' },
       { target: 'dev', label: 'failed', delta: 8, worse: true, to: '20' },
     ]);
     expect(wrapper.text()).toContain('+8');
+  });
+
+  it("reports NameRes's Babel release moving even when NodeNorm's stays put", async () => {
+    const line = (date, nameres) =>
+      JSON.stringify({
+        date,
+        targets: {
+          prod: { babel_version: '2025sep1', nameres_babel_version: nameres, counts: {} },
+        },
+      });
+    const wrapper = await mountWith([line('2026-11-08', '2025sep1'), line('2026-11-09', '2026jul22')]);
+    expect(wrapper.vm.changes).toEqual([
+      { target: 'prod', label: 'NameRes Babel version', from: '2025sep1', to: '2026jul22' },
+    ]);
+    // The table names NameRes's release only on the run where it differs.
+    const cells = wrapper.findAll('tbody td.small').map((td) => td.text());
+    expect(cells.filter((text) => text.includes('NameRes on 2026jul22'))).toHaveLength(1);
+    expect(cells.filter((text) => text.includes('NameRes on'))).toHaveLength(1);
+  });
+
+  it('does not report a field the previous run did not record yet', async () => {
+    const before = JSON.stringify({ date: 'a', targets: { dev: { babel_version: 'x', counts: {} } } });
+    const now = JSON.stringify({
+      date: 'b',
+      targets: { dev: { babel_version: 'x', nameres_babel_version: 'y', counts: {} } },
+    });
+    expect((await mountWith([before, now])).vm.changes).toEqual([]);
   });
 
   it('colours a drop in passing tests as a regression, not an improvement', async () => {
@@ -90,6 +117,20 @@ describe('what changed since the previous run', () => {
     expect(wrapper.vm.changes).toEqual([
       { target: 'exp', label: 'no longer reported', worse: true },
     ]);
+  });
+
+  it('says nothing of a target dropped before the last two runs', async () => {
+    // The table's columns span the whole file, so ci-es, dropped weeks ago, is
+    // missing from both of the runs compared, which is no change at all.
+    const old = JSON.stringify({
+      date: 'a',
+      targets: { dev: { counts: { passed: 10 } }, 'ci-es': { counts: { passed: 4 } } },
+    });
+    const later = JSON.stringify({ date: 'b', targets: { dev: { counts: { passed: 10 } } } });
+    const wrapper = await mountWith([old, later, later]);
+    expect(wrapper.vm.targetNames).toContain('ci-es');
+    expect(wrapper.vm.changes).toEqual([]);
+    expect(wrapper.text()).toContain('Nothing changed');
   });
 
   it('says so when nothing moved, and shows nothing with only one run', async () => {

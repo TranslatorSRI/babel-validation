@@ -27,9 +27,12 @@ import math
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import requests
+
+from src.babel_validation.core.babel_release import babel_release_date
 
 logger = logging.getLogger(__name__)
 
@@ -206,9 +209,42 @@ def _trimmed_float(value):
     return value if math.isfinite(value) else None
 
 
-def trim_status(raw):
+def _version_key(version):
     """
-    Whitelist the fields of a NodeNorm or NameRes /status response. The
+    Sort key for a version string such as "9.3.1": its numbers compared as
+    numbers, then the whole string to break ties ("9.3.1-SNAPSHOT").
+    """
+    return [int(n) for n in re.findall(r"[0-9]+", version)], version
+
+
+def _babel_releases(available):
+    """
+    The Babel releases in a /status babel.available_versions, oldest first, or
+    None if it is in a shape we do not read. NodeNorm ES 1.2.0 sends an object
+    keyed by release name (the values are links to each release's README); a
+    plain list of names is read the same way. Anything else is logged rather
+    than dropped silently, because an empty "Babel releases served" row looks
+    exactly like a NodeNorm that serves only its default.
+    """
+    if isinstance(available, (dict, list)):
+        names = {v for v in available if babel_release_date(v)}
+        if available and not names:
+            logger.warning(
+                "babel.available_versions lists %d entries, none a Babel release",
+                len(available),
+            )
+        return sorted(names, key=babel_release_date)
+    logger.warning(
+        "Unreadable babel.available_versions: a %s, not an object or list",
+        type(available).__name__,
+    )
+    return None
+
+
+def trim_status(raw, service):
+    """
+    Whitelist the fields of a NodeNorm or NameRes ("nodenorm" or "nameres")
+    /status response. The
     response is untrusted service output: unknown keys are dropped, numbers are
     coerced, strings are escaped and truncated, and babel_version_url is kept
     only if it points into the NCATSTranslator GitHub org.
@@ -218,6 +254,14 @@ def trim_status(raw):
     trimmed = {}
     if "status" in raw:
         trimmed["status"] = sanitize(raw["status"], 50)
+    # The service's own release (NodeNorm 2.5.1, NodeNorm ES 1.0.0). NameRes
+    # reports its own as nameres_version, below, and from v1.7 lists its Solr
+    # core's stats at the top level, where "version" is the index's version
+    # counter (68618), not a release. Keyed on the service rather than on the
+    # shape of the response, because a NameRes error body need not carry the
+    # numDocs that would otherwise give the counter away.
+    if service == "nodenorm" and "version" in raw:
+        trimmed["version"] = sanitize(raw["version"], 50)
     if "babel_version" in raw:
         trimmed["babel_version"] = sanitize(raw["babel_version"], 50)
     url = raw.get("babel_version_url")
@@ -225,6 +269,18 @@ def trim_status(raw):
         "https://github.com/ncatstranslator/"
     ):
         trimmed["babel_version_url"] = sanitize(url, 200)
+    # NodeNorm ES from 1.2.0 can serve several Babel releases, chosen per
+    # request, and lists them under babel.available_versions. Keep only the
+    # names that are real Babel releases, oldest first; a name that passes
+    # babel_release_date() is plain ASCII, so it needs no further escaping.
+    # Every name is checked before the list is cut to the newest 50, so the
+    # releases that matter most cannot be cut off by a long or misordered list.
+    babel = raw.get("babel")
+    available = babel.get("available_versions") if isinstance(babel, dict) else None
+    if available is not None:
+        releases = _babel_releases(available)
+        if releases is not None:
+            trimmed["babel_available_versions"] = releases[-50:]
     biolink = raw.get("biolink_model")
     if isinstance(biolink, dict) and "tag" in biolink:
         trimmed["biolink_version"] = sanitize(biolink["tag"], 100)
@@ -246,6 +302,34 @@ def trim_status(raw):
             trimmed_dbs[sanitize(name, 50)] = entry
         trimmed["databases"] = trimmed_dbs
 
+    # NodeNorm ES: its Elasticsearch nodes, reduced to what says whether the
+    # cluster is healthy. Every node is counted and read, so a mixed-version
+    # cluster (mid rolling upgrade) shows all its versions; only the list of
+    # distinct versions is cut short, since that is what reaches the report.
+    elasticsearch = raw.get("elasticsearch")
+    nodes = elasticsearch.get("nodes") if isinstance(elasticsearch, dict) else None
+    if isinstance(nodes, dict):
+        node_list = [n for n in nodes.values() if isinstance(n, dict)]
+        disk = [_trimmed_float(n.get("disk.used_percent")) for n in node_list]
+        disk = [d for d in disk if d is not None]
+        # A node can report "version": null (mid-restart, say). sanitize() keeps
+        # None as None, and sorting None among strings raises TypeError, which
+        # fetch_status would turn into an error for the whole NodeNorm status.
+        versions = {
+            sanitize(n["version"], 20)
+            for n in node_list
+            if n.get("version") is not None
+        }
+        trimmed_es = {"nodes": len(node_list)}
+        if versions:
+            # Oldest first, compared as numbers: as strings, 8.10.0 sorts before
+            # 8.9.0. The cut to five keeps the newest, and is only a bound on
+            # hostile input: a real cluster runs one version, or two mid-upgrade.
+            trimmed_es["versions"] = sorted(versions, key=_version_key)[-5:]
+        if disk:
+            trimmed_es["max_disk_used_percent"] = max(disk)
+        trimmed["elasticsearch"] = trimmed_es
+
     # NameRes-only fields.
     if "nameres_version" in raw:
         trimmed["nameres_version"] = sanitize(raw["nameres_version"], 50)
@@ -263,33 +347,67 @@ def trim_status(raw):
         trimmed["recent_queries"] = {
             key: value for key, value in latencies.items() if value is not None
         }
+    # NameRes's search index: under "solr" before v1.7, at the top level from
+    # v1.7 on, and at the top level in NameRes ES (which reports numDocs and
+    # size, both 0 on ci-nameres-es). One "index" key whichever it was. Keyed
+    # on the service as well as the shape, as "version" is above: a NodeNorm
+    # body carrying a numDocs is not a NameRes index.
     solr = raw.get("solr")
-    if isinstance(solr, dict):
-        trimmed_solr = {}
-        num_docs = _trimmed_int(solr.get("numDocs"))
+    index = solr if isinstance(solr, dict) else raw
+    if service == "nameres" and (isinstance(solr, dict) or "numDocs" in raw):
+        trimmed_index = {}
+        num_docs = _trimmed_int(index.get("numDocs"))
         if num_docs is not None:
-            trimmed_solr["numDocs"] = num_docs
-        if "size" in solr:
-            trimmed_solr["size"] = sanitize(solr["size"], 20)
-        trimmed["solr"] = trimmed_solr
+            trimmed_index["numDocs"] = num_docs
+        if "size" in index:
+            trimmed_index["size"] = sanitize(index["size"], 20)
+        for key in ("lastModified", "startTime"):
+            if key in index:
+                trimmed_index[key] = sanitize(index[key], 40)
+        trimmed["index"] = trimmed_index
     return trimmed
 
 
-def fetch_status(base_url):
-    """GET {base_url}status and whitelist it. Errors become just a type name —
-    no message text, since it could echo the URL or response body."""
+def service_links(base_url, backend):
+    """
+    The docs and /status URLs of a service, from its targets.ini base URL and
+    backend. The Redis- and Solr-backed services serve Swagger UI at /docs; the
+    Elasticsearch-backed ones serve it at their root and answer /docs with a
+    404 (checked on nodenorm-es and namelookup-es on 2026-11-11). Both URLs come
+    from checked-in config, so the website may link to them.
+    """
     if not base_url:
+        return None, None
+    docs = base_url if backend == "elasticsearch" else base_url.rstrip("/") + "/docs"
+    return docs, base_url.rstrip("/") + "/status"
+
+
+def fetch_status(status_url, service):
+    """GET a service's /status URL (from service_links) and whitelist it, adding
+    how long it took to answer. Errors become just a type name — no message
+    text, since it could echo the URL or response body."""
+    if not status_url:
         # A targets.ini section that defines only one of the two services: one
         # blank card, not a crashed report.
         return {"error": "NoURL"}
     try:
-        response = requests.get(
-            base_url.rstrip("/") + "/status", timeout=STATUS_TIMEOUT_SECONDS
-        )
+        # Timed by hand rather than with response.elapsed, which stops when the
+        # headers arrive and so leaves out downloading and parsing the body.
+        start = time.monotonic()
+        response = requests.get(status_url, timeout=STATUS_TIMEOUT_SECONDS)
         response.raise_for_status()
-        return trim_status(response.json())
+        body = response.json()
+        elapsed_ms = round((time.monotonic() - start) * 1000)
+        status = trim_status(body, service)
+        # A body that is not a JSON object is reported as InvalidStatus, with
+        # no timing: how fast a service answered with garbage says nothing.
+        if isinstance(body, dict):
+            status["response_ms"] = elapsed_ms
+        return status
     except Exception as e:
-        logger.warning("Could not fetch status from %r: %s", base_url, type(e).__name__)
+        logger.warning(
+            "Could not fetch status from %r: %s", status_url, type(e).__name__
+        )
         return {"error": type(e).__name__}
 
 
@@ -409,6 +527,24 @@ def _annotate_result(result, key, rest, test_records, allowlist):
     result["kind"] = "other"
 
 
+def side_branch_of(section, target, targets):
+    """
+    The target this one's targets.ini section names as SideBranchOf, or None.
+    The Environments table shows a side branch beside its parent, so the name
+    must be another deployed target; anything else is logged and ignored, and
+    the branch keeps its place in the deployment order.
+    """
+    parent = section.get("SideBranchOf")
+    if parent is None:
+        return None
+    if parent == target or parent not in targets:
+        logger.warning(
+            "[%s] has SideBranchOf = %r, which is not another target", target, parent
+        )
+        return None
+    return parent
+
+
 def build_report(results, counts, github_issues_ran, targets, allowlist, config):
     now = datetime.datetime.now(datetime.timezone.utc)
     target_sections = {}
@@ -416,13 +552,34 @@ def build_report(results, counts, github_issues_ran, targets, allowlist, config)
         section = config[target]
         nodenorm_url = section.get("NodeNormURL")
         nameres_url = section.get("NameResURL")
+        # The configured backend rather than the one /status reports: NameRes
+        # /status does not report one, and the NodeNorm tests already check the
+        # configured one against /status. None for a service the environment
+        # does not run, or the Backend row would name one beside "NoURL".
+        nodenorm_backend = (
+            section.get("NodeNormBackend", "redis") if nodenorm_url else None
+        )
+        nameres_backend = section.get("NameResBackend", "solr") if nameres_url else None
+        nodenorm_docs_url, nodenorm_status_url = service_links(
+            nodenorm_url, nodenorm_backend
+        )
+        nameres_docs_url, nameres_status_url = service_links(
+            nameres_url, nameres_backend
+        )
         target_counts = counts[target]
         total = sum(target_counts.values())
         target_sections[target] = {
+            "side_branch_of": side_branch_of(section, target, targets),
             "nodenorm_url": nodenorm_url,
             "nameres_url": nameres_url,
-            "nodenorm_status": fetch_status(nodenorm_url),
-            "nameres_status": fetch_status(nameres_url),
+            "nodenorm_backend": nodenorm_backend,
+            "nameres_backend": nameres_backend,
+            "nodenorm_docs_url": nodenorm_docs_url,
+            "nodenorm_status_url": nodenorm_status_url,
+            "nameres_docs_url": nameres_docs_url,
+            "nameres_status_url": nameres_status_url,
+            "nodenorm_status": fetch_status(nodenorm_status_url, "nodenorm"),
+            "nameres_status": fetch_status(nameres_status_url, "nameres"),
             "counts": target_counts,
             "unreachable": total == 0 or target_counts["error"] == total,
         }
@@ -454,14 +611,23 @@ def build_history_line(report):
         nodenorm_status = section["nodenorm_status"]
         nameres_status = section["nameres_status"]
         eq_db = nodenorm_status.get("databases", {}).get("eq_id_to_id_db", {})
-        solr = nameres_status.get("solr", {})
+        index = nameres_status.get("index", {})
         line["targets"][target] = {
             "babel_version": nodenorm_status.get("babel_version"),
             "nameres_version": nameres_status.get("nameres_version"),
+            # NodeNorm and NameRes are promoted separately, so each release
+            # change shows up in the history diff on its own.
+            "nameres_babel_version": nameres_status.get("babel_version"),
             "biolink_version": nodenorm_status.get("biolink_version"),
             "nn_eq_records": eq_db.get("count"),
-            "solr_docs": solr.get("numDocs"),
-            "solr_size": solr.get("size"),
+            # Named for Solr, but read from either backend's index. Runs before
+            # 2026-11 read only the pre-v1.7 "solr" key, so they recorded null
+            # for NameRes v1.7+ environments: a null followed by a number in
+            # these two fields is data that was missing, not a change. Anything
+            # that compares them across runs must skip a null, as History.vue
+            # skips fields an older run did not record.
+            "solr_docs": index.get("numDocs"),
+            "solr_size": index.get("size"),
             "p95_ms": nameres_status.get("recent_queries", {}).get("p95_ms"),
             "counts": section["counts"],
         }

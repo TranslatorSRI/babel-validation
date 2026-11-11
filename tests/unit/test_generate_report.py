@@ -1,6 +1,7 @@
 """Unit tests for the dashboard report generator. No network: everything is fed
 literal JSONL records and hostile inline payloads."""
 
+import collections
 import configparser
 import json
 
@@ -281,7 +282,7 @@ class TestNoSheetLeak:
         sheet_id = "FAKE-SHEET-ID-FOR-LEAK-TEST-0123456789"
         monkeypatch.setenv("BABEL_VALIDATION_SHEET_ID", sheet_id)
         monkeypatch.setattr(
-            generate_report, "fetch_status", lambda url: {"status": "ok"}
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
         )
         records = [
             _record(
@@ -340,7 +341,7 @@ class TestTrimStatus:
             "solr": {"numDocs": 7, "size": "1 GB", "jvm": {"secrets": True}},
             "extra_key": {"anything": "dropped"},
         }
-        trimmed = trim_status(hostile)
+        trimmed = trim_status(hostile, "nameres")
         assert "extra_key" not in trimmed
         assert "babel_version_url" not in trimmed  # not the NCATSTranslator org
         assert "\x1b" not in trimmed["status"]
@@ -351,27 +352,191 @@ class TestTrimStatus:
         )
         assert "weird" not in trimmed["databases"]
         assert trimmed["recent_queries"] == {"p95_ms": 12.5}
-        assert trimmed["solr"] == {"numDocs": 7, "size": "1 GB"}
+        assert trimmed["index"] == {"numDocs": 7, "size": "1 GB"}
         assert trimmed["biolink_version"] == "v4"
+
+    def test_nodenorm_version_kept(self):
+        assert trim_status({"version": "2.5.1"}, "nodenorm")["version"] == "2.5.1"
+
+    def test_nameres_version_never_taken_from_top_level_version(self):
+        # A NameRes error body with no numDocs to show that "version" is the
+        # Solr index's counter.
+        trimmed = trim_status({"status": "error", "version": 68618}, "nameres")
+        assert "version" not in trimmed
+
+    def test_nameres_index_read_from_solr_or_top_level(self):
+        dates = {
+            "lastModified": "2026-10-08T22:16:21.135Z",
+            "startTime": "2026-10-14T17:14:16.138Z",
+        }
+        expected = {"numDocs": 7, "size": "1 GB", **dates}
+        # Before NameRes v1.7, the index stats were under "solr".
+        before = trim_status(
+            {"solr": {"numDocs": 7, "size": "1 GB", **dates}}, "nameres"
+        )
+        assert before["index"] == expected
+        # From v1.7 they are at the top level, including the index's own
+        # "version" counter, which must not pass for the service's version.
+        after = trim_status(
+            {"numDocs": "7", "size": "1 GB", "version": 68618, **dates}, "nameres"
+        )
+        assert after["index"] == expected
+        assert "version" not in after
+        # NameRes ES reports a top-level index too; 0 is a real value there.
+        assert trim_status({"numDocs": 0, "size": 0}, "nameres")["index"] == {
+            "numDocs": 0,
+            "size": "0",
+        }
+
+    def test_nodenorm_never_gets_a_nameres_index(self):
+        # Keyed on the service, as "version" is: the shape alone would give a
+        # NodeNorm body that happens to carry numDocs a NameRes index.
+        for body in ({"numDocs": 7, "size": "1 GB"}, {"solr": {"numDocs": 7}}):
+            assert "index" not in trim_status(body, "nodenorm")
+
+    def test_babel_releases_served_are_validated_and_ordered(self):
+        available = {
+            "2026jul22": "https://example/2026jul22",
+            "2025sep1": "https://example/2025sep1",
+            "2026feb30": "not a real date",
+            "\x1b[2Jlatest": "hostile",
+        }
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == ["2025sep1", "2026jul22"]
+
+    def test_babel_releases_served_keeps_the_newest_of_a_long_list(self):
+        # Oldest first, with junk ahead of them: the cut must not drop the
+        # current releases at the end.
+        junk = {f"junk{i}": "" for i in range(60)}
+        old = {f"2020jan{d}": "" for d in range(1, 29)}
+        old.update({f"2020feb{d}": "" for d in range(1, 29)})
+        available = {**junk, **old, "2026jul22": ""}
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        releases = trimmed["babel_available_versions"]
+        assert len(releases) == 50
+        assert releases[-1] == "2026jul22"
+
+    def test_babel_releases_served_read_from_a_list_too(self):
+        available = ["2026jul22", "2025sep1", "2025sep1", {"not": "hashable"}, None]
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == ["2025sep1", "2026jul22"]
+
+    @pytest.mark.parametrize("available", ["2026jul22", 3, True])
+    def test_babel_releases_served_in_an_unknown_shape_is_logged(
+        self, available, caplog
+    ):
+        # Dropping it silently hid the row, which reads as a NodeNorm that serves
+        # only its default release.
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert "babel_available_versions" not in trimmed
+        assert any(
+            "available_versions" in r.getMessage() for r in caplog.records
+        ), caplog.records
+
+    def test_babel_releases_served_with_no_real_release_is_logged(self, caplog):
+        available = {"latest": "", "\x1b[2J": ""}
+        trimmed = trim_status({"babel": {"available_versions": available}}, "nodenorm")
+        assert trimmed["babel_available_versions"] == []
+        assert any(
+            "none a Babel release" in r.getMessage() for r in caplog.records
+        ), caplog.records
+
+    def test_babel_releases_served_absent_is_quiet(self, caplog):
+        trimmed = trim_status({"babel": {"default_version": "2025sep1"}}, "nodenorm")
+        assert "babel_available_versions" not in trimmed
+        assert not caplog.records
+
+    def test_elasticsearch_nodes_are_summarised(self):
+        nodes = {
+            "es-0": {"version": "9.3.1", "disk.used_percent": "69.93"},
+            "es-1": {"version": "9.3.1", "disk.used_percent": "71.5"},
+            "es-2": {"version": "9.3.1", "disk.used_percent": "NaN"},
+            "bad": "not a dict",
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {
+            "nodes": 3,
+            "versions": ["9.3.1"],
+            "max_disk_used_percent": 71.5,
+        }
+
+    def test_elasticsearch_mixed_versions_are_all_reported(self):
+        # Mid rolling upgrade: the first node alone would hide the old ones.
+        nodes = {
+            "es-0": {"version": "9.3.1"},
+            "es-1": {"version": "8.19.0"},
+            "es-2": {"version": "8.19.0"},
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"]["versions"] == ["8.19.0", "9.3.1"]
+
+    def test_elasticsearch_versions_are_ordered_as_numbers(self):
+        # As strings, 8.10.0 sorted before 8.9.0, and the cut to five kept the
+        # lexically smallest rather than the newest.
+        nodes = {
+            f"es-{i}": {"version": version}
+            for i, version in enumerate(
+                ["8.10.0", "8.9.0", "8.2.0", "8.11.1", "8.8.0", "8.1.0", "8.10.0-rc1"]
+            )
+        }
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"]["versions"] == [
+            "8.8.0",
+            "8.9.0",
+            "8.10.0",
+            "8.10.0-rc1",
+            "8.11.1",
+        ]
+
+    def test_elasticsearch_node_with_null_version_is_skipped(self):
+        # A node mid-restart can report "version": null. Sorting None among
+        # strings raised TypeError, which turned the whole NodeNorm status into
+        # an error over one field.
+        nodes = {"es-0": {"version": "9.3.1"}, "es-1": {"version": None}}
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {"nodes": 2, "versions": ["9.3.1"]}
+
+    def test_elasticsearch_with_no_nodes_is_kept(self):
+        # A cluster with no nodes is a finding, not missing data.
+        trimmed = trim_status({"elasticsearch": {"nodes": {}}}, "nodenorm")
+        assert trimmed["elasticsearch"] == {"nodes": 0}
+
+    def test_elasticsearch_summary_is_bounded_and_escaped(self):
+        nodes = {
+            f"es-{i}": {"version": "\x1b[2J9" * 20, "disk.used_percent": "1"}
+            for i in range(1000)
+        }
+        nodes["es-0"]["version"] = "\x1b[2J" + "9" * 100
+        for i in range(10):
+            nodes[f"es-{i}"]["version"] = f"9.{i}"
+        trimmed = trim_status({"elasticsearch": {"nodes": nodes}}, "nodenorm")
+        trimmed = trimmed["elasticsearch"]
+        # Every node is counted; only the list of distinct versions is cut.
+        assert trimmed["nodes"] == 1000
+        assert len(trimmed["versions"]) == 5
+        for version in trimmed["versions"]:
+            assert "\x1b" not in version
+            assert len(version) < 50
 
     def test_valid_babel_version_url_kept(self):
         trimmed = trim_status(
-            {"babel_version_url": "https://github.com/ncatstranslator/Babel/blob/x.md"}
+            {"babel_version_url": "https://github.com/ncatstranslator/Babel/blob/x.md"},
+            "nodenorm",
         )
         assert trimmed["babel_version_url"].startswith("https://github.com/")
 
     def test_not_a_dict(self):
-        assert trim_status(["nope"]) == {"error": "InvalidStatus"}
+        assert trim_status(["nope"], "nodenorm") == {"error": "InvalidStatus"}
 
     @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", float("inf")])
     def test_non_finite_numbers_are_dropped(self, value):
         # float() accepts all of these, and json.dump would then write the bare
         # tokens NaN/Infinity — valid Python, invalid JSON. JSON.parse rejects
         # the file, so one bad latency from one service blanks every page.
-        trimmed = trim_status({"recent_queries": {"p95_ms": value}})
+        trimmed = trim_status({"recent_queries": {"p95_ms": value}}, "nameres")
         assert trimmed["recent_queries"] == {}
-        trimmed = trim_status({"solr": {"numDocs": value, "size": "1 GB"}})
-        assert trimmed["solr"] == {"size": "1 GB"}
+        trimmed = trim_status({"solr": {"numDocs": value, "size": "1 GB"}}, "nameres")
+        assert trimmed["index"] == {"size": "1 GB"}
 
 
 class TestAllTargetsUnreachable:
@@ -465,7 +630,120 @@ class TestBadInputIsSkippedNotFatal:
         assert len(lines) == 2
 
     def test_missing_url_does_not_reach_the_network(self):
-        assert fetch_status(None) == {"error": "NoURL"}
+        assert fetch_status(None, "nodenorm") == {"error": "NoURL"}
+
+    def test_response_time_is_recorded(self, monkeypatch):
+        # The time includes reading the body, not just the headers.
+        clock = iter([100.0, 101.2344])
+        monkeypatch.setattr(generate_report.time, "monotonic", lambda: next(clock))
+
+        class Response:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"status": "ok"}
+
+        urls = []
+
+        def fake_get(url, timeout):
+            urls.append(url)
+            return Response()
+
+        monkeypatch.setattr(generate_report.requests, "get", fake_get)
+        assert fetch_status("https://nn.example/status", "nodenorm") == {
+            "status": "ok",
+            "response_ms": 1234,
+        }
+        assert urls == ["https://nn.example/status"]
+
+
+class TestServiceLinks:
+    def test_build_report_links_each_service_by_its_backend(self, monkeypatch):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[dev]\nNodeNormURL = https://nn.example/\nNameResURL = https://nr.example/\n"
+            "[ci]\nNodeNormURL = https://nn-es.example/\nNodeNormBackend = elasticsearch\n"
+            "NameResURL = https://nr-es.example/\nNameResBackend = elasticsearch\n"
+        )
+        counts = collections.defaultdict(collections.Counter)
+        targets = generate_report.build_report(
+            {}, counts, True, ["dev", "ci"], ALLOWLIST, config
+        )["targets"]
+        assert targets["dev"]["nodenorm_backend"] == "redis"
+        assert targets["dev"]["nameres_backend"] == "solr"
+        assert targets["dev"]["nodenorm_docs_url"] == "https://nn.example/docs"
+        assert targets["dev"]["nameres_status_url"] == "https://nr.example/status"
+        # The Elasticsearch services serve Swagger UI at their root, not /docs.
+        assert targets["ci"]["nodenorm_docs_url"] == "https://nn-es.example/"
+        assert targets["ci"]["nameres_docs_url"] == "https://nr-es.example/"
+        assert targets["ci"]["nodenorm_status_url"] == "https://nn-es.example/status"
+
+    def test_a_service_without_a_url_has_no_backend(self, monkeypatch):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string("[test]\nNodeNormURL = https://nn.example/\n")
+        counts = collections.defaultdict(collections.Counter)
+        test = generate_report.build_report(
+            {}, counts, True, ["test"], ALLOWLIST, config
+        )["targets"]["test"]
+        assert test["nodenorm_backend"] == "redis"
+        assert test["nameres_backend"] is None
+
+    def test_history_line_reads_the_nameres_index_from_either_backend(self):
+        report = {
+            "generated_at": "2026-11-09T00:00:00+00:00",
+            "run": {"github_run_id": "1"},
+            "targets": {
+                "ci": {
+                    "nodenorm_status": {},
+                    "nameres_status": {
+                        **trim_status({"numDocs": 5, "size": "2 GB"}, "nameres"),
+                        "babel_version": "2026jul22",
+                    },
+                    "counts": {},
+                }
+            },
+        }
+        line = generate_report.build_history_line(report)["targets"]["ci"]
+        assert (line["solr_docs"], line["solr_size"]) == (5, "2 GB")
+        # NameRes's Babel release is recorded apart from NodeNorm's.
+        assert line["nameres_babel_version"] == "2026jul22"
+        assert line["babel_version"] is None
+
+    def test_a_missing_url_has_no_links(self):
+        assert generate_report.service_links(None, "redis") == (None, None)
+
+    def test_side_branch_of_comes_from_targets_ini_and_is_checked(
+        self, monkeypatch, caplog
+    ):
+        monkeypatch.setattr(
+            generate_report, "fetch_status", lambda url, service: {"status": "ok"}
+        )
+        config = configparser.ConfigParser()
+        config.read_string(
+            "[ci]\nNodeNormURL = https://nn.example/\n"
+            "[ci-nr]\nSideBranchOf = ci\nNodeNormURL = https://nn.example/\n"
+            "[self]\nSideBranchOf = self\n"
+            "[gone]\nSideBranchOf = localhost\n"
+        )
+        targets = ["ci", "ci-nr", "self", "gone"]
+        counts = collections.defaultdict(collections.Counter)
+        sections = generate_report.build_report(
+            {}, counts, True, targets, ALLOWLIST, config
+        )["targets"]
+        assert {t: s["side_branch_of"] for t, s in sections.items()} == {
+            "ci": None,
+            "ci-nr": "ci",
+            "self": None,
+            "gone": None,
+        }
+        assert sum("SideBranchOf" in r.getMessage() for r in caplog.records) == 2
 
 
 # read_targets is the single source of truth for which environments exist: as of

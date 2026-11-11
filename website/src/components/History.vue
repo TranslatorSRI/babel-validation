@@ -18,6 +18,13 @@ import { fetchHistory, formatCount } from '../reportData.js';
 // and moves nothing else used to report "Nothing changed".
 const COUNTS = ['failed', 'error', 'xpassed', 'passed'];
 
+// The version fields the diff compares, and how each change is labelled.
+const VERSION_FIELDS = [
+  ['babel_version', 'NodeNorm Babel version'],
+  ['nameres_babel_version', 'NameRes Babel version'],
+  ['nameres_version', 'NameRes version'],
+];
+
 export default {
   props: {
     dataUrl: { type: String, required: true },
@@ -55,6 +62,11 @@ export default {
         // count, and comparing field by field would silently skip it: with
         // nothing else moving, the page said "Nothing changed" on the run that
         // added or dropped a whole target.
+        //
+        // targetNames spans every run in the file, so a target dropped long
+        // ago is missing from both runs here: that is no change at all, and
+        // without this skip it was reported as "no longer reported" every day.
+        if (!now && !before) continue;
         if (!now || !before) {
           changes.push({
             target,
@@ -63,11 +75,17 @@ export default {
           });
           continue;
         }
-        for (const field of ['babel_version', 'nameres_version']) {
-          if (now[field] !== before[field]) {
+        // babel_version is NodeNorm's; NameRes's is recorded separately
+        // because the two are promoted separately. Each label names its
+        // service: a bare "babel version" beside "nameres babel version" read
+        // as the whole environment's release when only NodeNorm had moved. A
+        // field the previous run did not record yet (nameres_babel_version,
+        // before 2026-11) is not a change.
+        for (const [field, label] of VERSION_FIELDS) {
+          if (Object.hasOwn(before, field) && now[field] !== before[field]) {
             changes.push({
               target,
-              label: field.replace('_', ' '),
+              label,
               from: before[field] ?? '—',
               to: now[field] ?? '—',
             });
@@ -145,7 +163,8 @@ export default {
       Nothing changed between the last two runs.
     </p>
 
-    <div class="card">
+    <!-- table-responsive: the table scrolls sideways on a phone, not the page. -->
+    <div class="card table-responsive">
       <table class="table table-dense align-middle mb-0">
         <thead>
           <tr>
@@ -158,9 +177,19 @@ export default {
             <td class="text-nowrap">{{ run.date }}</td>
             <td v-for="target in targetNames" :key="target" class="small">
               <template v-if="run.targets?.[target]">
+                <!-- babel_version is NodeNorm's. NameRes's is shown only when it
+                     differs, and runs before 2026-11 did not record it. -->
                 <div>
-                  Babel {{ run.targets[target].babel_version ?? '?' }} · NameRes
-                  {{ run.targets[target].nameres_version ?? '?' }}
+                  Babel {{ run.targets[target].babel_version ?? '?' }}
+                  <template
+                    v-if="
+                      run.targets[target].nameres_babel_version &&
+                      run.targets[target].nameres_babel_version !== run.targets[target].babel_version
+                    "
+                  >
+                    (NameRes on {{ run.targets[target].nameres_babel_version }})
+                  </template>
+                  · NameRes {{ run.targets[target].nameres_version ?? '?' }}
                 </div>
                 <div class="text-body-secondary">
                   {{ formatCount(run.targets[target].nn_eq_records) }} ids ·
