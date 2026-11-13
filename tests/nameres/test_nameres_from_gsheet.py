@@ -50,6 +50,16 @@ def test_label(target_info, test_row, test_category, record_property):
     if not test_category(category):
         pytest.skip(f"Skipping category {category} because of the category filter.")
 
+    # A `negative` row asserts that a CURIE is *not* returned, which is what the
+    # blocklist is for. A NameRes without one fails every such row by construction,
+    # so this is a capability the target declares rather than a result worth
+    # reporting. Defaults to true: every deployment but namelookup-es has a blocklist.
+    if 'negative' in test_row.Flags and not target_info.getboolean('NameResHasBlocklist', True):
+        pytest.skip(
+            f"Skipping negative test row: {target_info['NameResURL']} declares no blocklist "
+            f"(NameResHasBlocklist) in targets.ini."
+        )
+
     source = test_row.Source
     source_url = test_row.SourceURL
     source_info = f"{source} ({source_url})"
@@ -151,6 +161,11 @@ def test_label(target_info, test_row, test_category, record_property):
 
             elif expected_id in all_curies:
                 expected_index = all_curies.index(expected_id)
+
+                # Record the rank even when we are about to xfail. A demotion from rank 1
+                # to rank 2 is the most common regression there is, and the imperative
+                # xfail below hides it from the failure count entirely.
+                record_property("expected_rank", expected_index + 1)
 
                 fail_message = f"{test_summary} returns {results[0]['curie']} ('{results[0]['label']}') as the " \
                     f"top result, but {expected_id} is at {expected_index} index."

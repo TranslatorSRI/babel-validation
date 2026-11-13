@@ -110,6 +110,75 @@ def test_search_by_name_validates_and_warms_before_calling_nodenorm(nodenorm):
     assert nodenorm.post_calls == []
 
 
+class FakeNameRes:
+    """Returns a fixed result list, whatever it is asked. str() reaches the messages."""
+
+    def __init__(self, curies):
+        self._results = [{'curie': c, 'label': f'label for {c}'} for c in curies]
+
+    def lookup(self, query, **params):
+        return self._results
+
+    def __str__(self):
+        return 'FakeNameRes'
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize('returned,expected_status,expected_in_message', [
+    (['A:1', 'C:1'], TestStatus.Passed, 'is the top result'),
+    (['C:1', 'A:1'], TestStatus.Failed, 'is at rank 2'),
+    (['C:1'], TestStatus.Failed, 'is not in the top 5'),
+    ([], TestStatus.Failed, 'No results found'),
+])
+def test_search_by_name_top_result_only_accepts_rank_one(
+        nodenorm, returned, expected_status, expected_in_message):
+    """SearchByName accepts anything in the top N; this one must not.
+
+    The two failure messages are deliberately different: "at rank 2" is a ranking
+    problem, "not in the top 5" is a retrieval one, and they have different owners.
+    """
+    handler = ASSERTION_HANDLERS['searchbynametopresult']
+    results = list(handler.test_with_nameres(
+        [['water', 'B:1']], nodenorm, FakeNameRes(returned), 5, 'test'))
+    [(status, message)] = _messages(results)
+    assert status == expected_status, message
+    assert expected_in_message in message
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize('returned,expected_status,expected_in_message', [
+    (['C:1'], TestStatus.Passed, 'is absent from the top 5'),
+    ([], TestStatus.Passed, 'is absent from the top 5'),
+    (['A:1'], TestStatus.Failed, 'was returned at rank 1'),
+    (['C:1', 'A:1'], TestStatus.Failed, 'was returned at rank 2'),
+])
+def test_does_not_search_by_name(nodenorm, returned, expected_status, expected_in_message):
+    """B:1 normalizes to A:1, so the assertion is about the clique, not the string."""
+    handler = ASSERTION_HANDLERS['doesnotsearchbyname']
+    results = list(handler.test_with_nameres(
+        [['mongoloid', 'B:1']], nodenorm, FakeNameRes(returned), 5, 'test'))
+    [(status, message)] = _messages(results)
+    assert status == expected_status, message
+    assert expected_in_message in message
+
+
+@pytest.mark.unit
+def test_does_not_search_by_name_fails_on_a_curie_it_cannot_normalize(nodenorm):
+    """The one way a negative assertion can be worse than no assertion.
+
+    D:1 is dropped from the NodeNorm response entirely. "We could not look it up" and
+    "it was not returned" both end with the CURIE absent from the results, so treating
+    the first as a pass would let a typo'd blocklist assertion succeed forever while
+    testing nothing.
+    """
+    handler = ASSERTION_HANDLERS['doesnotsearchbyname']
+    results = list(handler.test_with_nameres(
+        [['mongoloid', 'D:1']], nodenorm, FakeNameRes([]), 5, 'test'))
+    [(status, message)] = _messages(results)
+    assert status == TestStatus.Failed, message
+    assert 'Unable to normalize' in message
+
+
 class TempGroupingHandler(NodeNormTest):
     """Registered last, after the NameRes handlers, only by test_docs_group_handlers_*."""
     NAME = 'tempgrouping'
@@ -163,7 +232,7 @@ def test_registration_rejects_a_duplicate_name():
 @pytest.mark.unit
 def test_registered_handlers_satisfy_those_rules():
     assert all(name == name.lower() for name in ASSERTION_HANDLERS)
-    assert len(ASSERTION_HANDLERS) == 8
+    assert len(ASSERTION_HANDLERS) == 10
 
 
 @pytest.mark.unit
