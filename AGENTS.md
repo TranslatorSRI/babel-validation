@@ -123,6 +123,8 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 
 **Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
 
+**End-of-run summary:** after pytest's own summary, `pytest_terminal_summary` in `conftest.py` prints the targets and category filters, then a pass rate per component (`tests/<dir>`) and target, with the URL tested; skipped tests (including category-filtered rows) are left out of the rate. With several `--target`s it also lists tests whose outcome differs between targets. The logic is `summarize_run` in `tests/_pytest_helpers.py`; it reuses `classify_record`/`parse_nodeid` from `generate_report.py`, so it counts outcomes the same way the dashboard does.
+
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
