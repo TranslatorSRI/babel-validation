@@ -12,7 +12,7 @@ import pytest
 import configparser
 
 from src.babel_validation.core import cache_dir
-from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
+from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE, summarize_run
 
 
 def get_targets_ini_path(config):
@@ -69,6 +69,10 @@ def unlink_if_exists(path) -> None:
 # needs to write.
 _report_file = None
 
+# Every record pytest_runtest_logreport builds, kept in memory for the end-of-run summary
+# (pytest_terminal_summary). Only the controller prints it, for the same reason as above.
+_summary_records = []
+
 
 def pytest_configure(config):
     global _report_file
@@ -96,9 +100,10 @@ def pytest_configure(config):
 
 def pytest_runtest_logreport(report):
     """
-    When --report-jsonl is set, write one JSON line per test phase: every 'call'
-    report, plus setup/teardown reports that did not pass (setup skips and
-    errors). Raw pytest facts only — classification into
+    Record one entry per test phase: every 'call' report, plus setup/teardown
+    reports that did not pass (setup skips and errors). They feed the
+    end-of-run summary and, when --report-jsonl is set, are written one JSON
+    line each. Raw pytest facts only — classification into
     passed/failed/xfailed/xpassed/skipped/error happens in
     src.babel_validation.tools.generate_report, where it is unit-testable.
 
@@ -106,8 +111,6 @@ def pytest_runtest_logreport(report):
     responses); it is truncated here and repr-escaped by the report generator
     before it is displayed anywhere.
     """
-    if _report_file is None:
-        return
     if report.when != 'call' and report.outcome == 'passed':
         return
     # Prefer the one-line crash message ("AssertionError: ...") over the full
@@ -126,8 +129,34 @@ def pytest_runtest_logreport(report):
         "props": dict(report.user_properties or []),
         "msg": msg[:2000] if msg else None,
     }
-    _report_file.write(json.dumps(record) + "\n")
-    _report_file.flush()
+    _summary_records.append(record)
+    if _report_file is not None:
+        _report_file.write(json.dumps(record) + "\n")
+        _report_file.flush()
+
+
+def pytest_terminal_summary(terminalreporter, config):
+    """
+    Print what was tested and per-component, per-target pass rates at the end of the run, so
+    nobody has to scroll back to the header through thousands of lines of output. With several
+    --target options, also list the tests whose outcome differs between targets.
+    """
+    if not _summary_records:
+        return
+    targets = get_targets(config)
+    # Not get_target(), which raises on an unknown --target: that run has already failed at
+    # collection, and the summary shouldn't add a second traceback.
+    sections = read_targets(get_targets_ini_path(config))
+    lines = summarize_run(
+        _summary_records,
+        targets,
+        {target: sections[target] for target in targets if target in sections},
+        set(config.getoption('--category')),
+        set(config.getoption('--category-exclude')),
+    )
+    terminalreporter.write_sep("=", "Babel Validation summary")
+    for line in lines:
+        terminalreporter.write_line(line)
 
 
 def pytest_addoption(parser):
