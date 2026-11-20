@@ -108,7 +108,7 @@ def log_path(mo):
     #
     # These exports are large and are intentionally NOT checked into the repository:
     # `data/` is a symlink to a shared, gitignored data directory.
-    LOG_DIR = REPO_ROOT / "data" / "log-analysis"
+    LOG_DIR = REPO_ROOT / "data" / "log-analysis" / "nameres"
     LOG_PATHS = sorted(LOG_DIR.glob("nameres-autocomplete-only-*.json"))
 
     if not LOG_PATHS:
@@ -1083,7 +1083,7 @@ def next_steps(mo):
        of this notebook because mixing the two populations made every aggregate a
        weighted average of two things that behave nothing alike (p95 Solr wait
        ~2.8 s vs ~43 ms). They deserve their own notebook over the general
-       `data/log-analysis/nameres-*` exports, sharing this one's parser.
+       `data/log-analysis/nameres/` exports, sharing this one's parser.
 
     6. **De-duplicate overlapping exports.** `assert_no_overlapping_spans` currently
        refuses overlapping windows outright. Logs Insights records carry no ID, so
