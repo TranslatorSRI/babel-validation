@@ -98,6 +98,20 @@ def curies_in(curies_text: str) -> list[str]:
     return _CURIE_RE.findall(curies_text)
 
 
+NS_PER_HOUR = 3_600_000_000_000
+
+
+def merge_windows(windows) -> list:
+    """Merge overlapping or touching (start, end) windows into a sorted, disjoint list."""
+    merged = []
+    for start, end in sorted(windows):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
 @dataclass
 class FileSummary:
     """What was read from one file in the log directory."""
@@ -126,6 +140,13 @@ class FileSummary:
         if self.members_read:
             return "loaded"
         return "skipped"
+
+    @property
+    def hours_queried(self) -> float:
+        """Hours the export's queries cover, counting an overlap once."""
+        return (
+            sum(end - start for start, end in merge_windows(self.windows)) / NS_PER_HOUR
+        )
 
     @property
     def notes(self) -> str:

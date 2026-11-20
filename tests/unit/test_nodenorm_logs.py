@@ -14,6 +14,7 @@ from src.babel_validation.tools.nodenorm_logs import (
     count_curies,
     curies_in,
     load_logs,
+    merge_windows,
     parse_log_line,
 )
 
@@ -129,10 +130,20 @@ def test_loads_an_archive_and_reports_what_it_skipped(tmp_path):
         "2026-01-01 00:00:02.000",
     )
     assert archive.windows == [(0, 3_600_000_000_000)] * 2
+    assert archive.hours_queried == 1.0
     assert archive.skipped == {
         "CSV twin of a JSON export": 1,
         "no reader for '.txt' files": 1,
     }
+
+
+def test_merges_overlapping_and_touching_windows():
+    assert merge_windows([(5, 9), (0, 2), (2, 3), (6, 7), (20, 30)]) == [
+        (0, 3),
+        (5, 9),
+        (20, 30),
+    ]
+    assert merge_windows([]) == []
 
 
 def test_the_same_line_from_two_pods_is_two_requests(tmp_path):
