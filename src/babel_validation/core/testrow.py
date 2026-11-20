@@ -2,6 +2,16 @@ from dataclasses import dataclass
 from enum import Enum
 
 
+def split_pipes(value: str) -> set[str]:
+    """Split a pipe-separated cell into its non-empty entries.
+
+    A bare `set(value.split('|'))` turns a blank cell into `{''}`, which is
+    truthy, so a filter column like Prefixes or Only Taxa would look filled in
+    on every row and send an empty filter to NameRes.
+    """
+    return {v.strip() for v in value.split('|') if v.strip()}
+
+
 @dataclass(frozen=True)
 class TestRow:
     """
@@ -20,6 +30,7 @@ class TestRow:
     Conflations: set[str]
     BiolinkClasses: set[str]
     Prefixes: set[str]
+    OnlyTaxa: set[str]
     Source: str
     SourceURL: str
     Notes: str
@@ -47,8 +58,11 @@ class TestRow:
             PreferredLabel=row.get('Preferred Label', ''),
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
             Conflations=set(row.get('Conflations', '').split('|')),
+            # Not split_pipes(): test_nameres_from_gsheet loops over these, and a blank cell's ''
+            # is what makes it run the lookup with no biolink_type.
             BiolinkClasses=set(row.get('Biolink Classes', '').split('|')),
-            Prefixes=set(row.get('Prefixes', '').split('|')),
+            Prefixes=split_pipes(row.get('Prefixes', '')),
+            OnlyTaxa=split_pipes(row.get('Only Taxa', '')),
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),
             Notes=row.get('Notes', '')
