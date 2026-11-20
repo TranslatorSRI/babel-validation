@@ -31,7 +31,8 @@ def title(mo):
     ```
 
     That is the `release-v1.5.2-with-metrics` format. NameRes v1.7.0 writes
-    `only_taxa=None): took …`, and v1.7.1 on adds `, exact=False` before the `)`.
+    `only_taxa=None): took …`, and v1.7.1 on adds `, exact=None` (or
+    `exact=ExactMatchMode.label`, `.synonyms` or `.any`) before the `)`.
     After v1.7.1 (NameResolution#231), the Solr figure reads `(with 21.30ms for the
     Solr round trip)`, matching `/status`'s `solr_round_trip_ms`; it is the same
     measurement. The parser reads all four. Lookups that fail log
@@ -166,8 +167,10 @@ def parser(ast, dataclass, datetime, re):
         solr_wait_ms: float     # time spent waiting for Solr; NaN for a failed lookup
         slow_query: bool        # emitted as a WARNING "SLOW QUERY" line
         # NameRes's `exact` parameter (exact-match mode, from v1.7.1), not the
-        # autocomplete=False lookups this notebook calls "exact". None on older lines.
-        exact: bool | None = None
+        # autocomplete=False lookups this notebook calls "exact": "label", "synonyms"
+        # or "any". None is the default tokenized search, which is what a line logging
+        # `exact=None` and an older line with no `exact=` both were.
+        exact: str | None = None
         outcome: str = "ok"     # "ok", or a failed lookup's "timeout" / "error" / "cancelled"
         error_type: str = ""    # exception class of a failed lookup, e.g. "ReadTimeout"
         pod_name: str = ""
@@ -181,6 +184,12 @@ def parser(ast, dataclass, datetime, re):
     # worded "waiting for Solr" (v1.7.1 and earlier) or "for the Solr round trip"
     # (after). "cancelled" failures are also from after v1.7.1. A line NameRes changes
     # again still raises in parse_record rather than being skipped.
+    #
+    # `exact` is logged as NameRes formats its ExactMatchMode enum: `None`, or
+    # `ExactMatchMode.<mode>`. NameRes has never logged `exact=True` or `exact=False`.
+    # only_taxa is kept from matching across ", exact=" so that an `exact=` value this
+    # doesn't recognize fails the match (and so raises) instead of being read as part
+    # of only_taxa, which is what happened while this expected True or False.
     LOOKUP_LINE_RE = re.compile(
         r"(?:FAILED QUERY \((?P<outcome>timeout|error|cancelled): (?P<error_type>\w+)\): )?"
         r'Lookup query to Solr for "(?P<query>.*)" '
@@ -190,8 +199,8 @@ def parser(ast, dataclass, datetime, re):
         r"biolink_types=(?P<biolink_types>\[.*?\]), "
         r"only_prefixes=(?P<only_prefixes>.*?), "
         r"exclude_prefixes=(?P<exclude_prefixes>.*?), "
-        r"only_taxa=(?P<only_taxa>.*?)"
-        r"(?:, exact=(?P<exact>True|False))?\):? "
+        r"only_taxa=(?P<only_taxa>(?:(?!, exact=).)*?)"
+        r"(?:, exact=(?:None|ExactMatchMode\.(?P<exact>label|synonyms|any)))?\):? "
         r"(?:took (?P<took>[\d.]+)ms "
         r"\(with (?P<solr>[\d.]+)ms (?:waiting for Solr|for the Solr round trip)\)"
         r"|failed after (?P<failed_after>[\d.]+)ms)"
@@ -243,7 +252,7 @@ def parser(ast, dataclass, datetime, re):
             # failed lookups while total-latency statistics still count them.
             solr_wait_ms=float("nan") if failed else float(g["solr"]),
             slow_query="SLOW QUERY" in line,
-            exact=None if g["exact"] is None else g["exact"] == "True",
+            exact=g["exact"],
             outcome=g["outcome"] or "ok",
             error_type=g["error_type"] or "",
             pod_name=k8s.get("pod_name", ""),
@@ -951,7 +960,7 @@ def bench_build(df, mo, pd):
             _ep=frame["exclude_prefixes"].apply(_join),
             _ot=frame["only_taxa"].apply(_join),
         )
-        # `exact` is None on lines from before NameRes v1.7.1; dropna=False keeps those
+        # `exact` is None for every default (non-exact) lookup; dropna=False keeps those
         # rows rather than silently dropping them from every group.
         key = ["query", "autocomplete", "highlighting", "offset", "limit",
                "_bt", "_op", "_ep", "_ot", "exact"]
@@ -975,9 +984,9 @@ def bench_build(df, mo, pd):
                     "only_prefixes": list(r0["only_prefixes"]),
                     "exclude_prefixes": list(r0["exclude_prefixes"]),
                     "only_taxa": list(r0["only_taxa"]),
-                    # Reissue NameRes's exact-match flag as logged; None means the
-                    # line predates it, i.e. NameRes's default (False).
-                    "exact": None if pd.isna(r0["exact"]) else bool(r0["exact"]),
+                    # Reissue NameRes's exact-match mode as logged ("label",
+                    # "synonyms" or "any"); None is the default tokenized search.
+                    "exact": None if pd.isna(r0["exact"]) else str(r0["exact"]),
                     "baseline_solr": {
                         "n_observed": int(len(g)),
                         "n_failed": int((g["outcome"] != "ok").sum()),

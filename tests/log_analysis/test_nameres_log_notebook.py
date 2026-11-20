@@ -135,13 +135,16 @@ def test_parse_record_rejects_a_lookup_line_it_cannot_parse(parser):
 # NameRes versions log it. NameResolution#231 adds the SLOW QUERY and FAILED QUERY
 # variants of the v1.7.1 format.
 _V170_LINE = LOOKUP_LINE.replace("only_taxa=None) took", "only_taxa=None): took")
-_V171_LINE = LOOKUP_LINE.replace("only_taxa=None) took", "only_taxa=None, exact=False): took")
+# `exact` is logged as NameRes formats its ExactMatchMode enum: None, or
+# ExactMatchMode.<mode>. These are copied from what NameRes writes, not from its docs.
+_V171_LINE = LOOKUP_LINE.replace("only_taxa=None) took", "only_taxa=None, exact=None): took")
+_V171_EXACT_LINE = _V171_LINE.replace("exact=None", "exact=ExactMatchMode.label")
 # After v1.7.1 (NameResolution#231) the Solr figure is worded as /status names it.
 _ROUND_TRIP_LINE = _V171_LINE.replace("waiting for Solr", "for the Solr round trip")
 _FAILED_PREFIX = LOOKUP_LINE.split(" took ")[0].replace(
     "INFO:api.server:Lookup", "WARNING:api.server:FAILED QUERY (timeout: ReadTimeout): Lookup"
 )
-FAILED_TIMEOUT_LINE = _FAILED_PREFIX.replace("only_taxa=None)", "only_taxa=None, exact=False)") + (
+FAILED_TIMEOUT_LINE = _FAILED_PREFIX.replace("only_taxa=None)", "only_taxa=None, exact=None)") + (
     ": failed after 30001.23ms"
 )
 
@@ -151,9 +154,11 @@ FAILED_TIMEOUT_LINE = _FAILED_PREFIX.replace("only_taxa=None)", "only_taxa=None,
     [
         pytest.param(LOOKUP_LINE, None, id="v1.5.2-with-metrics"),
         pytest.param(_V170_LINE, None, id="v1.7.0"),
-        pytest.param(_V171_LINE, False, id="v1.7.1"),
-        pytest.param(_V171_LINE.replace("exact=False", "exact=True"), True, id="v1.7.1-exact"),
-        pytest.param(_ROUND_TRIP_LINE, False, id="after-v1.7.1-round-trip"),
+        pytest.param(_V171_LINE, None, id="v1.7.1"),
+        pytest.param(_V171_EXACT_LINE, "label", id="v1.7.1-exact-label"),
+        pytest.param(_V171_LINE.replace("exact=None", "exact=ExactMatchMode.synonyms"), "synonyms", id="v1.7.1-exact-synonyms"),
+        pytest.param(_V171_LINE.replace("exact=None", "exact=ExactMatchMode.any"), "any", id="v1.7.1-exact-any"),
+        pytest.param(_ROUND_TRIP_LINE, None, id="after-v1.7.1-round-trip"),
     ],
 )
 def test_parse_record_reads_each_nameres_versions_format(parser, line, exact):
@@ -161,7 +166,7 @@ def test_parse_record_reads_each_nameres_versions_format(parser, line, exact):
     assert entry.query == "autism"
     # The last filter field must not swallow the `exact=` that follows it.
     assert entry.only_taxa == []
-    assert entry.exact is exact
+    assert entry.exact == exact
     assert entry.took_ms == pytest.approx(30.20)
     assert entry.solr_wait_ms == pytest.approx(27.75)
     assert entry.outcome == "ok"
@@ -189,12 +194,29 @@ def test_parse_record_keeps_failed_lookups(parser, outcome, error_type):
     line = FAILED_TIMEOUT_LINE.replace("(timeout: ReadTimeout)", f"({outcome}: {error_type})")
     entry = parser["parse_record"](_record(line))
     assert entry.query == "autism"
-    assert entry.exact is False
+    assert entry.exact is None
     assert entry.outcome == outcome
     assert entry.error_type == error_type
     assert entry.took_ms == pytest.approx(30001.23)
     assert entry.solr_wait_ms != entry.solr_wait_ms  # NaN, so pandas skips it
     assert entry.slow_query is False
+
+
+def test_parse_record_keeps_only_taxa_apart_from_exact(parser):
+    """A taxon filter followed by `exact=` is two fields. While the parser expected
+    `exact=True|False`, which NameRes never logged, only_taxa read as
+    ['NCBITaxon:9606, exact=None']."""
+    line = _V171_LINE.replace("only_taxa=None, exact=None", "only_taxa=NCBITaxon:9606, exact=None")
+    entry = parser["parse_record"](_record(line))
+    assert entry.only_taxa == ["NCBITaxon:9606"]
+    assert entry.exact is None
+
+
+def test_parse_record_rejects_an_exact_value_it_does_not_know(parser):
+    """A new exact mode must fail loudly, not be folded into only_taxa."""
+    line = _V171_LINE.replace("exact=None", "exact=ExactMatchMode.prefix")
+    with pytest.raises(ValueError, match="Unparseable NameRes lookup line"):
+        parser["parse_record"](_record(line))
 
 
 @pytest.mark.parametrize(
@@ -220,7 +242,7 @@ def test_benchmark_export_handles_failed_and_exact_lookups(notebook, parser):
     parse = parser["parse_record"]
     entries = [
         parse(_record(FAILED_TIMEOUT_LINE)),
-        parse(_record(_V171_LINE.replace("exact=False", "exact=True"))),
+        parse(_record(_V171_EXACT_LINE)),
         parse(_record(LOOKUP_LINE)),
     ]
     from dataclasses import asdict
@@ -230,14 +252,12 @@ def test_benchmark_export_handles_failed_and_exact_lookups(notebook, parser):
     _output, defs = notebook.bench_build.run(df=frame)
     cases = defs["benchmark_cases"]
 
-    # exact=False, exact=True and "not logged" (None) are three different requests.
-    assert sorted(case["exact"] is None and "none" or str(case["exact"]) for case in cases) == [
-        "False", "True", "none"
-    ]
-    failed_only = next(case for case in cases if case["exact"] is False)
-    assert failed_only["baseline_solr"]["n_failed"] == 1
-    assert failed_only["baseline_solr"]["solr_wait_ms_p50"] is None
-    assert failed_only["baseline_solr"]["took_ms_p50"] == pytest.approx(30001.23)
+    # `exact=None` and "not logged" are the same request (the default search), so the
+    # failed lookup and the old-format one are one case; the exact one is another.
+    assert sorted(str(case["exact"]) for case in cases) == ["None", "label"]
+    default = next(case for case in cases if case["exact"] is None)
+    assert default["baseline_solr"]["n_observed"] == 2
+    assert default["baseline_solr"]["n_failed"] == 1
     json.dumps(cases, allow_nan=False)
 
 
