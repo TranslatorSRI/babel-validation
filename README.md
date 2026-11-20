@@ -127,7 +127,7 @@ $ curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_l
 
 ## Log Analysis
 
-The Jupyter Notebook in `log-analysis/` contains some basic analysis of the
+The Jupyter Notebook in `log-analysis/nodenorm/` contains some basic analysis of the
 logs from NodeNorm (and, someday, NameRes) instances.
 
 ## The dashboard website
