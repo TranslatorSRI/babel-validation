@@ -1,12 +1,29 @@
 # NodeNorm log analysis
 
 `NodeNorm_log_analysis.ipynb` analyses NodeNorm's request logs. It reads them from
-`../../data/log-analysis/`, which is gitignored: log dumps run from tens of megabytes to
-hundreds, so they are kept out of the repository rather than checked in.
+`data/log-analysis/` at the repository root (`../../data/log-analysis/` from this directory),
+which is gitignored: a single month of web logs is hundreds of megabytes, so they are kept out
+of the repository rather than checked in.
 
 ## Getting the logs
 
-**From AWS CloudWatch Logs Insights**, using this query:
+The notebook loads the Sterling web log archives, one `.tar.gz` per month, from
+`data/log-analysis/pjl-upload/`:
+
+```
+data/log-analysis/pjl-upload/
+├── node-normalization-web-logs-2025-11.tar.gz
+├── node-normalization-web-logs-2025-12.tar.gz
+└── node-normalization-web-logs-2026-01.tar.gz
+```
+
+These three are the months it loads by default. To analyse other months, download those archives
+into the same directory and edit the `logfiles_json_tar_gz` list in the notebook's "Loading
+files" section.
+
+### CloudWatch (not loaded by the current notebook)
+
+Logs can also be exported from AWS CloudWatch Logs Insights with this query:
 
 ```
 fields @timestamp, @message, @logStream, @log
@@ -15,11 +32,6 @@ fields @timestamp, @message, @logStream, @log
 | limit 10000
 ```
 
-(Why 10K? Because that's the maximum it'll let you download.)
-
-Download the logs in JSON. Some of them will still be truncated, but at least the JSON
-will be well-formed. Save the file into `data/log-analysis/`.
-
-**From the Sterling web log archives**, which the notebook loads by default: the
-`node-normalization-web-logs-<year>-<month>.tar.gz` files go into
-`data/log-analysis/pjl-upload/`.
+(Why 10K? Because that's the maximum it'll let you download.) Download them in JSON: some lines
+will still be truncated, but the JSON will be well-formed. The notebook has no loader for this
+format, so using such an export means adding one.
