@@ -11,7 +11,8 @@ skill. Read this before editing a running notebook.
   `pyproject.toml`; `cm.packages.add(...)` goes through uv and updates
   `pyproject.toml` + `uv.lock` (commit those changes with the notebook work).
 - marimo is a dev dependency (`marimo[recommended]`), which brings in `altair`.
-  `pandas`/`numpy` are declared project dependencies.
+  The notebooks' own libraries (`pandas`, `numpy`, `matplotlib`, `seaborn`) are
+  dev dependencies too: nothing in `src/babel_validation/` imports them.
 
 ## Driving a live marimo notebook
 
