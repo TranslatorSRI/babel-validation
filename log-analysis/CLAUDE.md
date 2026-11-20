@@ -125,6 +125,10 @@ one notebook to export.
 
 ## Data & git hygiene
 
+- **Raw log exports live in the repo-root `data/log-analysis/`**, shared by every
+  notebook; each notebook picks out its own files with a narrow glob or an
+  explicit list. Don't add a per-notebook `logs/` directory: that is where they
+  used to live, and `data/` keeps them out of the source tree entirely.
 - **Raw log exports and generated artifacts are not committed.** gitignore the
   log files, any generated `benchmark/`/`output/` artifacts, and marimo's
   `__marimo__/` session cache (output snapshots, regenerated on run). Commit
