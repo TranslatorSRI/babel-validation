@@ -58,6 +58,8 @@ class TestRow:
             PreferredLabel=row.get('Preferred Label', ''),
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
             Conflations=set(row.get('Conflations', '').split('|')),
+            # Not split_pipes(): test_nameres_from_gsheet loops over these, and a blank cell's ''
+            # is what makes it run the lookup with no biolink_type.
             BiolinkClasses=set(row.get('Biolink Classes', '').split('|')),
             Prefixes=split_pipes(row.get('Prefixes', '')),
             OnlyTaxa=split_pipes(row.get('Only Taxa', '')),
