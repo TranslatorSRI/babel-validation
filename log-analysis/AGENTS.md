@@ -1,4 +1,4 @@
-# CLAUDE.md — log-analysis (marimo notebooks)
+# AGENTS.md — log-analysis (marimo notebooks)
 
 Guidance for working on the log-analysis notebooks (`nameres/`, `nodenorm/`).
 These are pair-programmed as **live marimo notebooks** via the `marimo-pair`
@@ -126,10 +126,14 @@ one notebook to export.
 
 ## Data & git hygiene
 
-- **Raw log exports live in the repo-root `data/log-analysis/`**, shared by every
-  notebook; each notebook picks out its own files with a narrow glob or an
-  explicit list. Don't add a per-notebook `logs/` directory: that is where they
-  used to live, and `data/` keeps them out of the source tree entirely.
+- **Raw log exports live in the repo-root `data/log-analysis/<service>/`**:
+  `data/log-analysis/nodenorm/` and `data/log-analysis/nameres/`. A notebook reads
+  only its own service's directory, so one that loads everything it finds there
+  never trips over another service's exports. Within that directory a notebook
+  may still narrow further (the NameRes one globs `nameres-autocomplete-only-*`,
+  because general exports sit beside them). Don't add a per-notebook `logs/`
+  directory in the source tree: that is where they used to live, and `data/`
+  keeps them out of it entirely.
 - **Raw log exports and generated artifacts are not committed.** gitignore the
   log files, any generated `benchmark/`/`output/` artifacts, and marimo's
   `__marimo__/` session cache (output snapshots, regenerated on run). Commit
