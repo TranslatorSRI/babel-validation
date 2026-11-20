@@ -1,7 +1,7 @@
 # NodeNorm log analysis
 
 `NodeNorm_log_analysis.ipynb` analyses NodeNorm's request logs. It reads them from
-`../data/log-analysis/`, which is gitignored: log dumps run from tens of megabytes to
+`../../data/log-analysis/`, which is gitignored: log dumps run from tens of megabytes to
 hundreds, so they are kept out of the repository rather than checked in.
 
 ## Getting the logs
