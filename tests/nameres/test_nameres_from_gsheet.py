@@ -54,10 +54,8 @@ def test_label(target_info, test_row, test_category, record_property):
     source_url = test_row.SourceURL
     source_info = f"{source} ({source_url})"
 
-    biolink_classes = test_row.BiolinkClasses
-    # Make sure we test this without Biolink classes as well
-    if '' not in biolink_classes:
-        biolink_classes.update('')
+    # Always test without a Biolink class ('') as well. A copy, so the shared test_row isn't changed.
+    biolink_classes = test_row.BiolinkClasses | {''}
 
     expected_id = test_row.PreferredID
     query_labels = {test_row.QueryLabel}

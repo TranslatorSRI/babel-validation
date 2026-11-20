@@ -26,7 +26,13 @@ def test_missing_columns_parse_empty():
     row = TestRow.from_data_row({})
     assert row.OnlyTaxa == set()
     assert row.Prefixes == set()
+    assert row.BiolinkClasses == set()
 
 
 def test_prefixes():
     assert TestRow.from_data_row({"Prefixes": "MONDO|^HP"}).Prefixes == {"MONDO", "^HP"}
+
+
+def test_biolink_classes():
+    row = TestRow.from_data_row({"Biolink Classes": "biolink:Disease|!biolink:Gene"})
+    assert row.BiolinkClasses == {"biolink:Disease", "!biolink:Gene"}
