@@ -9,8 +9,9 @@ Babel Validation is a test suite and web tools for validating outputs from [Babe
 ## About these files
 
 Agent instructions live in `AGENTS.md` files: this one, `tests/AGENTS.md` (writing tests),
-`website/AGENTS.md` (the dashboard) and `tests/nodenorm/by_issue/biothings/AGENTS.md` (NodeNorm
-ES investigations). **Before writing or changing anything under `tests/` or `website/`, read
+`website/AGENTS.md` (the dashboard), `log-analysis/AGENTS.md` (the marimo log-analysis
+notebooks) and `tests/nodenorm/by_issue/biothings/AGENTS.md` (NodeNorm ES investigations).
+**Before writing or changing anything under `tests/`, `website/` or `log-analysis/`, read
 that directory's `AGENTS.md`**, because not every agent loads it for you. Claude Code loads a
 subdirectory's file only when it opens a file there with the Read tool, so writing a new file
 there does not load it; some other agents load only the files between the repository root and
