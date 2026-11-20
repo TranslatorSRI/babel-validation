@@ -1,6 +1,13 @@
 # NodeNorm log analysis
 
-`NodeNorm_log_analysis.ipynb` analyses NodeNorm's request logs. It reads them from
+`analyze_nodenorm_logs.py` is a [marimo](https://marimo.io/) notebook that analyses NodeNorm's
+request logs. Open it from the repository root with:
+
+```bash
+uv run marimo edit log-analysis/nodenorm/analyze_nodenorm_logs.py
+```
+
+It reads the logs from
 `data/log-analysis/nodenorm/` at the repository root (`../../data/log-analysis/nodenorm/` from this
 directory; other services' logs sit beside it, as `data/log-analysis/nameres/`),
 which is gitignored: a single month of web logs is hundreds of megabytes, so they are kept out

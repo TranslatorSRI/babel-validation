@@ -40,3 +40,12 @@ timeout = 300
 markers = [
     "unit: unit tests that do not require network access",
 ]
+
+[dependency-groups]
+dev = [
+    "marimo[recommended]>=0.23.13",
+    "matplotlib>=3.11.2",
+    "numpy>=2.4.6",
+    "pandas>=3.1.1",
+    "seaborn>=0.13.2",
+]
