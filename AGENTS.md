@@ -101,6 +101,7 @@ Shared library code used by the tests and potentially other consumers.
 - `services/service_checks.py` — test-facing checks over NodeNorm/NameRes responses: the cached `/status` and OpenAPI document fetches (`get_status()`, `get_openapi()`), `nodenorm_version()` and `require_babel_release()` for gating a test on a release, the OpenAPI `x-translator` and backend checks, `get_normalized_node()`, and `truncated_repr()` for putting service output into an assertion message
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
+- `tools/nodenorm_logs.py` — reads NodeNorm request logs (Loki exports, loose or in tar archives) from a directory into per-request columns, de-duplicated, with a `FileSummary` per file saying what was read and skipped; standard library only, used by `log-analysis/nodenorm/analyze_nodenorm_logs.py`
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
 
 Before writing a `requests` call to NodeNorm or NameRes and its checks — in a test, a tool such
