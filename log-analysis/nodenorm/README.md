@@ -1,17 +1,18 @@
 # NodeNorm log analysis
 
 `NodeNorm_log_analysis.ipynb` analyses NodeNorm's request logs. It reads them from
-`data/log-analysis/` at the repository root (`../../data/log-analysis/` from this directory),
+`data/log-analysis/nodenorm/` at the repository root (`../../data/log-analysis/nodenorm/` from this
+directory; other services' logs sit beside it, as `data/log-analysis/nameres/`),
 which is gitignored: a single month of web logs is hundreds of megabytes, so they are kept out
 of the repository rather than checked in.
 
 ## Getting the logs
 
 The notebook loads the Sterling web log archives, one `.tar.gz` per month, from
-`data/log-analysis/pjl-upload/`:
+`data/log-analysis/nodenorm/pjl-upload/`:
 
 ```
-data/log-analysis/pjl-upload/
+data/log-analysis/nodenorm/pjl-upload/
 ├── node-normalization-web-logs-2025-11.tar.gz
 ├── node-normalization-web-logs-2025-12.tar.gz
 └── node-normalization-web-logs-2026-01.tar.gz
