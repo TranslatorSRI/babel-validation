@@ -1,0 +1,5 @@
+# marimo's session/output snapshot cache — not source, regenerated on run.
+__marimo__/
+
+# Shareable exports (marimo export html). Generated, never edited by hand.
+exports/
