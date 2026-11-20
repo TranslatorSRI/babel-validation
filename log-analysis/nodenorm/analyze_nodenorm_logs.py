@@ -32,7 +32,7 @@ def _(mo):
     mo.md(r"""
     ## Loading files
 
-    These files are read from `data/log-analysis/pjl-upload/` at the repository root, which is gitignored. They are far too large to check in — a single month of web logs is hundreds of megabytes — so keep them there and out of the repository.
+    These files are read from `data/log-analysis/nodenorm/pjl-upload/` at the repository root, which is gitignored. They are far too large to check in — a single month of web logs is hundreds of megabytes — so keep them there and out of the repository.
     """)
     return
 
@@ -40,7 +40,7 @@ def _(mo):
 @app.cell
 def _(mo):
     # Anchored on the notebook's directory rather than the cwd, which is wherever marimo was launched from.
-    LOG_DIR = mo.notebook_dir().parents[1] / "data" / "log-analysis" / "pjl-upload"
+    LOG_DIR = mo.notebook_dir().parents[1] / "data" / "log-analysis" / "nodenorm" / "pjl-upload"
     logfiles_json_tar_gz = [
         LOG_DIR / "node-normalization-web-logs-2025-11.tar.gz",
         LOG_DIR / "node-normalization-web-logs-2025-12.tar.gz",
