@@ -15,8 +15,12 @@ of the repository rather than checked in.
 
 ## Getting the logs
 
-The notebook loads the Sterling web log archives, one `.tar.gz` per month, from
-`data/log-analysis/nodenorm/pjl-upload/`:
+Put log exports anywhere under `data/log-analysis/nodenorm/` and re-run the notebook. It reads
+everything it finds there, subdirectories included, and its first table lists every file with
+what was read from it, the period it covers and anything skipped. Nothing in the notebook
+names a file.
+
+What is there now is the Sterling web log archives, one `.tar.gz` per month:
 
 ```
 data/log-analysis/nodenorm/pjl-upload/
@@ -25,11 +29,29 @@ data/log-analysis/nodenorm/pjl-upload/
 └── node-normalization-web-logs-2026-01.tar.gz
 ```
 
-These three are the months it loads by default. To analyse other months, download those archives
-into the same directory and edit the `logfiles_json_tar_gz` list in the notebook's "Loading
-files" section.
+The reading is done by `src/babel_validation/tools/nodenorm_logs.py`, which understands:
 
-### CloudWatch (not loaded by the current notebook)
+- **Loki exports** (`loki_query_results_*.json`), loose or inside a `.tar`, `.tar.gz` or
+  `.tgz`. Each holds the queries that were run and their results, so the notebook knows
+  which hours were downloaded, and which pod and Kubernetes node served each request.
+
+Everything else is listed in the table as skipped, with the reason. That includes the `.csv`
+twin the Sterling exports write beside each `.json` (same rows, without the query window),
+plain-text pod logs, and CloudWatch exports. To read another format, add a branch to
+`_read_member()` in that module.
+
+A log entry that turns up twice, in one file or in two, is counted once, so overlapping
+exports are safe to drop in together.
+
+## Getting the numbers out
+
+The notebook has a **Write the CSV** button that writes one row per request (time, number of
+CURIEs, time taken, options, pod, node, source file) to
+`exports/nodenorm-requests-<first day>-to-<last day>.generated.csv.gz` in this directory, for
+anyone who wants to re-analyse the requests without parsing the log exports again. `exports/`
+is gitignored: the file names pods and nodes, so share it the way you would share the logs.
+
+### CloudWatch (no reader yet)
 
 Logs can also be exported from AWS CloudWatch Logs Insights with this query:
 
@@ -41,5 +63,5 @@ fields @timestamp, @message, @logStream, @log
 ```
 
 (Why 10K? Because that's the maximum it'll let you download.) Download them in JSON: some lines
-will still be truncated, but the JSON will be well-formed. The notebook has no loader for this
-format, so using such an export means adding one.
+will still be truncated, but the JSON will be well-formed. There is no reader for this format
+yet, so such an export is listed as skipped.
