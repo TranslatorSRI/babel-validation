@@ -71,9 +71,7 @@ def sanitize(text, max_chars=MAX_MESSAGE_CHARS):
     text = str(text)
     if len(text) > max_chars:
         text = text[:max_chars] + "…[truncated]"
-    return "".join(
-        ch if ch.isprintable() or ch in "\n\t" else repr(ch)[1:-1] for ch in text
-    )
+    return "".join(ch if ch.isprintable() or ch in "\n\t" else repr(ch)[1:-1] for ch in text)
 
 
 def classify_record(record):
@@ -107,9 +105,7 @@ def read_targets(targets_ini_path):
     config.read(targets_ini_path, encoding="utf8")
     targets = [section for section in config.sections() if section != "localhost"]
     allowlist = [
-        repo.strip().lower()
-        for repo in config.defaults().get("repositories", "").splitlines()
-        if repo.strip()
+        repo.strip().lower() for repo in config.defaults().get("repositories", "").splitlines() if repo.strip()
     ]
     return targets, allowlist, config
 
@@ -265,9 +261,7 @@ def trim_status(raw, service):
     if "babel_version" in raw:
         trimmed["babel_version"] = sanitize(raw["babel_version"], 50)
     url = raw.get("babel_version_url")
-    if isinstance(url, str) and url.lower().startswith(
-        "https://github.com/ncatstranslator/"
-    ):
+    if isinstance(url, str) and url.lower().startswith("https://github.com/ncatstranslator/"):
         trimmed["babel_version_url"] = sanitize(url, 200)
     # NodeNorm ES from 1.2.0 can serve several Babel releases, chosen per
     # request, and lists them under babel.available_versions. Keep only the
@@ -296,9 +290,7 @@ def trim_status(raw, service):
             if count is not None:
                 entry["count"] = count
             if "used_memory_rss_human" in db:
-                entry["used_memory_rss_human"] = sanitize(
-                    db["used_memory_rss_human"], 20
-                )
+                entry["used_memory_rss_human"] = sanitize(db["used_memory_rss_human"], 20)
             trimmed_dbs[sanitize(name, 50)] = entry
         trimmed["databases"] = trimmed_dbs
 
@@ -315,11 +307,7 @@ def trim_status(raw, service):
         # A node can report "version": null (mid-restart, say). sanitize() keeps
         # None as None, and sorting None among strings raises TypeError, which
         # fetch_status would turn into an error for the whole NodeNorm status.
-        versions = {
-            sanitize(n["version"], 20)
-            for n in node_list
-            if n.get("version") is not None
-        }
+        versions = {sanitize(n["version"], 20) for n in node_list if n.get("version") is not None}
         trimmed_es = {"nodes": len(node_list)}
         if versions:
             # Oldest first, compared as numbers: as strings, 8.10.0 sorts before
@@ -344,9 +332,7 @@ def trim_status(raw, service):
                 ("p99_ms", "p99_ms"),
             ]
         }
-        trimmed["recent_queries"] = {
-            key: value for key, value in latencies.items() if value is not None
-        }
+        trimmed["recent_queries"] = {key: value for key, value in latencies.items() if value is not None}
     # NameRes's search index: under "solr" before v1.7, at the top level from
     # v1.7 on, and at the top level in NameRes ES (which reports numDocs and
     # size, both 0 on ci-nameres-es). One "index" key whichever it was. Keyed
@@ -405,9 +391,7 @@ def fetch_status(status_url, service):
             status["response_ms"] = elapsed_ms
         return status
     except Exception as e:
-        logger.warning(
-            "Could not fetch status from %r: %s", status_url, type(e).__name__
-        )
+        logger.warning("Could not fetch status from %r: %s", status_url, type(e).__name__)
         return {"error": type(e).__name__}
 
 
@@ -423,9 +407,7 @@ def read_raw_records(raw_dir):
                     continue
                 try:
                     record = json.loads(line)
-                    if not isinstance(record, dict) or not isinstance(
-                        record.get("id"), str
-                    ):
+                    if not isinstance(record, dict) or not isinstance(record.get("id"), str):
                         raise ValueError("not a record object")
                     records.append(record)
                 except (json.JSONDecodeError, ValueError) as e:
@@ -447,10 +429,7 @@ def build_results(records, targets, allowlist):
         by_key.setdefault(key, []).append(record)
 
     results = {}
-    counts = {
-        target: {outcome: 0 for outcome in OUTCOME_SEVERITY}
-        for target in list(targets) + ["?"]
-    }
+    counts = {target: {outcome: 0 for outcome in OUTCOME_SEVERITY} for target in list(targets) + ["?"]}
     github_issues_ran = False
 
     for (key, target, rest), test_records in by_test.items():
@@ -538,9 +517,7 @@ def side_branch_of(section, target, targets):
     if parent is None:
         return None
     if parent == target or parent not in targets:
-        logger.warning(
-            "[%s] has SideBranchOf = %r, which is not another target", target, parent
-        )
+        logger.warning("[%s] has SideBranchOf = %r, which is not another target", target, parent)
         return None
     return parent
 
@@ -556,16 +533,10 @@ def build_report(results, counts, github_issues_ran, targets, allowlist, config)
         # /status does not report one, and the NodeNorm tests already check the
         # configured one against /status. None for a service the environment
         # does not run, or the Backend row would name one beside "NoURL".
-        nodenorm_backend = (
-            section.get("NodeNormBackend", "redis") if nodenorm_url else None
-        )
+        nodenorm_backend = section.get("NodeNormBackend", "redis") if nodenorm_url else None
         nameres_backend = section.get("NameResBackend", "solr") if nameres_url else None
-        nodenorm_docs_url, nodenorm_status_url = service_links(
-            nodenorm_url, nodenorm_backend
-        )
-        nameres_docs_url, nameres_status_url = service_links(
-            nameres_url, nameres_backend
-        )
+        nodenorm_docs_url, nodenorm_status_url = service_links(nodenorm_url, nodenorm_backend)
+        nameres_docs_url, nameres_status_url = service_links(nameres_url, nameres_backend)
         target_counts = counts[target]
         total = sum(target_counts.values())
         target_sections[target] = {
@@ -645,9 +616,7 @@ def run_has_tests(run):
     so such a row would sit in the trends table indefinitely."""
     for target in run.get("targets", {}).values():
         counts = target.get("counts") if isinstance(target, dict) else None
-        if isinstance(counts, dict) and any(
-            isinstance(n, int) and n > 0 for n in counts.values()
-        ):
+        if isinstance(counts, dict) and any(isinstance(n, int) and n > 0 for n in counts.values()):
             return True
     return False
 
@@ -665,17 +634,13 @@ def append_history(history_in_path, history_line):
                     continue
                 try:
                     prior = json.loads(line)
-                    if not isinstance(prior, dict) or not isinstance(
-                        prior.get("targets"), dict
-                    ):
+                    if not isinstance(prior, dict) or not isinstance(prior.get("targets"), dict):
                         raise ValueError("not a history object")
                 except (json.JSONDecodeError, ValueError):
                     logger.warning("Dropping bad history line: %.80r", line)
                     continue
                 if not run_has_tests(prior):
-                    logger.warning(
-                        "Dropping history run with no test results: %.80r", line
-                    )
+                    logger.warning("Dropping history run with no test results: %.80r", line)
                     continue
                 lines.append(line)
     if run_has_tests(history_line):
@@ -693,9 +658,7 @@ def main(argv=None):
         required=True,
         help="Directory of *.jsonl files from pytest --report-jsonl",
     )
-    parser.add_argument(
-        "--targets-ini", required=True, help="Path to tests/targets.ini"
-    )
+    parser.add_argument("--targets-ini", required=True, help="Path to tests/targets.ini")
     parser.add_argument(
         "--history-in",
         default=None,
@@ -712,9 +675,7 @@ def main(argv=None):
     records = read_raw_records(args.raw_dir)
     logger.info("Read %d raw records for targets %s", len(records), targets)
     results, counts, github_issues_ran = build_results(records, targets, allowlist)
-    report = build_report(
-        results, counts, github_issues_ran, targets, allowlist, config
-    )
+    report = build_report(results, counts, github_issues_ran, targets, allowlist, config)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

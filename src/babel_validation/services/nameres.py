@@ -54,7 +54,7 @@ class CachedNameRes:
         return f"CachedNameRes({self.nameres_url})"
 
     @staticmethod
-    def from_url(nameres_url: str) -> 'CachedNameRes':
+    def from_url(nameres_url: str) -> "CachedNameRes":
         """Return the singleton ``CachedNameRes`` for *nameres_url*.
 
         The singleton ensures that cache entries accumulated during one part of
@@ -92,7 +92,7 @@ class CachedNameRes:
         result = {}
         if queries_to_be_queried:
             api_params = dict(params)
-            api_params['strings'] = list(queries_to_be_queried)
+            api_params["strings"] = list(queries_to_be_queried)
 
             self.logger.debug("Called NameRes %s with params %s", self, api_params)
             response = requests.post(self.nameres_url + "bulk-lookup", json=api_params, timeout=30)
@@ -105,9 +105,15 @@ class CachedNameRes:
         for query in cached_queries:
             result[query] = self.cache[(query, params_key)]
 
-        time_taken_sec = (time.time_ns() - time_started) / 1E9
-        self.logger.info("Looked up %d queries (with %d cached) with params %s on %s in %.3fs",
-                         len(queries_to_be_queried), len(cached_queries), params, self, time_taken_sec)
+        time_taken_sec = (time.time_ns() - time_started) / 1e9
+        self.logger.info(
+            "Looked up %d queries (with %d cached) with params %s on %s in %.3fs",
+            len(queries_to_be_queried),
+            len(cached_queries),
+            params,
+            self,
+            time_taken_sec,
+        )
 
         return result
 
@@ -127,7 +133,7 @@ class CachedNameRes:
             return self.cache[cache_key]
 
         api_params = dict(params)
-        api_params['string'] = query
+        api_params["string"] = query
         self.logger.debug("Querying NameRes with params %s", api_params)
 
         response = requests.post(self.nameres_url + "lookup", params=api_params, timeout=30)

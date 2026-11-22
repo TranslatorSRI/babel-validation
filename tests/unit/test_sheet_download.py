@@ -157,9 +157,7 @@ def test_a_stale_cache_is_refetched(cache, monkeypatch):
         ),
         pytest.param(
             lambda url, timeout=None: (_ for _ in ()).throw(
-                requests.ConnectTimeout(
-                    f"Connection to docs.google.com timed out: {url}"
-                )
+                requests.ConnectTimeout(f"Connection to docs.google.com timed out: {url}")
             ),
             id="connect-timeout",
         ),

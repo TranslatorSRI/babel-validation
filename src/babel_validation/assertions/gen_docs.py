@@ -125,12 +125,10 @@ ADDING_NEW = """\
 
 _GROUP_HEADERS: dict[str, str] = {
     "NodeNorm": (
-        "## NodeNorm Assertions\n\n"
-        "These assertions test the [NodeNorm](https://nodenorm.transltr.io/docs) service."
+        "## NodeNorm Assertions\n\nThese assertions test the [NodeNorm](https://nodenorm.transltr.io/docs) service."
     ),
     "NameRes": (
-        "## NameRes Assertions\n\n"
-        "These assertions test the [NameRes](https://name-lookup.transltr.io/docs) service."
+        "## NameRes Assertions\n\nThese assertions test the [NameRes](https://name-lookup.transltr.io/docs) service."
     ),
     "NodeNorm and NameRes": "## Special Assertions",
 }
@@ -173,9 +171,7 @@ def _render_handler(h: AssertionHandler) -> str:
     wiki_block = "\n".join(wiki_examples)
     parts.append(f"**Wiki syntax:**\n```\n{wiki_block}\n```\n")
 
-    parts.append(
-        f"**YAML syntax:**\n```yaml\nbabel_tests:\n  {name}:\n{yaml_params}\n```\n"
-    )
+    parts.append(f"**YAML syntax:**\n```yaml\nbabel_tests:\n  {name}:\n{yaml_params}\n```\n")
 
     parts.append("---\n")
 

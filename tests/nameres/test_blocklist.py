@@ -34,18 +34,20 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
 
     :param target_info: The test target information.
     """
-    nameres_url = target_info['NameResURL']
-    nameres_synonyms_url = nameres_url + 'synonyms'
+    nameres_url = target_info["NameResURL"]
+    nameres_synonyms_url = nameres_url + "synonyms"
 
     # If there is any test category provided, this test is not relevant and we can skip it.
     if categories_include:
-        pytest.skip(f"Skipping blocklist entry as it is not part of any category and the category filter is set to include {categories_include}.")
+        pytest.skip(
+            f"Skipping blocklist entry as it is not part of any category and the category filter is set to include {categories_include}."
+        )
         return
 
     # Only "blocked" entries are considered, since most of the spreadsheet is things we decided _not_ to block.
-    if blocklist_entry.Blocked == 'y':
+    if blocklist_entry.Blocked == "y":
         flag_expect_present = False
-    elif blocklist_entry.Blocked == 'n':
+    elif blocklist_entry.Blocked == "n":
         flag_expect_present = True
     else:
         logging.info(f"Skipping blocklist entry as it is not asserted to be blocked: {blocklist_entry}")
@@ -59,9 +61,12 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
 
     # Someday we would like to do this with the query as well, but that would require some work.
     # So we only test the CURIE for now.
-    response = requests.get(nameres_synonyms_url, params={
-        'preferred_curies': blocklist_entry.CURIE,
-    })
+    response = requests.get(
+        nameres_synonyms_url,
+        params={
+            "preferred_curies": blocklist_entry.CURIE,
+        },
+    )
     assert response.ok, (
         f"Request to {nameres_synonyms_url}?preferred_curies={blocklist_entry.CURIE} "
         f"failed with HTTP {response.status_code}: {response.text}"
@@ -69,6 +74,10 @@ def test_check_blocklist_entry(target_info, blocklist_entry, categories_include)
     result = response.json()[blocklist_entry.CURIE]
 
     if flag_expect_present:
-        assert result != {}, f"Expected {blocklist_entry.CURIE} to be present on {nameres_synonyms_url}, but found: {result}"
+        assert result != {}, (
+            f"Expected {blocklist_entry.CURIE} to be present on {nameres_synonyms_url}, but found: {result}"
+        )
     else:
-        assert result == {}, f"Expected {blocklist_entry.CURIE} to be absent on {nameres_synonyms_url}, but found: {result}"
+        assert result == {}, (
+            f"Expected {blocklist_entry.CURIE} to be absent on {nameres_synonyms_url}, but found: {result}"
+        )

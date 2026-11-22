@@ -24,11 +24,13 @@ def get_targets_ini_path(config):
     :param config: PyTest configuration settings.
     :return: The filepath to targets.ini, or raises an exception if it can't be found.
     """
-    config_path = os.path.join(config.rootpath, 'targets.ini')
+    config_path = os.path.join(config.rootpath, "targets.ini")
     if not os.path.isfile(config_path):
-        config_path_with_tests = os.path.join(config.rootpath, 'tests', 'targets.ini')
+        config_path_with_tests = os.path.join(config.rootpath, "tests", "targets.ini")
         if not os.path.isfile(config_path_with_tests):
-            raise RuntimeError(f"Could not find targets.ini configuration file at either {config_path} or {config_path_with_tests}")
+            raise RuntimeError(
+                f"Could not find targets.ini configuration file at either {config_path} or {config_path_with_tests}"
+            )
         return config_path_with_tests
     return config_path
 
@@ -72,21 +74,21 @@ _report_file = None
 
 def pytest_configure(config):
     global _report_file
-    report_path = config.getoption('--report-jsonl')
-    if report_path and not os.environ.get('PYTEST_XDIST_WORKER'):
+    report_path = config.getoption("--report-jsonl")
+    if report_path and not os.environ.get("PYTEST_XDIST_WORKER"):
         # Truncate, not append: build_results takes the worst outcome per test,
         # so leftover records from an earlier run would keep a fixed test red.
         os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
-        _report_file = open(report_path, 'w', encoding='utf-8')
+        _report_file = open(report_path, "w", encoding="utf-8")
 
     # Delete the Google Sheet CSV cache at the start of each run so tests always
     # use a fresh download. Only the controller does this — xdist workers skip it
     # so they can share the cache file written by the controller.
-    if not os.environ.get('PYTEST_XDIST_WORKER'):
+    if not os.environ.get("PYTEST_XDIST_WORKER"):
         # Only the .csv files. Their .lock files are left alone for the same reason as the
         # issue cache's below — this used to unlink `<name>.lock` alongside each `<name>.csv`,
         # which is the hazard 48b1c44 removed for the issue lock and missed here.
-        for f in glob.glob(os.path.join(cache_dir(), 'gsheet_*.csv')):
+        for f in glob.glob(os.path.join(cache_dir(), "gsheet_*.csv")):
             unlink_if_exists(f)
         # Same for the GitHub issue ID cache. The matching .lock file is left
         # alone: deleting it out from under a concurrently running pytest would
@@ -108,20 +110,20 @@ def pytest_runtest_logreport(report):
     """
     if _report_file is None:
         return
-    if report.when != 'call' and report.outcome == 'passed':
+    if report.when != "call" and report.outcome == "passed":
         return
     # Prefer the one-line crash message ("AssertionError: ...") over the full
     # traceback with source and locals; skips have a (path, line, reason) tuple
     # longrepr with no reprcrash, for which str() is already the short form.
     msg = None
     if report.longrepr is not None:
-        crash = getattr(report.longrepr, 'reprcrash', None)
+        crash = getattr(report.longrepr, "reprcrash", None)
         msg = crash.message if crash is not None else str(report.longrepr)
     record = {
         "id": report.nodeid,
         "when": report.when,
         "outcome": report.outcome,
-        "wasxfail": hasattr(report, 'wasxfail'),
+        "wasxfail": hasattr(report, "wasxfail"),
         "duration": round(report.duration, 3),
         "props": dict(report.user_properties or []),
         "msg": msg[:2000] if msg else None,
@@ -133,45 +135,34 @@ def pytest_runtest_logreport(report):
 def pytest_addoption(parser):
     # The target environment(s) to target.
     parser.addoption(
-        '--target',
+        "--target",
         default=[],
-        action='append',  # You can specify multiple targets, e.g. `--target prod --target dev`
-        help="The target to test. See targets.ini file for a list of targets."
+        action="append",  # You can specify multiple targets, e.g. `--target prod --target dev`
+        help="The target to test. See targets.ini file for a list of targets.",
     )
     # Categories to process.
-    parser.addoption(
-        '--category',
-        default=[],
-        action='append',
-        help="The categories of tests to run."
-    )
-    parser.addoption(
-        '--category-exclude',
-        default=[],
-        action='append',
-        help="The categories of tests to exclude."
-    )
+    parser.addoption("--category", default=[], action="append", help="The categories of tests to run.")
+    parser.addoption("--category-exclude", default=[], action="append", help="The categories of tests to exclude.")
 
     # Write one JSON line per test outcome, for the dashboard report generator.
     parser.addoption(
-        '--report-jsonl',
+        "--report-jsonl",
         default=None,
-        help="Append raw per-test outcome records (JSONL) to this file, for "
-             "babel_validation.tools.generate_report."
+        help="Append raw per-test outcome records (JSONL) to this file, for babel_validation.tools.generate_report.",
     )
 
     # Only test particular GitHub issues.
     parser.addoption(
-        '--issue',
+        "--issue",
         default=[],
-        action='append',
-        help="One or more GitHub issues to test. Should be specified as either 'organization/repo#110', 'repo#110' or '110'"
+        action="append",
+        help="One or more GitHub issues to test. Should be specified as either 'organization/repo#110', 'repo#110' or '110'",
     )
 
 
 def read_targets(config_path):
     cp = configparser.ConfigParser()
-    cp.read(config_path, encoding='utf8')
+    cp.read(config_path, encoding="utf8")
     return cp
 
 
@@ -184,10 +175,10 @@ def get_target(config, target):
 
 
 def get_targets(config):
-    targets = config.getoption('--target')
+    targets = config.getoption("--target")
     if not targets:
         # Default to 'dev'
-        return ['dev']
+        return ["dev"]
     if "all" in targets:
         config_path = get_targets_ini_path(config)
         return read_targets(config_path).sections()
@@ -200,8 +191,8 @@ def pytest_report_header(config):
     for target in targets:
         target_info.append(f"testing target '{target}': {dict(get_target(config, target))}")
 
-    categories_include = set(config.getoption('--category'))
-    categories_exclude = set(config.getoption('--category-exclude'))
+    categories_include = set(config.getoption("--category"))
+    categories_exclude = set(config.getoption("--category-exclude"))
     target_info.append(f"included categories: {categories_include}")
     target_info.append(f"excluded categories: {categories_exclude}")
 
@@ -213,21 +204,26 @@ def pytest_generate_tests(metafunc):
     if "target" in metafunc.fixturenames:
         metafunc.parametrize("target", targets)
     if "target_info" in metafunc.fixturenames:
-        metafunc.parametrize("target_info", map(lambda target: get_target(metafunc.config, target), targets), ids=targets)
+        metafunc.parametrize(
+            "target_info", map(lambda target: get_target(metafunc.config, target), targets), ids=targets
+        )
+
 
 @pytest.fixture
 def categories_include(request):
-    return set(request.config.getoption('--category'))
+    return set(request.config.getoption("--category"))
+
 
 @pytest.fixture
 def categories_exclude(request):
-    return set(request.config.getoption('--category-exclude'))
+    return set(request.config.getoption("--category-exclude"))
+
 
 @pytest.fixture
 def test_category(request):
     def category_test(cat):
-        categories_include = set(request.config.getoption('--category'))
-        categories_exclude = set(request.config.getoption('--category-exclude'))
+        categories_include = set(request.config.getoption("--category"))
+        categories_exclude = set(request.config.getoption("--category-exclude"))
 
         if categories_include:
             # Only include the included categories minus the excluded categories.
@@ -246,4 +242,4 @@ def test_category(request):
 # --issue is consumed by tests/github_issues/conftest.py; this fixture exposes it to any test that wants it.
 @pytest.fixture
 def selected_github_issues(pytestconfig):
-    return pytestconfig.getoption('issue')
+    return pytestconfig.getoption("issue")

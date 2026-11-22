@@ -18,7 +18,7 @@ from babel_validation.services.service_checks import (
 )
 
 # The backends a NodeNorm deployment can report in /status.
-KNOWN_BACKENDS = {'redis', 'elasticsearch'}
+KNOWN_BACKENDS = {"redis", "elasticsearch"}
 
 # Where each Babel release's notes are published. NodeNorm links to them on `master`,
 # which GitHub redirects now that Babel's default branch is `main`; either is correct.
@@ -27,23 +27,21 @@ KNOWN_BACKENDS = {'redis', 'elasticsearch'}
 # links to the new one, so both are correct for now. Drop the old shape once Babel
 # deletes the stubs.
 BABEL_RELEASE_NOTES_URLS = (
-    'https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}/README.md',
-    'https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}.md',
+    "https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}/README.md",
+    "https://github.com/ncatstranslator/Babel/blob/{branch}/releases/{version}.md",
 )
-BABEL_RELEASE_NOTES_BRANCHES = ('main', 'master')
+BABEL_RELEASE_NOTES_BRANCHES = ("main", "master")
 
 # Each backend is its own information resource, per biolink/information-resource-registry#140.
 INFORES_BY_BACKEND = {
-    'redis': 'infores:sri-node-normalizer',
-    'elasticsearch': 'infores:nodenorm',
+    "redis": "infores:sri-node-normalizer",
+    "elasticsearch": "infores:nodenorm",
 }
 
 
 def test_openapi_json(target_info):
-    url, openapi_json = get_openapi(target_info, 'NodeNormURL', 'NodeNormOpenAPIPath')
-    assert_x_translator(
-        url, openapi_json, INFORES_BY_BACKEND[target_info['NodeNormBackend']]
-    )
+    url, openapi_json = get_openapi(target_info, "NodeNormURL", "NodeNormOpenAPIPath")
+    assert_x_translator(url, openapi_json, INFORES_BY_BACKEND[target_info["NodeNormBackend"]])
 
     try:
         # Validate the document we already parsed as JSON, rather than validate_url(url),
@@ -68,9 +66,9 @@ def test_status_backend(target_info):
     :param target_info: The target information for this set of tests.
     """
     url, status_json = get_status(target_info)
-    expected_backend = target_info['NodeNormBackend']
+    expected_backend = target_info["NodeNormBackend"]
 
-    if 'backend' not in status_json:
+    if "backend" not in status_json:
         # There is nothing to compare with targets.ini. The missing field is itself a
         # failure, but test_status_backend_is_known reports it, so failing here too would
         # only report the same problem twice.
@@ -95,12 +93,9 @@ def test_status_backend_is_known(target_info):
     """
     url, status_json = get_status(target_info)
 
-    assert 'backend' in status_json, (
-        f"{url} does not report a backend: it should be one of {sorted(KNOWN_BACKENDS)}."
-    )
-    assert status_json['backend'] in KNOWN_BACKENDS, (
-        f"{url} reports backend {truncated_repr(status_json['backend'])}, which is not one of "
-        f"{sorted(KNOWN_BACKENDS)}."
+    assert "backend" in status_json, f"{url} does not report a backend: it should be one of {sorted(KNOWN_BACKENDS)}."
+    assert status_json["backend"] in KNOWN_BACKENDS, (
+        f"{url} reports backend {truncated_repr(status_json['backend'])}, which is not one of {sorted(KNOWN_BACKENDS)}."
     )
 
 
@@ -138,11 +133,10 @@ def test_status_babel_version_url(target_info):
         for branch in BABEL_RELEASE_NOTES_BRANCHES
     ]
 
-    assert 'babel_version_url' in status_json, f"{url} does not report a babel_version_url."
-    babel_version_url = status_json['babel_version_url']
+    assert "babel_version_url" in status_json, f"{url} does not report a babel_version_url."
+    babel_version_url = status_json["babel_version_url"]
     matching_urls = [
-        u for u in expected_urls
-        if isinstance(babel_version_url, str) and u.casefold() == babel_version_url.casefold()
+        u for u in expected_urls if isinstance(babel_version_url, str) and u.casefold() == babel_version_url.casefold()
     ]
     assert matching_urls, (
         f"{url} reports babel_version_url {truncated_repr(babel_version_url)}, but the release "

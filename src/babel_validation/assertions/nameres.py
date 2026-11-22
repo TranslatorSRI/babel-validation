@@ -10,6 +10,7 @@ from babel_validation.services.nodenorm import NodeNormService
 
 class SearchByNameHandler(NameResTest):
     """Test that a name search returns an expected CURIE in the top-N results in NameRes."""
+
     NAME = "searchbyname"
     DESCRIPTION = (
         "Each params_list must have exactly two elements: a search query string and an expected CURIE. "
@@ -29,32 +30,46 @@ class SearchByNameHandler(NameResTest):
         # params[0] is a free-text search query; only the expected CURIE is a CURIE.
         return params[1:2]
 
-    def test_params_list(self, params: ParamsList, nodenorm: NodeNormService,
-                         nameres: NameResService, pass_if_found_in_top: int = 5,
-                         label: str = "") -> Iterator[TestResult]:
+    def test_params_list(
+        self,
+        params: ParamsList,
+        nodenorm: NodeNormService,
+        nameres: NameResService,
+        pass_if_found_in_top: int = 5,
+        label: str = "",
+    ) -> Iterator[TestResult]:
         [search_query, expected_curie_from_test] = params
         expected_curie_result = nodenorm.normalize_curie(expected_curie_from_test)
         if not expected_curie_result:
             yield self.failed(f"Unable to normalize CURIE {expected_curie_from_test} in {label}")
             return
 
-        expected_curie = expected_curie_result['id']['identifier']
-        expected_curie_label = expected_curie_result['id'].get('label', '')
-        expected_curie_string = f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
+        expected_curie = expected_curie_result["id"]["identifier"]
+        expected_curie_label = expected_curie_result["id"].get("label", "")
+        expected_curie_string = (
+            f"Expected CURIE {expected_curie_from_test}, normalized to {expected_curie} '{expected_curie_label}'"
+        )
 
-        results = nameres.lookup(search_query, autocomplete='false', limit=pass_if_found_in_top)
+        results = nameres.lookup(search_query, autocomplete="false", limit=pass_if_found_in_top)
         if not results:
             yield self.failed(f"No results found for '{search_query}' on NameRes {nameres} ({expected_curie_string})")
             return
 
-        curies = [result['curie'] for result in results]
+        curies = [result["curie"] for result in results]
         if expected_curie not in curies:
             logging.getLogger(__name__).debug(
                 "%s not found in top %d results for '%s' in NameRes %s: %s",
-                expected_curie_string, pass_if_found_in_top, search_query, nameres,
-                json.dumps(results, indent=2, sort_keys=True)
+                expected_curie_string,
+                pass_if_found_in_top,
+                search_query,
+                nameres,
+                json.dumps(results, indent=2, sort_keys=True),
             )
-            yield self.failed(f"{expected_curie_string} not found in top {pass_if_found_in_top} results for '{search_query}' in NameRes {nameres}")
+            yield self.failed(
+                f"{expected_curie_string} not found in top {pass_if_found_in_top} results for '{search_query}' in NameRes {nameres}"
+            )
             return
 
-        yield self.passed(f"{expected_curie_string} found at index {curies.index(expected_curie) + 1} on NameRes {nameres}")
+        yield self.passed(
+            f"{expected_curie_string} found at index {curies.index(expected_curie) + 1} on NameRes {nameres}"
+        )

@@ -23,9 +23,7 @@ OPENAPI_PATH_BY_BACKEND = {
 def test_backend_and_openapi_path_agree(name):
     section = config[name]
     backend = section["NodeNormBackend"]
-    assert (
-        backend in OPENAPI_PATH_BY_BACKEND
-    ), f"[{name}] has unknown NodeNormBackend = {backend}"
+    assert backend in OPENAPI_PATH_BY_BACKEND, f"[{name}] has unknown NodeNormBackend = {backend}"
     assert section["NodeNormOpenAPIPath"] == OPENAPI_PATH_BY_BACKEND[backend], (
         f"[{name}] has NodeNormBackend = {backend} but "
         f"NodeNormOpenAPIPath = {section['NodeNormOpenAPIPath']}: set both when a target "
@@ -45,15 +43,11 @@ def test_targets_sharing_a_service_say_which_is_the_side_branch():
             if a >= b:
                 continue
             shared = [
-                key
-                for key in SERVICE_URL_KEYS
-                if config[a].get(key) and config[a].get(key) == config[b].get(key)
+                key for key in SERVICE_URL_KEYS if config[a].get(key) and config[a].get(key) == config[b].get(key)
             ]
             if not shared:
                 continue
-            declared = (
-                config[a].get("SideBranchOf") == b or config[b].get("SideBranchOf") == a
-            )
+            declared = config[a].get("SideBranchOf") == b or config[b].get("SideBranchOf") == a
             assert declared, (
                 f"[{a}] and [{b}] share {', '.join(shared)}: set SideBranchOf in the "
                 f"section that branches from the other."
@@ -65,6 +59,6 @@ def test_side_branch_of_names_another_target(name):
     parent = config[name].get("SideBranchOf")
     if parent is None:
         return
-    assert (
-        parent != name and parent in config.sections()
-    ), f"[{name}] has SideBranchOf = {parent}, which is not another section."
+    assert parent != name and parent in config.sections(), (
+        f"[{name}] has SideBranchOf = {parent}, which is not another section."
+    )

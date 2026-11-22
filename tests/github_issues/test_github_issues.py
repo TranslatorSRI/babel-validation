@@ -10,11 +10,11 @@ from babel_validation.services.nodenorm import CachedNodeNorm
 
 
 def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases, subtests):
-    nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
-    nameres = CachedNameRes.from_url(target_info['NameResURL'])
+    nodenorm = CachedNodeNorm.from_url(target_info["NodeNormURL"])
+    nameres = CachedNameRes.from_url(target_info["NameResURL"])
     # NameRes assertions pass if the expected CURIE is in the top N results; N
     # comes from targets.ini (NameResXFailIfInTop) rather than being hardcoded.
-    pass_if_found_in_top = int(target_info.get('NameResXFailIfInTop', 5))
+    pass_if_found_in_top = int(target_info.get("NameResXFailIfInTop", 5))
     tests = github_issues_test_cases.get_test_issues_from_issue(github_issue)
     if not tests:
         pytest.skip(f"No tests found in issue {github_issue}")
@@ -23,8 +23,7 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
     is_open = github_issue.state == "open"
 
     # Unknown assertion types must fail hard, not XFAIL.
-    unknown = [f"'{t.assertion}'" for t in tests
-               if t.assertion.lower() not in ASSERTION_HANDLERS]
+    unknown = [f"'{t.assertion}'" for t in tests if t.assertion.lower() not in ASSERTION_HANDLERS]
     if unknown:
         pytest.fail(
             f"Issue {github_issue_id} uses unknown assertion type(s): "
@@ -35,10 +34,12 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
     # Open issues are assumed to fail, so we set an xfail marker (but we set it to strict so
     # that XPASSes are reported loudly).
     if is_open:
-        request.node.add_marker(pytest.mark.xfail(
-            reason=f"Issue {github_issue.html_url} is expected to fail because the issue is open.",
-            strict=True,
-        ))
+        request.node.add_marker(
+            pytest.mark.xfail(
+                reason=f"Issue {github_issue.html_url} is expected to fail because the issue is open.",
+                strict=True,
+            )
+        )
 
     count_subtests = 0
     failed_messages = []
