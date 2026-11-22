@@ -139,6 +139,61 @@ resets every 60 seconds, so its counter is often back at zero by the time you lo
 $ curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
 ```
 
+## Use as a library
+
+Other repositories can install `babel_validation` to run the BabelTest assertions written in
+GitHub issues (the `{{BabelTest|...}}` and ```` ```yaml babel_tests: ```` syntax, described in
+[`assertions/README.md`](./src/babel_validation/assertions/README.md)). Reading issues needs a
+GitHub token.
+
+```shell
+$ uv add --dev "babel-validation @ git+https://github.com/TranslatorSRI/babel-validation"
+```
+
+**Run every issue's tests against a chosen NodeNorm/NameRes pair**, and see which issues look
+closeable or due to be reopened:
+
+```python
+from babel_validation import CachedNameRes, CachedNodeNorm, GitHubIssuesTestCases, run_issue_tests
+
+cases = GitHubIssuesTestCases(github_token, ["NCATSTranslator/Babel"])
+reports = run_issue_tests(
+    cases,
+    nodenorm=CachedNodeNorm.from_url("https://nodenorm.transltr.io/"),
+    nameres=CachedNameRes.from_url("https://name-lookup.transltr.io/"),
+)
+for r in reports:
+    if r.closeable:
+        print(f"{r.issue_id} now passes; consider closing it ({r.url})")
+    elif r.reopened:
+        print(f"{r.issue_id} fails again; consider reopening it ({r.url})")
+        for failure in r.failed_results:
+            print(f"    {failure.assertion}: {failure.message!r}")
+```
+
+**Check a draft before posting it**, with the same parser and limits an issue body gets:
+
+```python
+from babel_validation import parse_babel_tests
+
+for assertion in parse_babel_tests(open("draft.md").read(), source_id="draft.md"):
+    ...  # assertion.run(nodenorm, nameres) yields TestResults
+```
+
+**Run the assertions against your own data** (a pipeline checking its output before it reaches
+NodeNorm, say): each `Assertion` has the assertion's name, its param sets and the issue's state.
+
+```python
+for issue in cases.get_issues_with_tests():
+    for assertion in cases.get_test_issues_from_issue(issue):
+        # assertion.assertion: "Resolves", "HasLabel", ...; assertion.issue_state: "open" or "closed"
+        for param_set in assertion.param_sets:
+            ...  # check param_set against your local data
+```
+
+Messages in the results come from issue bodies and service responses, which nobody reviews, so
+format them with `!r` before they reach a terminal or a web page.
+
 ## Log Analysis
 
 The Jupyter Notebook in `log-analysis/` contains some basic analysis of the

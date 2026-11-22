@@ -24,6 +24,11 @@ BEHAVIOUR = {behaviour!r}
 class FakeAssertion:
     assertion = "resolves"
     param_sets = [["MONDO:0005015"]]
+    is_known = True
+
+    def run(self, nodenorm, nameres, pass_if_found_in_top=5):
+        yield from self.test_with_nodenorm(nodenorm)
+        yield from self.test_with_nameres(nodenorm, nameres, pass_if_found_in_top)
 
     def test_with_nodenorm(self, nodenorm):
         if BEHAVIOUR == "raises":

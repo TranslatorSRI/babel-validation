@@ -111,6 +111,8 @@ every pull request; a branch cut before the rename needs
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
+- `sources/github/github_issues_test_cases.py` — `parse_babel_tests()` turns issue-body text into `Assertion` objects (plain strings, no PyGithub `Issue`, so other tools can build and pickle them); `GitHubIssuesTestCases` finds and fetches the issues
+- `runner.py` — `run_assertions()`/`run_issue_tests()` return `IssueReport`s and own the expectation rules (an open issue whose tests all pass is `closeable`, a closed one with a failure is `reopened`); `tests/github_issues/test_github_issues.py` maps a report onto pytest outcomes. `babel_validation/__init__.py` exports the names other repositories may rely on (README, "Use as a library")
 
 Before writing a `requests` call to NodeNorm or NameRes and its checks — in a test, a tool such
 as `generate_report.py`, or the library itself — look in `services/service_checks.py`:
