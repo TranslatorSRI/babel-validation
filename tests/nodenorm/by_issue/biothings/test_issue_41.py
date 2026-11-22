@@ -12,7 +12,7 @@
 # backends, so that is deliberately not pinned.
 import pytest
 
-from src.babel_validation.services.service_checks import (
+from babel_validation.services.service_checks import (
     get_normalized_node,
     require_babel_release,
     truncated_repr,

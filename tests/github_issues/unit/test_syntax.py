@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
-from src.babel_validation.core.testrow import TestStatus
+from babel_validation.core.testrow import TestStatus
 from tests.github_issues.unit._helpers import _mock_issue
 
 pytestmark = pytest.mark.unit

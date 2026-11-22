@@ -6,13 +6,13 @@ These run against the real CachedNodeNorm so that the bulk-normalization contrac
 
 import pytest
 
-from src.babel_validation.assertions import ASSERTION_HANDLERS, NodeNormTest, _register
-from src.babel_validation.assertions.gen_docs import generate_readme
-from src.babel_validation.assertions.nodenorm import (
+from babel_validation.assertions import ASSERTION_HANDLERS, NodeNormTest, _register
+from babel_validation.assertions.gen_docs import generate_readme
+from babel_validation.assertions.nodenorm import (
     DoesNotResolveHandler, DoesNotResolveWithHandler, ResolvesHandler, ResolvesWithHandler,
 )
-from src.babel_validation.core.testrow import TestStatus
-from src.babel_validation.services import nodenorm as nodenorm_service
+from babel_validation.core.testrow import TestStatus
+from babel_validation.services import nodenorm as nodenorm_service
 
 
 def _node(identifier, label):

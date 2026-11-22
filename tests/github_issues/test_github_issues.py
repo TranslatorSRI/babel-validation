@@ -3,10 +3,10 @@ import json
 
 import pytest
 
-from src.babel_validation.assertions import ASSERTION_HANDLERS
-from src.babel_validation.services.nameres import CachedNameRes
-from src.babel_validation.services.nodenorm import CachedNodeNorm
-from src.babel_validation.core.testrow import TestResult, TestStatus
+from babel_validation.assertions import ASSERTION_HANDLERS
+from babel_validation.services.nameres import CachedNameRes
+from babel_validation.services.nodenorm import CachedNodeNorm
+from babel_validation.core.testrow import TestResult, TestStatus
 
 
 def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases, subtests):

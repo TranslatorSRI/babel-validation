@@ -94,7 +94,13 @@ never reaches CI. Check `git status` shows new files as tracked.
 
 ### Library (`src/babel_validation/`)
 
-Shared library code used by the tests and potentially other consumers.
+Shared library code used by the tests and potentially other consumers. Import it as
+`babel_validation`, never `src.babel_validation`. The `src.` form still resolves under pytest,
+because `tests/__init__.py` makes pytest put the repository root on `sys.path` and `src/` then
+counts as a namespace package, so a test using it passes. But it loads a second copy of each
+module, so `from_url()` hands out a different instance with its own cache, and the same import
+fails with "No module named 'src'" from anywhere else, including `python -m` from outside the
+repository.
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
 - `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
@@ -301,7 +307,7 @@ issue, so they stay here:
   unauthenticated endpoint. If one of them fails or comes back different, that worker collects a
   different set of tests and xdist aborts the whole run before executing anything:
   `ERROR gw2 - Different tests were collected between gw0 and gw2`. Use
-  `src.babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
+  `babel_validation.sources.google_sheets.fetch_sheet_csv()`, which caches under a
   `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
   mode reappears if a cache's TTL can expire *during* a run, which is why
   `pytest_configure` deletes `gsheet_*.csv` before collection starts.

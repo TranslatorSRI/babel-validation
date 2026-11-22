@@ -9,7 +9,7 @@ which putting it in the parent conftest would not.
 
 import pytest
 
-from src.babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
+from babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
 
 
 @pytest.fixture
