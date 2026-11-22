@@ -20,6 +20,13 @@ dependencies = [
     "pytest-subtests",
 ]
 
+# Tools for working on this repository, not needed to use babel_validation, so they stay out of
+# the wheel's dependencies. `uv sync` and `uv run` install the dev group by default.
+[dependency-groups]
+dev = [
+    "ruff>=0.14.14",
+]
+
 [project.urls]
 Repository = "https://github.com/TranslatorSRI/babel-validation"
 
@@ -46,3 +53,20 @@ timeout = 300
 markers = [
     "unit: unit tests that do not require network access",
 ]
+
+# ruff is used only as a check that no `src.babel_validation` import comes back; black still
+# formats the code. Under pytest, `src.babel_validation` still resolves (tests/__init__.py puts
+# the repository root on sys.path, where src/ counts as a namespace package), so a test using it
+# passes. But it loads a second copy of every module, with its own from_url() singletons and
+# caches, and the same import fails with "No module named 'src'" anywhere outside pytest. Banning
+# `src` catches every form: `from src.babel_validation.x import y`, `import src.babel_validation.x`
+# and `from src import ...`.
+[tool.ruff]
+# log-analysis/ holds exploratory notebooks, not maintained code: one cell does not even parse.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"src" = { msg = "Import babel_validation, not src.babel_validation (see AGENTS.md, 'Library')" }

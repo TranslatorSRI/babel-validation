@@ -29,6 +29,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
+      # Only TID251 for now (see [tool.ruff] in pyproject.toml): it rejects a
+      # `src.babel_validation` import, which still passes under pytest while
+      # loading a second copy of every module. A pull request branched before
+      # the rename fails here until its imports are updated.
+      - name: Check that nothing imports src.babel_validation
+        run: uv run ruff check --output-format github .
+
       # To run the GitHub issue tests here too — drop the `-m unit` filter, or
       # add a second job running `uv run pytest tests/github_issues` — put back:
       #

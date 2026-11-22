@@ -61,6 +61,7 @@ pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nod
 
 ```bash
 black tests/    # Format Python test code
+ruff check .    # Only checks that nothing imports src.babel_validation (see "Library" below)
 ```
 
 Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
@@ -100,7 +101,9 @@ because `tests/__init__.py` makes pytest put the repository root on `sys.path` a
 counts as a namespace package, so a test using it passes. But it loads a second copy of each
 module, so `from_url()` hands out a different instance with its own cache, and the same import
 fails with "No module named 'src'" from anywhere else, including `python -m` from outside the
-repository.
+repository. `ruff check` rejects it (TID251, configured in `pyproject.toml`), and CI runs that on
+every pull request; a branch cut before the rename needs
+`git grep -l 'src\.babel_validation' | xargs sed -i '' 's/src\.babel_validation/babel_validation/g'`.
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
 - `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
