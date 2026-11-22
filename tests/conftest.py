@@ -98,6 +98,22 @@ def pytest_configure(config):
         unlink_if_exists(GITHUB_ISSUES_CACHE_FILE)
 
 
+def pytest_itemcollected(item):
+    """
+    Record the target a test runs against as its "target" user property, so the end-of-run
+    summary knows which tests are per-target. Guessing from the node ID took a unit test
+    parametrized with '2026sep24-dev' to be a test of dev. Done at collection, in whichever
+    process collects, so it is on every phase's report (even a setup error) and xdist
+    forwards it to the controller.
+    """
+    params = getattr(getattr(item, 'callspec', None), 'params', {})
+    if 'target' in params:
+        item.user_properties.append(('target', params['target']))
+    elif 'target_info' in params:
+        # The parameter is the targets.ini section, whose name is the target.
+        item.user_properties.append(('target', params['target_info'].name))
+
+
 def pytest_runtest_logreport(report):
     """
     Record one entry per test phase: every 'call' report, plus setup/teardown

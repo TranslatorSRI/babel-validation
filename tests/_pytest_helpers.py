@@ -53,9 +53,11 @@ def summarize_run(records, targets, target_sections, categories_include, categor
     Lines for the end-of-run summary printed by pytest_terminal_summary in tests/conftest.py.
 
     `records` are the raw per-phase dicts that conftest's pytest_runtest_logreport builds (the
-    same shape --report-jsonl writes), so outcomes and targets are worked out exactly as the
-    dashboard's report generator does it: the worst outcome per test wins, and the target is
-    parsed out of the node ID.
+    same shape --report-jsonl writes), so outcomes are worked out exactly as the dashboard's
+    report generator does it: the worst outcome per test wins. A test's target is the "target"
+    property conftest's pytest_itemcollected records, not a guess from the node ID, which would
+    take a unit test parametrized with '2026sep24-dev' or 'prod' for a test of that target;
+    parse_nodeid is only used to strip the target from the key of tests that have one.
 
     :param targets: The target names this run tested, in --target order.
     :param target_sections: Mapping of target name to its targets.ini section (for the URLs).
@@ -63,7 +65,11 @@ def summarize_run(records, targets, target_sections, categories_include, categor
     # (test key without target, target) -> worst outcome across its phases.
     worst = {}
     for record in records:
-        key, target, _ = parse_nodeid(record["id"], targets)
+        target = (record.get("props") or {}).get("target")
+        if target is None:
+            key, target = record["id"].removeprefix("tests/"), "?"
+        else:
+            key, _, _ = parse_nodeid(record["id"], [target])
         outcome = classify_record(record)
         if OUTCOME_SEVERITY[outcome] >= OUTCOME_SEVERITY[worst.get((key, target), "passed")]:
             worst[(key, target)] = outcome

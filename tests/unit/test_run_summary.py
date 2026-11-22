@@ -9,12 +9,14 @@ from tests._pytest_helpers import summarize_run
 pytestmark = pytest.mark.unit
 
 
-def _record(nodeid, outcome="passed", when="call", wasxfail=False):
+def _record(nodeid, outcome="passed", when="call", wasxfail=False, target=None):
+    # conftest's pytest_itemcollected records the target of every test that takes one.
     return {
         "id": nodeid,
         "when": when,
         "outcome": outcome,
         "wasxfail": wasxfail,
+        "props": {"target": target} if target else {},
         "msg": None,
     }
 
@@ -31,18 +33,27 @@ def _sections():
 def test_summarize_run():
     gsheet = "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization"
     records = [
-        _record(f"{gsheet}[dev-gsheet:row=1]"),
-        _record(f"{gsheet}[ci-es-gsheet:row=1]"),
-        _record(f"{gsheet}[dev-gsheet:row=2]", "failed"),
-        _record(f"{gsheet}[ci-es-gsheet:row=2]"),
+        _record(f"{gsheet}[dev-gsheet:row=1]", target="dev"),
+        _record(f"{gsheet}[ci-es-gsheet:row=1]", target="ci-es"),
+        _record(f"{gsheet}[dev-gsheet:row=2]", "failed", target="dev"),
+        _record(f"{gsheet}[ci-es-gsheet:row=2]", target="ci-es"),
         # Skipped by category filter: not counted towards the pass rate.
-        _record(f"{gsheet}[dev-gsheet:row=3]", "skipped", when="setup"),
-        _record(f"{gsheet}[ci-es-gsheet:row=3]", "skipped", when="setup"),
+        _record(f"{gsheet}[dev-gsheet:row=3]", "skipped", when="setup", target="dev"),
+        _record(
+            f"{gsheet}[ci-es-gsheet:row=3]", "skipped", when="setup", target="ci-es"
+        ),
         # Fails in call and errors in teardown: counted once, as its worst outcome.
-        _record(f"{gsheet}[dev-gsheet:row=4]", "failed"),
-        _record(f"{gsheet}[dev-gsheet:row=4]", "failed", when="teardown"),
-        _record(f"{gsheet}[ci-es-gsheet:row=4]", "skipped", wasxfail=True),
-        _record("tests/nameres/test_nameres_api.py::test_openapi_json[dev]"),
+        _record(f"{gsheet}[dev-gsheet:row=4]", "failed", target="dev"),
+        _record(f"{gsheet}[dev-gsheet:row=4]", "failed", when="teardown", target="dev"),
+        _record(
+            f"{gsheet}[ci-es-gsheet:row=4]", "skipped", wasxfail=True, target="ci-es"
+        ),
+        _record(
+            "tests/nameres/test_nameres_api.py::test_openapi_json[dev]", target="dev"
+        ),
+        # A parameter that looks like a target doesn't make a test per-target: only the
+        # "target" property does.
+        _record("tests/unit/test_babel_release.py::test_name[2026sep24-dev]"),
         _record("tests/test_environment/test_env.py::test_google_sheet_has_test_cases"),
     ]
     lines = summarize_run(records, ["dev", "ci-es"], _sections(), {"Unit Tests"}, set())
@@ -53,6 +64,7 @@ def test_summarize_run():
         "NodeNorm [ci-es] https://nn.ci-es/: passed 2 of 3 run (67%) — 1 xfailed; 1 skipped",
         "NameRes [dev] https://nr.dev/: passed 1 of 1 run (100%)",
         "test_environment: passed 1 of 1 run (100%)",
+        "unit: passed 1 of 1 run (100%)",
         "Outcomes differing across targets: 2",
         "  nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=2]: dev=failed, ci-es=passed",
         "  nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=4]: dev=error, ci-es=xfailed",
@@ -65,6 +77,7 @@ def test_summarize_run_single_target_has_no_comparison():
             "tests/nameres/test_nameres_api.py::test_openapi_json[dev]",
             "skipped",
             when="setup",
+            target="dev",
         )
     ]
     lines = summarize_run(records, ["dev"], _sections(), set(), {"Slow"})
