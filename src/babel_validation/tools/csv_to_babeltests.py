@@ -13,6 +13,10 @@ YAML schema are reused, not duplicated.
 Run:
     uv run csv-to-babeltests INPUT.csv --curie-column OutputID \\
         --label-column "Expected Result / Suggested Comparator" --target dev
+
+or, reading a Google Sheet shared as "anyone with the link" instead of a file:
+    uv run csv-to-babeltests --from-google-sheet "$SHEET_CSV_EXPORT_URL" \\
+        --curie-column OutputID --label-column Label
 """
 
 from __future__ import annotations
@@ -26,11 +30,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import click
+import requests
 import yaml
 
 from babel_validation.assertions import ASSERTION_HANDLERS
 from babel_validation.core.testrow import TestStatus
 from babel_validation.services.nodenorm import CachedNodeNorm
+from babel_validation.sources.google_sheets import _redacted_reason
 
 
 # --- YAML emission ---------------------------------------------------------
@@ -83,7 +89,34 @@ def read_csv(path: Path | str, delimiter: str | None = None) -> list[dict[str, s
         text = sys.stdin.read()
     else:
         text = Path(path).read_text(encoding="utf-8-sig")  # strip any BOM
+    return parse_csv_text(text, delimiter)
 
+
+def read_google_sheet(url: str, delimiter: str | None = None) -> list[dict[str, str]]:
+    """Download a Google Sheet's CSV export and parse it as ``read_csv()`` would.
+
+    ``url`` is the sheet's CSV-export URL (``.../export?format=csv&gid=...``, or the
+    ``gviz/tq?tqx=out:csv`` form). That URL contains the sheet's ID, which is the
+    capability that grants access to a sheet shared as "anyone with the link", so a
+    failed download reports only the status line: a ``requests`` exception's message
+    repeats the URL, and ``from None`` keeps it out of the printed exception chain too.
+    """
+    try:
+        response = requests.get(url, timeout=60)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        raise click.ClickException(f"Could not download the Google Sheet: {_redacted_reason(e)}.") from None
+    # A sheet that isn't shared answers with a sign-in page rather than an error status.
+    if response.headers.get("Content-Type", "").startswith("text/html"):
+        raise click.ClickException(
+            "The Google Sheet URL returned something other than CSV; check that it is the "
+            "sheet's CSV-export URL and that the sheet is shared as 'anyone with the link'."
+        )
+    return parse_csv_text(response.content.decode("utf-8-sig"), delimiter)
+
+
+def parse_csv_text(text: str, delimiter: str | None = None) -> list[dict[str, str]]:
+    """Parse CSV text into a list of dict rows, sniffing the delimiter if none is given."""
     if delimiter is None:
         try:
             delimiter = csv.Sniffer().sniff(text[:4096], delimiters=",\t;|").delimiter
@@ -313,7 +346,13 @@ def load_nodenorm_url(target_name: str, targets_ini_path: Path) -> str:
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument(
     "input_csv",
+    required=False,
     type=click.Path(exists=True, dir_okay=False, allow_dash=True, path_type=Path),
+)
+@click.option(
+    "--from-google-sheet", "google_sheet_url", default=None, metavar="URL",
+    help=("Read the rows from a Google Sheet's CSV-export URL instead of INPUT_CSV. "
+          "The sheet must be shared as 'anyone with the link'."),
 )
 @click.option(
     "--curie-column", required=True,
@@ -356,7 +395,8 @@ def load_nodenorm_url(target_name: str, targets_ini_path: Path) -> str:
               help="Optional comment line emitted above the YAML block "
                    "(useful for recording provenance).")
 def main(
-    input_csv: Path,
+    input_csv: Path | None,
+    google_sheet_url: str | None,
     curie_column: str,
     label_column: str | None,
     type_column: str | None,
@@ -370,7 +410,10 @@ def main(
     fence: bool,
     header: str | None,
 ) -> None:
-    """Convert INPUT_CSV into a BabelTests YAML block on stdout."""
+    """Convert INPUT_CSV (or a Google Sheet) into a BabelTests YAML block on stdout."""
+
+    if (input_csv is None) == (google_sheet_url is None):
+        raise click.UsageError("Give exactly one of INPUT_CSV or --from-google-sheet URL.")
 
     # Default behavior for --resolves: emit Resolves only when the user
     # didn't ask for any of the other assertion blocks.
@@ -379,7 +422,10 @@ def main(
     else:
         emit_resolves = emit_resolves_flag
 
-    rows = read_csv(input_csv, delimiter=delimiter)
+    if google_sheet_url is not None:
+        rows = read_google_sheet(google_sheet_url, delimiter=delimiter)
+    else:
+        rows = read_csv(input_csv, delimiter=delimiter)
     if rows and curie_column not in rows[0]:
         raise click.ClickException(
             f"--curie-column {curie_column!r} not found in CSV header. "

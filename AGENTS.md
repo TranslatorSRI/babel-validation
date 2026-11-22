@@ -111,6 +111,7 @@ every pull request; a branch cut before the rename needs
 - `services/nodenorm.py` — `CachedNodeNorm`: wraps the NodeNorm `get_normalized_nodes` API with per-instance caching
 - `services/nameres.py` — `CachedNameRes`: wraps the NameRes `lookup`/`bulk-lookup` APIs with per-instance caching
 - `sources/google_sheets/google_sheet_test_cases.py` — `GoogleSheetTestCases`: downloads and parses the shared Google Sheet into `TestRow` instances and pytest `ParameterSet` lists
+- `tools/csv_to_babeltests.py` — the `csv-to-babeltests` CLI: turns a CSV (or a Google Sheet's CSV export, with `--from-google-sheet`) of CURIEs and expected labels, types or equivalent CURIEs into a `babel_tests:` block for an issue, optionally checking each row against a `targets.ini` NodeNorm. A sheet's export URL contains its ID, so a failed download reports only the status line, as `fetch_sheet_csv()` does
 
 Before writing a `requests` call to NodeNorm or NameRes and its checks — in a test, a tool such
 as `generate_report.py`, or the library itself — look in `services/service_checks.py`:

@@ -8,8 +8,11 @@ construction, YAML emission, and round-trip parsing through the same regex
 import re
 from pathlib import Path
 
+import click
 import pytest
+import requests
 import yaml
+from click.testing import CliRunner
 
 from babel_validation.core.testrow import TestStatus
 
@@ -17,7 +20,9 @@ from babel_validation.tools.csv_to_babeltests import (
     BlockEntry,
     build_blocks,
     emit_yaml,
+    main,
     read_csv,
+    read_google_sheet,
     validate_blocks,
 )
 
@@ -386,3 +391,63 @@ def test_fixture_csv_passes_the_issue_parser():
     assert {t.assertion: t.param_sets for t in parsed} == {
         assertion: [e.param_set for e in entries] for assertion, entries in blocks.items()
     }
+
+
+# --- --from-google-sheet ----------------------------------------------------
+
+SHEET_URL = "https://docs.google.com/spreadsheets/d/SECRET-SHEET-ID/export?format=csv&gid=0"
+
+
+class FakeSheetResponse:
+    def __init__(self, status_code=200, content_type="text/csv", text="OutputID,Label\nCHEBI:15365,aspirin\n"):
+        self.status_code = status_code
+        self.reason = "Not Found" if status_code == 404 else "OK"
+        self.headers = {"Content-Type": content_type}
+        self.content = text.encode("utf-8")
+        self.url = SHEET_URL
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} Client Error: {self.reason} for url: {self.url}", response=self)
+
+
+def test_read_google_sheet_parses_the_export(monkeypatch):
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append(kwargs)
+        return FakeSheetResponse()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    assert read_google_sheet(SHEET_URL) == [{"OutputID": "CHEBI:15365", "Label": "aspirin"}]
+    assert calls[0].get("timeout"), "the download must not be able to hang forever"
+
+
+@pytest.mark.parametrize("failure", [
+    lambda url, **kw: FakeSheetResponse(status_code=404),
+    lambda url, **kw: (_ for _ in ()).throw(requests.ConnectionError(f"Max retries exceeded with url: {url}")),
+])
+def test_read_google_sheet_never_repeats_the_url(monkeypatch, failure):
+    """The export URL holds the sheet's ID, which is the capability to read it, and a
+    requests exception's message repeats the URL."""
+    monkeypatch.setattr(requests, "get", failure)
+    with pytest.raises(click.ClickException) as excinfo:
+        read_google_sheet(SHEET_URL)
+    assert "SECRET-SHEET-ID" not in excinfo.value.message
+    assert excinfo.value.__cause__ is None and excinfo.value.__suppress_context__
+
+
+def test_read_google_sheet_rejects_a_sign_in_page(monkeypatch):
+    monkeypatch.setattr(requests, "get", lambda url, **kw: FakeSheetResponse(content_type="text/html; charset=utf-8"))
+    with pytest.raises(click.ClickException, match="other than CSV"):
+        read_google_sheet(SHEET_URL)
+
+
+@pytest.mark.parametrize("args", [
+    ["--curie-column", "OutputID"],
+    [str(FIXTURE_CSV), "--from-google-sheet", SHEET_URL, "--curie-column", "OutputID"],
+])
+def test_main_needs_exactly_one_input(args):
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 2
+    assert "exactly one of INPUT_CSV or --from-google-sheet" in result.output
