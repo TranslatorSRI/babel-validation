@@ -222,14 +222,13 @@ def validate_blocks(
     attributed back to its source CSV row. ``CachedNodeNorm`` deduplicates
     network calls per CURIE, so the per-row loop is no slower than batching.
     """
-    # Pre-warm the cache with every CURIE we'll need across all blocks.
-    all_curies: set[str] = set()
+    # Pre-warm the cache, one request per assertion. prepare_params_lists() rejects whatever
+    # test_with_nodenorm() would (a blank cell, a malformed CURIE, the wrong number of params)
+    # and warms only the rest, so a bad cell never reaches NodeNorm, not even in this batch.
+    # The rejected entries get their failure message from the per-entry run below.
     for assertion, entries in blocks.items():
         handler = ASSERTION_HANDLERS[assertion.lower()]
-        for entry in entries:
-            all_curies.update(handler.curie_params(entry.param_set))
-    if all_curies:
-        nodenorm.normalize_curies(list(all_curies))
+        handler.prepare_params_lists([entry.param_set for entry in entries], nodenorm, label="pre-warm")
 
     results: list[ValidationResult] = []
     for assertion, entries in blocks.items():

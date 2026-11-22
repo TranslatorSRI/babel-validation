@@ -11,11 +11,14 @@ from pathlib import Path
 import pytest
 import yaml
 
+from babel_validation.core.testrow import TestStatus
+
 from babel_validation.tools.csv_to_babeltests import (
     BlockEntry,
     build_blocks,
     emit_yaml,
     read_csv,
+    validate_blocks,
 )
 
 
@@ -224,3 +227,40 @@ def test_emitted_assertion_names_match_handler_registry():
         assert assertion.lower() in ASSERTION_HANDLERS, (
             f"build_blocks emitted unknown assertion name {assertion!r}"
         )
+
+
+# --- validate_blocks -------------------------------------------------------
+
+class RecordingNodeNorm:
+    """A NodeNorm stand-in that resolves every CURIE to itself and records what it was sent."""
+
+    def __init__(self):
+        self.requested: list[str] = []
+
+    def normalize_curies(self, curies, **params):
+        self.requested.extend(curies)
+        return {c: {"id": {"identifier": c, "label": "x"}, "type": ["biolink:NamedThing"]} for c in curies}
+
+    def normalize_curie(self, curie, **params):
+        return self.normalize_curies([curie])[curie]
+
+
+def test_validate_blocks_never_sends_a_bad_cell_to_nodenorm():
+    """The pre-warm batch filters as test_with_nodenorm() does: a blank or malformed cell
+    gets a failure, and is never posted to NodeNorm."""
+    blocks = {
+        "Resolves": [
+            BlockEntry(row_idx=2, param_set=["CHEBI:15365"]),
+            BlockEntry(row_idx=3, param_set=[""]),
+            BlockEntry(row_idx=4, param_set=["not a curie"]),
+        ],
+    }
+    nodenorm = RecordingNodeNorm()
+    results = validate_blocks(blocks, nodenorm)
+
+    assert set(nodenorm.requested) == {"CHEBI:15365"}
+    assert [(r.row_idx, r.status) for r in results] == [
+        (2, TestStatus.Passed),
+        (3, TestStatus.Failed),
+        (4, TestStatus.Failed),
+    ]
