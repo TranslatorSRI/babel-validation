@@ -135,14 +135,22 @@ def pytest_runtest_logreport(report):
         _report_file.flush()
 
 
+@pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_terminal_summary(terminalreporter, config):
     """
     Print what was tested and per-component, per-target pass rates at the end of the run, so
     nobody has to scroll back to the header through thousands of lines of output. With several
     --target options, also list the tests whose outcome differs between targets.
+
+    This is a tryfirst wrapper so that it is the outermost one and prints after everything
+    else, just above the final "N passed, M failed" line. A plain hook prints *before*
+    pytest's "short test summary info" list, because the terminal reporter's own wrapper
+    prints that after its yield, and on a run with 1500 failing sheet rows that buried the
+    summary 1500 lines up.
     """
+    result = yield
     if not _summary_records:
-        return
+        return result
     targets = get_targets(config)
     # Not get_target(), which raises on an unknown --target: that run has already failed at
     # collection, and the summary shouldn't add a second traceback.
@@ -157,6 +165,7 @@ def pytest_terminal_summary(terminalreporter, config):
     terminalreporter.write_sep("=", "Babel Validation summary")
     for line in lines:
         terminalreporter.write_line(line)
+    return result
 
 
 def pytest_addoption(parser):
