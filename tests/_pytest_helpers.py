@@ -107,16 +107,21 @@ def summarize_run(records, targets, target_sections, categories_include, categor
         url = target_sections[target].get(url_key) if url_key and target in target_sections else None
         if url:
             label += f" {url}"
-        run = sum(c.values()) - c["skipped"]
-        if run:
-            line = f"{label}: passed {c['passed']} of {run} run ({c['passed'] / run:.0%})"
+        # Expected failures (strict-xfail sheet rows) are left out of the rate, like skips:
+        # counting them as run-but-not-passed kept a target that behaved exactly as expected
+        # below 100%, which read as a regression. An unexpected pass (strict XPASS) is a failure.
+        not_counted = ("xfailed", "skipped")
+        counted = sum(n for outcome, n in c.items() if outcome not in not_counted)
+        if counted:
+            line = f"{label}: passed {c['passed']} of {counted} ({c['passed'] / counted:.0%})"
         else:
-            line = f"{label}: nothing run"
-        others = [f"{c[o]} {o}" for o in ("failed", "error", "xfailed", "xpassed") if c[o]]
+            line = f"{label}: nothing passed or failed"
+        others = [f"{c[o]} {o}" for o in ("failed", "error", "xpassed") if c[o]]
         if others:
             line += " — " + ", ".join(others)
-        if c["skipped"]:
-            line += f"; {c['skipped']} skipped"
+        uncounted = [f"{c[o]} {o}" for o in not_counted if c[o]]
+        if uncounted:
+            line += "; not counted: " + ", ".join(uncounted)
         lines.append(line)
 
     if len(targets) > 1:

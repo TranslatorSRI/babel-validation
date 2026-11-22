@@ -9,7 +9,9 @@ from tests._pytest_helpers import summarize_run
 pytestmark = pytest.mark.unit
 
 
-def _record(nodeid, outcome="passed", when="call", wasxfail=False, target=None):
+def _record(
+    nodeid, outcome="passed", when="call", wasxfail=False, target=None, msg=None
+):
     # conftest's pytest_itemcollected records the target of every test that takes one.
     return {
         "id": nodeid,
@@ -17,7 +19,7 @@ def _record(nodeid, outcome="passed", when="call", wasxfail=False, target=None):
         "outcome": outcome,
         "wasxfail": wasxfail,
         "props": {"target": target} if target else {},
-        "msg": None,
+        "msg": msg,
     }
 
 
@@ -48,6 +50,13 @@ def test_summarize_run():
         _record(
             f"{gsheet}[ci-es-gsheet:row=4]", "skipped", wasxfail=True, target="ci-es"
         ),
+        # A strict XPASS counts against the pass rate; an xfail (above) doesn't.
+        _record(
+            f"{gsheet}[ci-es-gsheet:row=5]",
+            "failed",
+            target="ci-es",
+            msg="[XPASS(strict)] known",
+        ),
         _record(
             "tests/nameres/test_nameres_api.py::test_openapi_json[dev]", target="dev"
         ),
@@ -63,12 +72,13 @@ def test_summarize_run():
 
     assert lines == [
         "Targets: dev, ci-es; included categories: Unit Tests; excluded categories: none",
-        "NodeNorm [dev] https://nn.dev/: passed 1 of 3 run (33%) — 1 failed, 1 error; 1 skipped",
-        "NodeNorm [ci-es] https://nn.ci-es/: passed 2 of 3 run (67%) — 1 xfailed; 1 skipped",
-        "NameRes [dev] https://nr.dev/: passed 1 of 1 run (100%)",
-        "test_cache_dir.py: passed 1 of 1 run (100%)",
-        "test_environment: passed 1 of 1 run (100%)",
-        "unit: passed 1 of 1 run (100%)",
+        "NodeNorm [dev] https://nn.dev/: passed 1 of 3 (33%) — 1 failed, 1 error; not counted: 1 skipped",
+        "NodeNorm [ci-es] https://nn.ci-es/: passed 2 of 3 (67%) — 1 xpassed; "
+        "not counted: 1 xfailed, 1 skipped",
+        "NameRes [dev] https://nr.dev/: passed 1 of 1 (100%)",
+        "test_cache_dir.py: passed 1 of 1 (100%)",
+        "test_environment: passed 1 of 1 (100%)",
+        "unit: passed 1 of 1 (100%)",
         "Outcomes differing across targets: 2",
         "  nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=2]: dev=failed, ci-es=passed",
         "  nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=4]: dev=error, ci-es=xfailed",
@@ -87,5 +97,5 @@ def test_summarize_run_single_target_has_no_comparison():
     lines = summarize_run(records, ["dev"], _sections(), set(), {"Slow"})
     assert lines == [
         "Targets: dev; included categories: all; excluded categories: Slow",
-        "NameRes [dev] https://nr.dev/: nothing run; 1 skipped",
+        "NameRes [dev] https://nr.dev/: nothing passed or failed; not counted: 1 skipped",
     ]
