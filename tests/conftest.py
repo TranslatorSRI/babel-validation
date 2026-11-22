@@ -12,9 +12,10 @@ import pytest
 import configparser
 
 from src.babel_validation.core import cache_dir
+from src.babel_validation.tools.generate_report import read_targets as read_report_targets
 from tests._pytest_helpers import (
     GITHUB_ISSUES_CACHE_FILE,
-    SUMMARY_DEFAULT_MAX_DIFFERENCES,
+    SUMMARY_DEFAULT_MAX_LISTED,
     build_summary,
     render_summary,
 )
@@ -182,9 +183,11 @@ def pytest_terminal_summary(terminalreporter, config):
         {target: sections[target] for target in targets if target in sections},
         set(config.getoption('--category')),
         set(config.getoption('--category-exclude')),
+        # The Repositories allowlist, read the way the dashboard's report generator reads it.
+        read_report_targets(get_targets_ini_path(config))[1],
     )
     terminalreporter.write_sep("=", "Babel Validation summary")
-    for line in render_summary(summary, config.getoption('--summary-max-differences')):
+    for line in render_summary(summary, config.getoption('--summary-max-listed')):
         # TerminalWriter drops the markup itself for --color=no, NO_COLOR or a non-terminal.
         for text, markup in line:
             terminalreporter.write(text, **markup)
@@ -223,12 +226,12 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        '--summary-max-differences',
+        '--summary-max-listed',
         type=int,
-        default=SUMMARY_DEFAULT_MAX_DIFFERENCES,
-        help="How many tests whose outcome differs between targets to list in the end-of-run "
-             f"summary (default {SUMMARY_DEFAULT_MAX_DIFFERENCES}); 0 lists only how many there "
-             "are of each kind, and -1 lists them all."
+        default=SUMMARY_DEFAULT_MAX_LISTED,
+        help="How many failing tests, and tests whose outcome differs between targets, to list "
+             f"in the end-of-run summary (default {SUMMARY_DEFAULT_MAX_LISTED}); 0 lists only "
+             "how many there are of each kind, and -1 lists them all."
     )
 
     # Only test particular GitHub issues.

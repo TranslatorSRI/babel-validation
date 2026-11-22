@@ -14,7 +14,13 @@ the end-of-run summary that the root conftest prints.
 from dataclasses import dataclass, field
 
 from src.babel_validation.core import cache_dir
-from src.babel_validation.tools.generate_report import OUTCOME_SEVERITY, classify_record, parse_nodeid
+from src.babel_validation.tools.generate_report import (
+    OUTCOME_SEVERITY,
+    classify_record,
+    parse_nodeid,
+    validate_issue_id,
+    validate_source_url,
+)
 
 # IDs of issues carrying BabelTest assertions, shared across xdist workers.
 GITHUB_ISSUES_CACHE_FILE = cache_dir() / "issues_cache.json"
@@ -48,8 +54,8 @@ def deselected_by_markexpr(metafunc) -> bool:
 # each under its own heading; every other directory under tests/ (or file directly in it) is
 # listed under "Other".
 SUMMARY_SERVICES = {"nodenorm": ("NodeNorm", "NodeNormURL"), "nameres": ("NameRes", "NameResURL")}
-SUMMARY_DEFAULT_MAX_DIFFERENCES = 50
-SUMMARY_MAX_PER_DIFFERENCE_GROUP = 10
+SUMMARY_DEFAULT_MAX_LISTED = 50
+SUMMARY_MAX_PER_GROUP = 10
 SUMMARY_MAX_FILES = 5
 
 # Outcomes that are a problem on the target (a strict XPASS fails the run), and outcomes left out
@@ -83,11 +89,17 @@ class RunSummary:
     urls: dict
     # component -> {file path: number of distinct tests in it}.
     files: dict
-    # test key -> {target: outcome}, for targeted tests only.
+    # test key -> {target: outcome}; target is "?" for untargeted tests.
     outcomes: dict = field(default_factory=dict)
+    # (test key, target) -> the node ID, to list a failing test in a form pytest can rerun.
+    nodeids: dict = field(default_factory=dict)
+    # test key -> an allowlisted link to what the test is about (its GitHub issue, say).
+    links: dict = field(default_factory=dict)
 
 
-def build_summary(records, targets, target_sections, categories_include, categories_exclude):
+def build_summary(
+    records, targets, target_sections, categories_include, categories_exclude, allowlist=()
+):
     """
     Count the run for the end-of-run summary printed by pytest_terminal_summary in
     tests/conftest.py.
@@ -101,15 +113,24 @@ def build_summary(records, targets, target_sections, categories_include, categor
 
     :param targets: The target names this run tested, in --target order.
     :param target_sections: Mapping of target name to its targets.ini section (for the URLs).
+    :param allowlist: The lower-cased org/repo names in targets.ini's Repositories list. Only
+        links into these are shown (see _source_link).
     """
     # (test key without target, target) -> worst outcome across its phases.
     worst = {}
+    nodeids = {}
+    rests = {}  # test key -> its parametrize ID without the target
+    props = {}  # test key -> its user properties, merged across phases and targets
     for record in records:
-        target = (record.get("props") or {}).get("target")
+        record_props = record.get("props") or {}
+        target = record_props.get("target")
         if target is None:
-            key, target = record["id"].removeprefix("tests/"), "?"
+            key, target, rest = record["id"].removeprefix("tests/"), "?", ""
         else:
-            key, _, _ = parse_nodeid(record["id"], [target])
+            key, _, rest = parse_nodeid(record["id"], [target])
+        nodeids[(key, target)] = record["id"]
+        rests[key] = rest
+        props.setdefault(key, {}).update(record_props)
         outcome = classify_record(record)
         if OUTCOME_SEVERITY[outcome] >= OUTCOME_SEVERITY[worst.get((key, target), "passed")]:
             worst[(key, target)] = outcome
@@ -124,8 +145,7 @@ def build_summary(records, targets, target_sections, categories_include, categor
         component = path.split("/")[0]
         counts.setdefault((component, target), dict.fromkeys(OUTCOME_SEVERITY, 0))[outcome] += 1
         test_keys.setdefault(component, {}).setdefault(path, set()).add(key)
-        if target != "?":
-            outcomes.setdefault(key, {})[target] = outcome
+        outcomes.setdefault(key, {})[target] = outcome
 
     urls = {}
     for component, target in counts:
@@ -142,7 +162,31 @@ def build_summary(records, targets, target_sections, categories_include, categor
         urls=urls,
         files={c: {path: len(keys) for path, keys in paths.items()} for c, paths in test_keys.items()},
         outcomes=outcomes,
+        nodeids=nodeids,
+        links={
+            key: link
+            for key in props
+            if (link := _source_link(key, rests[key], props[key], allowlist))
+        },
     )
+
+
+def _source_link(key, rest, props, allowlist):
+    """
+    A link to what a test is about, to list beside it when it fails: the GitHub issue a GitHub
+    issue test came from, or the Source URL of a Google Sheet row. Both are untrusted (anyone
+    can write an issue, and SourceURL is free text in the sheet), and this summary is printed
+    into public Actions logs, so they pass the same allowlist checks as the dashboard's links.
+    """
+    if "test_blocklist.py" in key:
+        return None  # The blocklist sheet may not be public: no metadata, no links.
+    if key.startswith("github_issues/"):
+        issue = validate_issue_id(rest, allowlist)
+        if not issue:
+            return None
+        repo, number = issue.split("#")
+        return f"https://github.com/{repo}/issues/{number}"
+    return validate_source_url(props.get("source_url"), allowlist)
 
 
 def _counted(c):
@@ -300,22 +344,28 @@ def _result_line(summary):
     return segments
 
 
-def _difference_groups(summary):
-    """Tests whose outcome differs between targets, grouped by their pattern of outcomes."""
+def _listed_groups(summary):
+    """
+    The tests to list after the table, grouped by their pattern of outcomes across targets:
+    every test that failed, errored or xpassed anywhere, and every test whose outcome differs
+    between targets.
+    """
+    order = _target_order(summary)
     groups = {}
     for key, outcomes in summary.outcomes.items():
         # Only targets the test actually ran on are compared: a test missing from one target
         # (because it wasn't parametrized there) isn't reported as a difference.
-        if len(set(outcomes.values())) < 2:
+        differs = len(set(outcomes.values())) > 1
+        if not differs and not any(o in PROBLEM_OUTCOMES for o in outcomes.values()):
             continue
-        pattern = tuple((t, outcomes[t]) for t in summary.targets if t in outcomes)
+        pattern = tuple((t, outcomes[t]) for t in order if t in outcomes)
         groups.setdefault(pattern, []).append(key)
 
     def tier(pattern):
         seen = {outcome for _, outcome in pattern}
-        if seen & {"failed", "error"}:
+        if seen & set(PROBLEM_OUTCOMES):
             return 0
-        if seen & {"xpassed", "xfailed"}:
+        if "xfailed" in seen:
             return 1
         return 2  # Differs only by a skip, typically require_babel_release.
 
@@ -323,7 +373,7 @@ def _difference_groups(summary):
 
 
 def _pattern_heading(pattern):
-    """E.g. "passed on ci; failed on test", with each outcome coloured."""
+    """E.g. "failed on dev; passed on prod", with each outcome coloured."""
     by_outcome = {}
     for target, outcome in pattern:
         by_outcome.setdefault(outcome, []).append(target)
@@ -332,43 +382,60 @@ def _pattern_heading(pattern):
         if segments:
             segments.append(("; ", {}))
         segments.append((outcome, OUTCOME_MARKUP[outcome]))
-        segments.append((f" on {', '.join(targets)}", {}))
+        named = [t for t in targets if t != "?"]
+        if named:
+            segments.append((f" on {', '.join(named)}", {}))
     return segments
 
 
-def _differences(summary, max_differences):
-    groups = _difference_groups(summary)
+def _example_nodeid(summary, key, pattern):
+    """The node ID to show for a test: from the first target where it went wrong, if any."""
+    for wanted in (PROBLEM_OUTCOMES, NOT_COUNTED):
+        for target, outcome in pattern:
+            if outcome in wanted:
+                return summary.nodeids[(key, target)]
+    return summary.nodeids[(key, pattern[0][0])]
+
+
+def _listed_tests(summary, max_listed):
+    groups = _listed_groups(summary)
     total = sum(len(keys) for _, keys in groups)
-    lines = [[(f"Outcomes differing across targets: {total}", BOLD)]]
-    remaining = None if max_differences < 0 else max_differences
+    title = "Failures and differences between targets" if len(summary.targets) > 1 else "Failures"
+    lines = [[(f"{title}: {total}", BOLD)]]
+    remaining = None if max_listed < 0 else max_listed
     hidden = 0
     for pattern, keys in groups:
-        lines.append([("  ", {})] + _pattern_heading(pattern) + [(f" ({len(keys)})", {})])
+        lines.append([("  ", {})] + _pattern_heading(pattern) + [(f" ({len(keys)}):", {})])
         if remaining is None:
             shown = len(keys)
         else:
-            shown = min(len(keys), SUMMARY_MAX_PER_DIFFERENCE_GROUP, remaining)
+            shown = min(len(keys), SUMMARY_MAX_PER_GROUP, remaining)
             remaining -= shown
-        # !r: the key carries parametrize IDs built from sheet rows and issue bodies.
-        lines.extend([[(f"    {key!r}", {})] for key in sorted(keys)[:shown]])
+        for key in sorted(keys)[:shown]:
+            # The full node ID, so it can be found in the log above or rerun with pytest; !r,
+            # because it carries parametrize IDs built from sheet rows and issue bodies.
+            line = [(f"    - {_example_nodeid(summary, key, pattern)!r}", {})]
+            if key in summary.links:
+                line.append((f" ({summary.links[key]})", {}))
+            lines.append(line)
         if shown < len(keys):
             hidden += len(keys) - shown
             if shown:
                 lines.append([(f"    … and {len(keys) - shown} more", DIM)])
     if hidden:
-        lines.append([(f"  (--summary-max-differences -1 lists all {total})", DIM)])
+        lines.append([(f"  (--summary-max-listed -1 lists all {total})", DIM)])
     return lines
 
 
-def render_summary(summary, max_differences=SUMMARY_DEFAULT_MAX_DIFFERENCES):
+def render_summary(summary, max_listed=SUMMARY_DEFAULT_MAX_LISTED):
     """
     Lay out a RunSummary as lines of (text, markup) segments, where markup is a dict of
     pytest TerminalWriter markup ({"red": True}). conftest writes each segment with
     terminalreporter.write(), which drops the colour for --color=no, NO_COLOR and a
     non-terminal, so nothing here depends on whether colour is on.
 
-    :param max_differences: How many differing tests to list in all; 0 lists only the groups'
-        headings, and a negative number lists every one.
+    :param max_listed: How many failing or differing tests to list in all; 0 lists only the
+        groups' headings, and a negative number lists every one.
     """
     include = ", ".join(sorted(summary.categories_include)) or "all"
     exclude = ", ".join(sorted(summary.categories_exclude)) or "none"
@@ -379,9 +446,8 @@ def render_summary(summary, max_differences=SUMMARY_DEFAULT_MAX_DIFFERENCES):
         [],
     ]
     lines.extend(_table(summary))
-    if len(summary.targets) > 1:
-        lines.append([])
-        lines.extend(_differences(summary, max_differences))
+    lines.append([])
+    lines.extend(_listed_tests(summary, max_listed))
     return lines
 
 

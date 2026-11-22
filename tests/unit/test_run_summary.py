@@ -15,15 +15,24 @@ DIM = {"light": True}
 
 
 def _record(
-    nodeid, outcome="passed", when="call", wasxfail=False, target=None, msg=None
+    nodeid,
+    outcome="passed",
+    when="call",
+    wasxfail=False,
+    target=None,
+    msg=None,
+    source_url=None,
 ):
     # conftest's pytest_itemcollected records the target of every test that takes one.
+    props = {"target": target} if target else {}
+    if source_url:
+        props["source_url"] = source_url
     return {
         "id": nodeid,
         "when": when,
         "outcome": outcome,
         "wasxfail": wasxfail,
-        "props": {"target": target} if target else {},
+        "props": props,
         "msg": msg,
     }
 
@@ -122,23 +131,25 @@ def test_render_summary():
         "  test_environment   100%     1/1       ·      ·      ·  │      ·     ·  (test_env.py: 1)",
         "  unit               100%     1/1       ·      ·      ·  │      ·     ·  (test_babel_release.py: 1)",
         "",
-        "Outcomes differing across targets: 3",
-        # Failures and errors first; then by size, then by pattern.
-        "  error on dev; xfailed on ci-es (1)",
-        "    'nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=4]'",
-        "  failed on dev; passed on ci-es (1)",
-        "    'nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=2]'",
-        "  passed on dev; failed on ci-es (1)",
-        "    'nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=\\x1b[2J]'",
+        # Every test that went wrong anywhere, or differs between targets: failures, errors
+        # and xpasses first, then by size, then by pattern. Each is the node ID from the target
+        # where it went wrong, so it can be found in the log or rerun.
+        "Failures and differences between targets: 4",
+        "  xpassed on ci-es (1):",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=5]'",
+        "  error on dev; xfailed on ci-es (1):",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=4]'",
+        "  failed on dev; passed on ci-es (1):",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=2]'",
+        "  passed on dev; failed on ci-es (1):",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=\\x1b[2J]'",
     ]
 
 
 def test_render_summary_markup():
+    rendered = render_summary(_summary())
     # Cells are padded to their column; compare the text without the padding.
-    lines = [
-        [(text.strip(), markup) for text, markup in line]
-        for line in render_summary(_summary())
-    ]
+    lines = [[(text.strip(), markup) for text, markup in line] for line in rendered]
     nodenorm_dev = lines[6]
     assert ("1", RED) in nodenorm_dev  # the failed count
     assert ("50%", RED) in nodenorm_dev
@@ -146,7 +157,8 @@ def test_render_summary_markup():
     assert ("100%", GREEN) in lines[9]  # NameRes dev
     assert ("NodeNorm ✗ dev, ci-es", RED) in lines[2]
     assert ("NameRes ✓", GREEN) in lines[2]
-    assert ("failed", RED) in lines[18] and ("passed", GREEN) in lines[18]
+    heading = lines[plain_text(rendered).index("  failed on dev; passed on ci-es (1):")]
+    assert ("failed", RED) in heading and ("passed", GREEN) in heading
 
 
 def test_rate_rounds_down():
@@ -157,7 +169,7 @@ def test_rate_rounds_down():
     assert lines[6].startswith("  dev   99%  199/200       1")
 
 
-def test_single_target_has_no_comparison():
+def test_single_target_lists_only_failures():
     records = [
         _record(
             "tests/nameres/test_nameres_api.py::test_openapi_json[dev]",
@@ -175,6 +187,8 @@ def test_single_target_has_no_comparison():
         "       rate  passed  failed  error  xpass  │  xfail  skip  URL",
         "NameRes",
         "  dev     —     0/0       ·      ·      ·  │      ·     1  https://nr.dev/",
+        "",
+        "Failures: 0",
     ]
 
 
@@ -219,7 +233,7 @@ def _differing_records():
 
 
 @pytest.mark.parametrize(
-    "max_differences, listed, more_lines",
+    "max_listed, listed, more_lines",
     [
         # The default: at most ten per group.
         (50, [10, 3, 2], ["    … and 2 more"]),
@@ -229,19 +243,68 @@ def _differing_records():
         (-1, [12, 3, 2], []),
     ],
 )
-def test_differences_are_grouped_and_capped(max_differences, listed, more_lines):
-    lines = plain_text(render_summary(_summary(_differing_records()), max_differences))
-    diff = lines[lines.index("Outcomes differing across targets: 17") + 1 :]
+def test_listed_tests_are_grouped_and_capped(max_listed, listed, more_lines):
+    lines = plain_text(render_summary(_summary(_differing_records()), max_listed))
+    diff = lines[lines.index("Failures and differences between targets: 17") + 1 :]
     headings = [
         line for line in diff if line.startswith("  ") and not line.startswith("    ")
     ]
     assert headings[:3] == [
-        "  passed on dev; failed on ci-es (12)",
-        "  passed on dev; xfailed on ci-es (3)",
-        "  passed on dev; skipped on ci-es (2)",
+        "  passed on dev; failed on ci-es (12):",
+        "  passed on dev; xfailed on ci-es (3):",
+        "  passed on dev; skipped on ci-es (2):",
     ]
-    tests = [line for line in diff if line.startswith("    '")]
+    tests = [line for line in diff if line.startswith("    - '")]
     assert len(tests) == sum(listed)
     assert [line for line in diff if line.startswith("    …")] == more_lines
-    hint = "  (--summary-max-differences -1 lists all 17)"
+    hint = "  (--summary-max-listed -1 lists all 17)"
     assert (hint in diff) == (sum(listed) < 17)
+
+
+def test_failures_on_one_target_and_their_links():
+    issue_test = "tests/github_issues/test_github_issues.py::test_github_issue"
+    records = [
+        # A sheet row whose Source URL is in an allowlisted repository is linked; one
+        # elsewhere is not, since the summary lands in public Actions logs.
+        _record(
+            f"{GSHEET}[dev-gsheet:row=1]",
+            "failed",
+            target="dev",
+            source_url="https://github.com/TranslatorSRI/Babel/issues/12",
+        ),
+        _record(
+            f"{GSHEET}[dev-gsheet:row=2]",
+            "failed",
+            target="dev",
+            source_url="https://example.org/TranslatorSRI/Babel/issues/12",
+        ),
+        # A GitHub issue test links to its issue, if the repository is allowlisted.
+        _record(f"{issue_test}[dev-TranslatorSRI/Babel#7]", "failed", target="dev"),
+        _record(f"{issue_test}[dev-Someone/else#7]", "failed", target="dev"),
+        # The blocklist sheet may not be public: never linked.
+        _record(
+            "tests/nameres/test_blocklist.py::test_blocklist[dev-blocklist_entry0]",
+            "failed",
+            target="dev",
+            source_url="https://github.com/TranslatorSRI/Babel/issues/13",
+        ),
+        # Untargeted failures are listed too, without a target.
+        _record("tests/unit/test_x.py::test_it", "failed"),
+    ]
+    summary = build_summary(
+        records, ["dev"], _sections(), set(), set(), allowlist=["translatorsri/babel"]
+    )
+    lines = plain_text(render_summary(summary))
+    assert lines[lines.index("Failures: 6") :] == [
+        "Failures: 6",
+        "  failed on dev (5):",
+        "    - 'tests/github_issues/test_github_issues.py::test_github_issue[dev-Someone/else#7]'",
+        "    - 'tests/github_issues/test_github_issues.py::test_github_issue[dev-TranslatorSRI/Babel#7]'"
+        " (https://github.com/TranslatorSRI/Babel/issues/7)",
+        "    - 'tests/nameres/test_blocklist.py::test_blocklist[dev-blocklist_entry0]'",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=1]'"
+        " (https://github.com/TranslatorSRI/Babel/issues/12)",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=2]'",
+        "  failed (1):",
+        "    - 'tests/unit/test_x.py::test_it'",
+    ]
