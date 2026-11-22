@@ -54,6 +54,9 @@ def test_summarize_run():
         # A parameter that looks like a target doesn't make a test per-target: only the
         # "target" property does.
         _record("tests/unit/test_babel_release.py::test_name[2026sep24-dev]"),
+        # A file directly in tests/ is its own component, named after the file; a slash in a
+        # parameter doesn't make one.
+        _record("tests/test_cache_dir.py::test_cache_dir[a/b]"),
         _record("tests/test_environment/test_env.py::test_google_sheet_has_test_cases"),
     ]
     lines = summarize_run(records, ["dev", "ci-es"], _sections(), {"Unit Tests"}, set())
@@ -63,6 +66,7 @@ def test_summarize_run():
         "NodeNorm [dev] https://nn.dev/: passed 1 of 3 run (33%) — 1 failed, 1 error; 1 skipped",
         "NodeNorm [ci-es] https://nn.ci-es/: passed 2 of 3 run (67%) — 1 xfailed; 1 skipped",
         "NameRes [dev] https://nr.dev/: passed 1 of 1 run (100%)",
+        "test_cache_dir.py: passed 1 of 1 run (100%)",
         "test_environment: passed 1 of 1 run (100%)",
         "unit: passed 1 of 1 run (100%)",
         "Outcomes differing across targets: 2",

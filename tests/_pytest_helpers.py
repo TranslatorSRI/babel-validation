@@ -43,7 +43,8 @@ def deselected_by_markexpr(metafunc) -> bool:
 
 
 # Components that test one service, with the targets.ini key holding that service's URL.
-# Tests elsewhere under tests/ are summarised under their directory name, without a URL.
+# Tests elsewhere under tests/ are summarised under their directory name (or, for a file
+# directly in tests/, its file name), without a URL.
 SUMMARY_COMPONENTS = {"nodenorm": ("NodeNorm", "NodeNormURL"), "nameres": ("NameRes", "NameResURL")}
 SUMMARY_MAX_DIFFERENCES = 50
 
@@ -77,7 +78,10 @@ def summarize_run(records, targets, target_sections, categories_include, categor
     counts = {}  # (component, target) -> {outcome: count}
     by_key = {}  # test key -> {target: outcome}, for targeted tests only
     for (key, target), outcome in worst.items():
-        component = key.split("/")[0] if "/" in key else "other"
+        # The directory under tests/, or the file name for a file directly in tests/. Only the
+        # path before "::" counts, since a parameter can itself contain a slash.
+        path = key.split("::")[0]
+        component = path.split("/")[0]
         component_counts = counts.setdefault((component, target), dict.fromkeys(OUTCOME_SEVERITY, 0))
         component_counts[outcome] += 1
         if target != "?":
