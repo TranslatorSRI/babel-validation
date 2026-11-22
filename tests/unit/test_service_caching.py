@@ -280,6 +280,26 @@ def test_invalidate_query_clears_both_endpoints(monkeypatch):
     assert recorder.calls[3][1]["json"]["strings"] == ["diabetes"], "invalidating one query flushed another"
 
 
+def test_bulk_lookup_does_not_cache_strings_missing_from_the_response(monkeypatch, caplog):
+    """A string /bulk-lookup left out is retried, not cached as None.
+
+    Caching None used to hand it back on every later call for that string, to
+    callers expecting a list of hits.
+    """
+    recorder = Recorder({"diabetes": [{"curie": "MONDO:0005015"}]})
+    monkeypatch.setattr(nameres_module.requests, "post", recorder)
+    nr = CachedNameRes("https://nameres.example/")
+
+    first = nr.bulk_lookup(["diabetes", "asthma"])
+    second = nr.bulk_lookup(["diabetes", "asthma"])
+
+    assert first == {"diabetes": [{"curie": "MONDO:0005015"}]}
+    assert second == first
+    assert recorder.call_count == 2
+    assert recorder.calls[1][1]["json"]["strings"] == ["asthma"], "the missing string was not retried"
+    assert any("returned no result" in r.getMessage() for r in caplog.records)
+
+
 @pytest.mark.parametrize("bad", [[], "diabetes", ("diabetes",)])
 def test_bulk_lookup_rejects_bad_input(nameres, bad):
     nr, recorder = nameres
