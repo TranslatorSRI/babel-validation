@@ -21,6 +21,9 @@ from babel_validation.tools.csv_to_babeltests import (
     validate_blocks,
 )
 
+# Path to the committed CSV fixture used by the data-asset tests.
+FIXTURE_CSV = Path(__file__).parent / "csv_to_babeltests_fixture.csv"
+
 
 pytestmark = pytest.mark.unit
 
@@ -264,3 +267,122 @@ def test_validate_blocks_never_sends_a_bad_cell_to_nodenorm():
         (3, TestStatus.Failed),
         (4, TestStatus.Failed),
     ]
+
+
+# --- CSV data-asset tests (csv_to_babeltests_fixture.csv, next to this file) ---
+# Add tricky cases to that file; these tests exercise the full pipeline from
+# CSV → build_blocks → emit_yaml → yaml.safe_load without hitting the network.
+
+def test_fixture_csv_exists():
+    assert FIXTURE_CSV.is_file(), f"Fixture CSV not found: {FIXTURE_CSV}"
+
+
+def test_fixture_csv_labels_round_trip():
+    """All non-empty Label values survive the full CSV → YAML → parse cycle."""
+    rows = read_csv(FIXTURE_CSV)
+    blocks, warnings = build_blocks(
+        rows,
+        curie_column="OutputID", label_column="Label",
+        type_column=None, equivalent_curie_column=None,
+        emit_resolves=False, dedupe=False, skip_empty=True,
+    )
+    assert "HasLabel" in blocks
+
+    out = emit_yaml(blocks, fence=True)
+    parsed = _parse_emitted(out)
+    label_pairs = parsed["babel_tests"]["HasLabel"]
+
+    # Every row with a non-empty OutputID and non-empty Label must appear.
+    expected = [
+        (r["OutputID"].strip(), r["Label"].strip())
+        for r in rows
+        if r["OutputID"].strip() and r["Label"].strip()
+    ]
+    actual = [(p[0], p[1]) for p in label_pairs]
+    assert actual == expected, "Label round-trip mismatch"
+
+
+def test_fixture_csv_tricky_labels():
+    """Labels that contain commas, apostrophes, and brackets must survive intact."""
+    rows = read_csv(FIXTURE_CSV)
+    blocks, _ = build_blocks(
+        rows,
+        curie_column="OutputID", label_column="Label",
+        type_column=None, equivalent_curie_column=None,
+        emit_resolves=False, dedupe=False, skip_empty=True,
+    )
+    out = emit_yaml(blocks, fence=True)
+    parsed = _parse_emitted(out)
+    pairs = {p[0]: p[1] for p in parsed["babel_tests"]["HasLabel"]}
+
+    assert pairs["CHEBI:27732"] == "caffeine, anhydrous"          # comma
+    assert pairs["DRUGBANK:DB00001"] == "Adenosine 5'-phosphosulfate"  # apostrophe
+    assert pairs["CHEBI:1"] == "foo [bar] (baz)"                  # brackets + parens
+
+
+def test_fixture_csv_empty_curie_produces_warning():
+    """A row with an empty OutputID must be skipped and produce a warning."""
+    rows = read_csv(FIXTURE_CSV)
+    _, warnings = build_blocks(
+        rows,
+        curie_column="OutputID", label_column="Label",
+        type_column=None, equivalent_curie_column=None,
+        emit_resolves=False, dedupe=False, skip_empty=True,
+    )
+    assert any("empty" in w and "OutputID" in w for w in warnings), (
+        f"Expected a warning about empty OutputID; got: {warnings}"
+    )
+
+
+def test_fixture_csv_dedupe_removes_duplicate_row():
+    """The fixture has one exact duplicate row; --dedupe should drop it."""
+    rows = read_csv(FIXTURE_CSV)
+    blocks_keep, _ = build_blocks(
+        rows,
+        curie_column="OutputID", label_column="Label",
+        type_column=None, equivalent_curie_column=None,
+        emit_resolves=False, dedupe=False, skip_empty=True,
+    )
+    blocks_dedup, _ = build_blocks(
+        rows,
+        curie_column="OutputID", label_column="Label",
+        type_column=None, equivalent_curie_column=None,
+        emit_resolves=False, dedupe=True, skip_empty=True,
+    )
+    # With dedupe=True there should be exactly one fewer HasLabel entry.
+    assert len(blocks_dedup["HasLabel"]) == len(blocks_keep["HasLabel"]) - 1
+
+
+def test_fixture_csv_skip_empty_type_suppresses_resolveswithtype():
+    """Rows with an empty Type column must not produce ResolvesWithType entries."""
+    rows = read_csv(FIXTURE_CSV)
+    blocks, _ = build_blocks(
+        rows,
+        curie_column="OutputID", label_column=None,
+        type_column="Type", equivalent_curie_column=None,
+        emit_resolves=False, dedupe=False, skip_empty=True,
+    )
+    rwt_curies = [e.param_set[1] for e in blocks.get("ResolvesWithType", [])]
+    # CHEBI:17968 has no Type value in the fixture; it must not appear.
+    assert "CHEBI:17968" not in rwt_curies
+
+
+def test_fixture_csv_passes_the_issue_parser():
+    """What the tool emits is accepted by the parser the issue tests use, which is stricter
+    than yaml.safe_load: no aliases, and every param must be a string."""
+    from tests.github_issues.unit._helpers import _mock_issue
+    from babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases
+
+    rows = read_csv(FIXTURE_CSV)
+    blocks, _ = build_blocks(
+        rows,
+        curie_column="OutputID", label_column="Label",
+        type_column="Type", equivalent_curie_column="Equiv",
+        emit_resolves=True, dedupe=False, skip_empty=True,
+    )
+    parser = GitHubIssuesTestCases("unit-test-dummy-token", ["test-org/test-repo"])
+    parsed = parser.get_test_issues_from_issue(_mock_issue(emit_yaml(blocks, fence=True)))
+
+    assert {t.assertion: t.param_sets for t in parsed} == {
+        assertion: [e.param_set for e in entries] for assertion, entries in blocks.items()
+    }
