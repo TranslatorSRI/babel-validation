@@ -263,7 +263,7 @@ the two halves of the codebase disagreed about where the cache was.
 
 ## Key Dependencies
 
-- Python >=3.11, pytest, requests, deepdiff, openapi-spec-validator, black
+- Python >=3.11, pytest, requests, pygithub, pyyaml (runtime); deepdiff, openapi-spec-validator, the pytest plugins, black, ruff (the `dev` dependency group, which `uv sync`/`uv run` install but the wheel does not)
 - `uv` for Python dependency management (no requirements.txt — uses pyproject.toml)
 
 ## Testing Patterns
