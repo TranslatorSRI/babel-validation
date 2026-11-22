@@ -9,6 +9,20 @@ from babel_validation.services.nodenorm import CachedNodeNorm
 from babel_validation.core.testrow import TestResult, TestStatus
 
 
+class OpenIssueMarkerAbsorbsNothing(AssertionError):
+    """
+    Never raised: the ``raises=`` for the strict xfail on an open issue.
+
+    That marker has one job, turning an open issue whose assertions all pass into a strict
+    XPASS failure, which says the issue looks closeable. An open issue whose assertions fail
+    is reported by the imperative ``pytest.xfail()`` at the end of the test, which pytest
+    handles before it looks at the marker's ``raises=``. Without ``raises=``, a strict xfail
+    also absorbs any exception, so a NodeNorm outage, an HTTP 500 or a bug in our own parsing
+    reported XFAIL, and every open issue went green. Naming an exception that nothing raises
+    lets every such exception fail the test.
+    """
+
+
 def test_github_issue(request, target_info, github_issue_id, github_issue, github_issues_test_cases, subtests):
     nodenorm = CachedNodeNorm.from_url(target_info['NodeNormURL'])
     nameres = CachedNameRes.from_url(target_info['NameResURL'])
@@ -33,10 +47,12 @@ def test_github_issue(request, target_info, github_issue_id, github_issue, githu
         )
 
     # Open issues are assumed to fail, so we set an xfail marker (but we set it to strict so
-    # that XPASSes are reported loudly).
+    # that XPASSes are reported loudly). raises= keeps it from absorbing an outage: see
+    # OpenIssueMarkerAbsorbsNothing.
     if is_open:
         request.node.add_marker(pytest.mark.xfail(
             reason=f"Issue {github_issue.html_url} is expected to fail because the issue is open.",
+            raises=OpenIssueMarkerAbsorbsNothing,
             strict=True,
         ))
 
