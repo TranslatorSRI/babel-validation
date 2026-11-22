@@ -50,6 +50,36 @@ def deselected_by_markexpr(metafunc) -> bool:
         return False
 
 
+# The user properties a Google Sheet test records (tests/*/test_*_from_gsheet.py), with the
+# label each gets in the "Google Sheet row" section of a failure report.
+SHEET_ROW_FIELDS = {
+    "category": "Category",
+    "source": "Source",
+    "source_url": "Source URL",
+    "query_id": "Query ID",
+    "query_label": "Query label",
+}
+
+
+def sheet_row_section(user_properties):
+    """
+    The text of a "Google Sheet row" report section for a failing sheet test, or None for any
+    other test. Its assertion messages do include the row, but as one long TestRow repr, so
+    which kind of test it was and where it came from were hard to find.
+
+    The values are sheet cells, which anyone with edit access can write, and the section is
+    printed to the terminal and into public Actions logs: each is !r-escaped and truncated.
+    """
+    props = dict(user_properties)
+    if "category" not in props:
+        return None
+    width = max(len(label) for label in SHEET_ROW_FIELDS.values())
+    return "\n".join(
+        f"{label + ':':<{width + 1}} {str(props.get(key) or '')[:200]!r}"
+        for key, label in SHEET_ROW_FIELDS.items()
+    )
+
+
 # Services, with the targets.ini key holding each one's URL. They come first in the summary,
 # each under its own heading; every other directory under tests/ (or file directly in it) is
 # listed under "Other".
