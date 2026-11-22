@@ -204,6 +204,121 @@ class Assertion:
 GitHubIssueTest = Assertion
 
 
+def parse_babel_tests(text: str, *, source_id: str = "", issue_url: str = "",
+                      issue_state: str = "") -> list[Assertion]:
+    """
+    Extract the BabelTest assertions from a GitHub issue body, or any other Markdown text.
+
+    Two syntaxes are supported:
+    - Wiki syntax: {{BabelTest|AssertionType|param1|param2|...}}
+    - YAML syntax:
+
+    ```yaml
+    babel_tests:
+        assertion:
+        - param1
+        - ['param1', 'param2']
+    ```
+
+    The text is treated as untrusted, as an issue body is: it gets the same length cap, YAML
+    rules (no aliases, no duplicate keys, string params only) and per-issue limits whether it
+    came from GitHub or from a local draft.
+
+    For the full list of supported assertion types and their parameters, see
+    src/babel_validation/assertions/README.md or inspect ASSERTION_HANDLERS.keys().
+
+    :param text: The Markdown to search.
+    :param source_id: Where the text came from, for messages and labels, e.g. "org/repo#42".
+    :param issue_url: The issue's html_url, if it came from an issue.
+    :param issue_state: The issue's state, "open" or "closed", if it came from an issue.
+    :return: The Assertion objects found in the text, wiki syntax first.
+    """
+    # Is there a body at all?
+    if not text or text.strip() == '':
+        return []
+
+    if len(text) > MAX_ISSUE_BODY_CHARS:
+        raise ValueError(
+            f"Issue {source_id} has a {len(text):,}-character body, over the "
+            f"{MAX_ISSUE_BODY_CHARS:,}-character limit. GitHub caps issue bodies below this, so this "
+            f"should be unreachable — treat it as a sign the input is not what we think it is."
+        )
+
+    # Look for BabelTest syntax.
+    testrows = []
+
+    for babeltest_match in GitHubIssuesTestCases._BABELTEST_RE.finditer(text):
+        match = babeltest_match.group(0)
+        _logger.info("Found BabelTest in issue %s: %r", source_id, match)
+
+        # Figure out parameters.
+        test_string = babeltest_match.group(1)
+        params = test_string.split("|")
+        assertion = params[0].strip() if params else ""
+        if not assertion:
+            raise ValueError(f"Missing assertion name in BabelTest in issue {source_id}: {match}")
+        # Wiki syntax: params[0] is the assertion name; params[1:] form a single
+        # param_set (may be empty for assertions like Needed), so param_sets is a
+        # one-element list: [params[1:]].
+        testrows.append(Assertion(assertion, [params[1:]], issue_id=source_id, issue_url=issue_url, issue_state=issue_state))
+
+    babeltest_yaml_matches = re.findall(GitHubIssuesTestCases._BABELTEST_YAML_RE, text)
+    if babeltest_yaml_matches:
+        for match in babeltest_yaml_matches:
+            _logger.info("Found BabelTest YAML in issue %s: %r", source_id, match)
+
+            # _NoAliasSafeLoader rather than safe_load: safe_load blocks code execution
+            # but still expands aliases and honours merge keys.
+            try:
+                yaml_dict = yaml.load(match.removeprefix("```yaml").removesuffix("```"),
+                                      Loader=_NoAliasSafeLoader)
+            except RecursionError as e:
+                # A few KB of nested `[[[[...]]]]` blows the interpreter's stack inside the
+                # loader. Report it as the malformed block it is rather than dumping a
+                # several-thousand-frame traceback.
+                raise ValueError(
+                    f"YAML block in issue {source_id} is nested too deeply to parse"
+                ) from e
+
+            babel_tests = yaml_dict.get('babel_tests') if isinstance(yaml_dict, dict) else None
+            if babel_tests is None:
+                raise ValueError(
+                    f"YAML block in issue {source_id} matched the detection pattern "
+                    f"but contains no 'babel_tests' top-level key: {match!r}"
+                )
+            if not isinstance(babel_tests, dict):
+                raise ValueError(
+                    f"YAML block in issue {source_id}: 'babel_tests' must be a mapping of "
+                    f"assertion name to param sets, but got {type(babel_tests).__name__}: {babel_tests!r}"
+                )
+
+            for assertion, original_param_sets in babel_tests.items():
+                # YAML syntax: each entry under an assertion key becomes one param_set.
+                # A bare string becomes a single-element param_set; a list is used as-is.
+                if not isinstance(assertion, str):
+                    raise ValueError(
+                        f"YAML block in issue {source_id}: assertion name must be a string, "
+                        f"but got {type(assertion).__name__}: {assertion!r}"
+                    )
+                if original_param_sets is None:
+                    raise ValueError(
+                        f"YAML block in issue {source_id}: assertion '{assertion}' has a null "
+                        f"param list — use an empty list [] or remove the entry"
+                    )
+                normalized = _to_list(
+                    original_param_sets,
+                    f"YAML block in issue {source_id}: assertion '{assertion}'"
+                )
+                param_sets = [
+                    _to_str_list(ps, f"YAML block in issue {source_id}: assertion '{assertion}' param_set")
+                    for ps in normalized
+                ]
+                testrows.append(Assertion(assertion, param_sets, issue_id=source_id, issue_url=issue_url, issue_state=issue_state))
+
+    GitHubIssuesTestCases._check_issue_size(source_id, testrows)
+    return testrows
+
+
 class GitHubIssuesTestCases:
     """
     The idea here is to allow test cases to be efficiently embedded within GitHub issues, to test them
@@ -257,21 +372,8 @@ class GitHubIssuesTestCases:
 
     def get_test_issues_from_issue(self, github_issue: Issue.Issue) -> list[Assertion]:
         """
-        Extract test rows from a single GitHub issue.
-
-        Two syntaxes are supported:
-        - Wiki syntax: {{BabelTest|AssertionType|param1|param2|...}}
-        - YAML syntax:
-
-        ```yaml
-        babel_tests:
-            assertion:
-            - param1
-            - ['param1', 'param2']
-        ```
-
-        For the full list of supported assertion types and their parameters, see
-        src/babel_validation/assertions/README.md or inspect ASSERTION_HANDLERS.keys().
+        Extract the BabelTest assertions from a single GitHub issue's body: see
+        parse_babel_tests() for the syntax and the limits it enforces.
 
         :param github_issue: A single GitHub issue to extract test cases from.
         :return: A list of Assertion objects found in the issue body.
@@ -281,94 +383,12 @@ class GitHubIssuesTestCases:
         self.logger.debug("Looking for tests in issue %s: %s (%s, %s)",
                           github_issue_id, github_issue.title, github_issue.state, github_issue.html_url)
 
-        # Plain strings, so the Assertions don't hold the live PyGithub Issue.
-        issue_meta = dict(issue_id=github_issue_id, issue_url=github_issue.html_url,
-                          issue_state=github_issue.state)
-
-        # Is there an issue body at all?
-        if not github_issue.body or github_issue.body.strip() == '':
-            return []
-
-        if len(github_issue.body) > MAX_ISSUE_BODY_CHARS:
-            raise ValueError(
-                f"Issue {github_issue_id} has a {len(github_issue.body):,}-character body, over the "
-                f"{MAX_ISSUE_BODY_CHARS:,}-character limit. GitHub caps issue bodies below this, so this "
-                f"should be unreachable — treat it as a sign the input is not what we think it is."
-            )
-
-        # Look for BabelTest syntax.
-        testrows = []
-
-        for babeltest_match in self._BABELTEST_RE.finditer(github_issue.body):
-            match = babeltest_match.group(0)
-            self.logger.info("Found BabelTest in issue %s: %r", github_issue_id, match)
-
-            # Figure out parameters.
-            test_string = babeltest_match.group(1)
-            params = test_string.split("|")
-            assertion = params[0].strip() if params else ""
-            if not assertion:
-                raise ValueError(f"Missing assertion name in BabelTest in issue {github_issue_id}: {match}")
-            # Wiki syntax: params[0] is the assertion name; params[1:] form a single
-            # param_set (may be empty for assertions like Needed), so param_sets is a
-            # one-element list: [params[1:]].
-            testrows.append(Assertion(assertion, [params[1:]], **issue_meta))
-
-        babeltest_yaml_matches = re.findall(self._BABELTEST_YAML_RE, github_issue.body)
-        if babeltest_yaml_matches:
-            for match in babeltest_yaml_matches:
-                self.logger.info("Found BabelTest YAML in issue %s: %r", github_issue_id, match)
-
-                # _NoAliasSafeLoader rather than safe_load: safe_load blocks code execution
-                # but still expands aliases and honours merge keys.
-                try:
-                    yaml_dict = yaml.load(match.removeprefix("```yaml").removesuffix("```"),
-                                          Loader=_NoAliasSafeLoader)
-                except RecursionError as e:
-                    # A few KB of nested `[[[[...]]]]` blows the interpreter's stack inside the
-                    # loader. Report it as the malformed block it is rather than dumping a
-                    # several-thousand-frame traceback.
-                    raise ValueError(
-                        f"YAML block in issue {github_issue_id} is nested too deeply to parse"
-                    ) from e
-
-                babel_tests = yaml_dict.get('babel_tests') if isinstance(yaml_dict, dict) else None
-                if babel_tests is None:
-                    raise ValueError(
-                        f"YAML block in issue {github_issue_id} matched the detection pattern "
-                        f"but contains no 'babel_tests' top-level key: {match!r}"
-                    )
-                if not isinstance(babel_tests, dict):
-                    raise ValueError(
-                        f"YAML block in issue {github_issue_id}: 'babel_tests' must be a mapping of "
-                        f"assertion name to param sets, but got {type(babel_tests).__name__}: {babel_tests!r}"
-                    )
-
-                for assertion, original_param_sets in babel_tests.items():
-                    # YAML syntax: each entry under an assertion key becomes one param_set.
-                    # A bare string becomes a single-element param_set; a list is used as-is.
-                    if not isinstance(assertion, str):
-                        raise ValueError(
-                            f"YAML block in issue {github_issue_id}: assertion name must be a string, "
-                            f"but got {type(assertion).__name__}: {assertion!r}"
-                        )
-                    if original_param_sets is None:
-                        raise ValueError(
-                            f"YAML block in issue {github_issue_id}: assertion '{assertion}' has a null "
-                            f"param list — use an empty list [] or remove the entry"
-                        )
-                    normalized = _to_list(
-                        original_param_sets,
-                        f"YAML block in issue {github_issue_id}: assertion '{assertion}'"
-                    )
-                    param_sets = [
-                        _to_str_list(ps, f"YAML block in issue {github_issue_id}: assertion '{assertion}' param_set")
-                        for ps in normalized
-                    ]
-                    testrows.append(Assertion(assertion, param_sets, **issue_meta))
-
-        self._check_issue_size(github_issue_id, testrows)
-        return testrows
+        return parse_babel_tests(
+            github_issue.body,
+            source_id=github_issue_id,
+            issue_url=github_issue.html_url,
+            issue_state=github_issue.state,
+        )
 
     @staticmethod
     def _check_issue_size(github_issue_id: str, testrows: list[Assertion]) -> None:
