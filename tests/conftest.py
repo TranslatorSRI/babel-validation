@@ -1,6 +1,7 @@
 #
 # conftest.py - pytest configuration settings
 #
+import configparser
 import glob
 import json
 import logging
@@ -9,7 +10,6 @@ import os.path
 from pathlib import Path
 
 import pytest
-import configparser
 
 from babel_validation.core import cache_dir
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE

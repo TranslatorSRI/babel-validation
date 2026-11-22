@@ -5,10 +5,9 @@
 # This has been reported in a bunch of issues:
 #   - https://github.com/NCATSTranslator/NameResolution/issues/220
 #
+import deepdiff
 import pytest
 import requests
-import deepdiff
-
 
 # We've been told that these queries are sometimes non-deterministic.
 non_deterministic_queries = [

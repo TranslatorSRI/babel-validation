@@ -24,8 +24,8 @@ The layout, for orientation while reading the code:
 """
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator
 
 from babel_validation.core.testrow import TestResult, TestStatus
 from babel_validation.services.nameres import NameResService
@@ -358,12 +358,17 @@ class NameResTest(AssertionHandler):
 
 
 # Registry — import submodules after base classes are defined to avoid circular imports.
-from babel_validation.assertions.nodenorm import (  # noqa: E402
-    ResolvesHandler, DoesNotResolveHandler, ResolvesWithHandler,
-    ResolvesWithTypeHandler, DoesNotResolveWithHandler, HasLabelHandler,
-)
-from babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
 from babel_validation.assertions.common import NeededHandler  # noqa: E402
+from babel_validation.assertions.nameres import SearchByNameHandler  # noqa: E402
+from babel_validation.assertions.nodenorm import (  # noqa: E402
+    DoesNotResolveHandler,
+    DoesNotResolveWithHandler,
+    HasLabelHandler,
+    ResolvesHandler,
+    ResolvesWithHandler,
+    ResolvesWithTypeHandler,
+)
+
 
 def _register(handlers: list[AssertionHandler]) -> dict[str, AssertionHandler]:
     """Index *handlers* by NAME, rejecting what a dict comprehension would hide.

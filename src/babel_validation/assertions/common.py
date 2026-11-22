@@ -1,4 +1,4 @@
-from typing import Iterator
+from collections.abc import Iterator
 
 from babel_validation.assertions import AssertionHandler, ParamsList
 from babel_validation.core.testrow import TestResult

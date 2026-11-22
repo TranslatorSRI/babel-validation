@@ -8,6 +8,7 @@
 import pytest
 import requests
 
+
 @pytest.fixture
 def nodenorm_url(target_info):
     return target_info['NodeNormURL']
@@ -217,7 +218,6 @@ def test_drugchemical_conflated_biolink_types(nodenorm_url):
         assert biolink_types == curies_and_expected_results[query_curie]
 
         # Check the individual types, which -- without conflation -- should be one of the chemical types.
-        first_biolink_type = biolink_types[0]
         for equivalent_identifiers in result['equivalent_identifiers']:
             assert equivalent_identifiers['type'] in {
                 'biolink:Drug',

@@ -42,7 +42,7 @@ STATUS_TIMEOUT_SECONDS = 30
 NODENORM_VERSION = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?(?!\d|\.\d)')
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _fetch_json(url):
     # lru_cache does not cache an exception, so a failed fetch fails this test and is
     # retried by the next one, rather than being remembered for the rest of the run. That

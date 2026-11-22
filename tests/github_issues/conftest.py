@@ -11,7 +11,11 @@ from github import GithubException, Issue
 from babel_validation.sources.github.github_issues_test_cases import GitHubIssuesTestCases, issue_id
 from tests._pytest_helpers import (
     GITHUB_ISSUES_CACHE_FILE as _CACHE_FILE,
+)
+from tests._pytest_helpers import (
     GITHUB_ISSUES_LOCK_FILE as _LOCK_FILE,
+)
+from tests._pytest_helpers import (
     deselected_by_markexpr,
 )
 

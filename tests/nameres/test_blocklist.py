@@ -1,7 +1,7 @@
 import logging
 
-import requests
 import pytest
+import requests
 
 from babel_validation.sources.google_sheets.blocklist import load_blocklist_from_gsheet
 from tests._pytest_helpers import deselected_by_markexpr

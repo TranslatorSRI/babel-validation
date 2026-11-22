@@ -7,7 +7,10 @@ Run:
 from pathlib import Path
 
 from babel_validation.assertions import (
-    ASSERTION_HANDLERS, AssertionHandler, NodeNormTest, NameResTest,
+    ASSERTION_HANDLERS,
+    AssertionHandler,
+    NameResTest,
+    NodeNormTest,
 )
 
 README_PATH = Path(__file__).parent / "README.md"

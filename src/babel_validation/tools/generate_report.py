@@ -546,7 +546,7 @@ def side_branch_of(section, target, targets):
 
 
 def build_report(results, counts, github_issues_ran, targets, allowlist, config):
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     target_sections = {}
     for target in targets:
         section = config[target]
