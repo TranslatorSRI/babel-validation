@@ -12,7 +12,12 @@ import pytest
 import configparser
 
 from src.babel_validation.core import cache_dir
-from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE, summarize_run
+from tests._pytest_helpers import (
+    GITHUB_ISSUES_CACHE_FILE,
+    SUMMARY_DEFAULT_MAX_DIFFERENCES,
+    build_summary,
+    render_summary,
+)
 
 
 def get_targets_ini_path(config):
@@ -171,7 +176,7 @@ def pytest_terminal_summary(terminalreporter, config):
     # Not get_target(), which raises on an unknown --target: that run has already failed at
     # collection, and the summary shouldn't add a second traceback.
     sections = read_targets(get_targets_ini_path(config))
-    lines = summarize_run(
+    summary = build_summary(
         _summary_records,
         targets,
         {target: sections[target] for target in targets if target in sections},
@@ -179,8 +184,11 @@ def pytest_terminal_summary(terminalreporter, config):
         set(config.getoption('--category-exclude')),
     )
     terminalreporter.write_sep("=", "Babel Validation summary")
-    for line in lines:
-        terminalreporter.write_line(line)
+    for line in render_summary(summary, config.getoption('--summary-max-differences')):
+        # TerminalWriter drops the markup itself for --color=no, NO_COLOR or a non-terminal.
+        for text, markup in line:
+            terminalreporter.write(text, **markup)
+        terminalreporter.line("")
     return result
 
 
@@ -212,6 +220,15 @@ def pytest_addoption(parser):
         default=None,
         help="Append raw per-test outcome records (JSONL) to this file, for "
              "src.babel_validation.tools.generate_report."
+    )
+
+    parser.addoption(
+        '--summary-max-differences',
+        type=int,
+        default=SUMMARY_DEFAULT_MAX_DIFFERENCES,
+        help="How many tests whose outcome differs between targets to list in the end-of-run "
+             f"summary (default {SUMMARY_DEFAULT_MAX_DIFFERENCES}); 0 lists only how many there "
+             "are of each kind, and -1 lists them all."
     )
 
     # Only test particular GitHub issues.

@@ -11,6 +11,8 @@ cache without duplicating the filenames the github_issues conftest owns, and
 the end-of-run summary that the root conftest prints.
 """
 
+from dataclasses import dataclass, field
+
 from src.babel_validation.core import cache_dir
 from src.babel_validation.tools.generate_report import OUTCOME_SEVERITY, classify_record, parse_nodeid
 
@@ -42,16 +44,53 @@ def deselected_by_markexpr(metafunc) -> bool:
         return False
 
 
-# Components that test one service, with the targets.ini key holding that service's URL.
-# Tests elsewhere under tests/ are summarised under their directory name (or, for a file
-# directly in tests/, its file name), without a URL.
-SUMMARY_COMPONENTS = {"nodenorm": ("NodeNorm", "NodeNormURL"), "nameres": ("NameRes", "NameResURL")}
-SUMMARY_MAX_DIFFERENCES = 50
+# Services, with the targets.ini key holding each one's URL. They come first in the summary,
+# each under its own heading; every other directory under tests/ (or file directly in it) is
+# listed under "Other".
+SUMMARY_SERVICES = {"nodenorm": ("NodeNorm", "NodeNormURL"), "nameres": ("NameRes", "NameResURL")}
+SUMMARY_DEFAULT_MAX_DIFFERENCES = 50
+SUMMARY_MAX_PER_DIFFERENCE_GROUP = 10
+SUMMARY_MAX_FILES = 5
+
+# Outcomes that are a problem on the target (a strict XPASS fails the run), and outcomes left out
+# of the pass rate: expected failures and skips aren't results about the service.
+PROBLEM_OUTCOMES = ("failed", "error", "xpassed")
+NOT_COUNTED = ("xfailed", "skipped")
+
+# Terminal markup, as pytest's TerminalWriter names it ("light" is faint/dim).
+BOLD = {"bold": True}
+DIM = {"light": True}
+OUTCOME_MARKUP = {
+    "passed": {"green": True},
+    "failed": {"red": True},
+    "error": {"red": True},
+    "xpassed": {"yellow": True},
+    "xfailed": DIM,
+    "skipped": DIM,
+}
 
 
-def summarize_run(records, targets, target_sections, categories_include, categories_exclude):
+@dataclass
+class RunSummary:
+    """What build_summary() counted, for render_summary() to lay out."""
+
+    targets: list
+    categories_include: set
+    categories_exclude: set
+    # (component, target) -> {outcome: number of tests}; target is "?" for untargeted tests.
+    counts: dict
+    # (component, target) -> the URL that was tested, for services only.
+    urls: dict
+    # component -> {file path: number of distinct tests in it}.
+    files: dict
+    # test key -> {target: outcome}, for targeted tests only.
+    outcomes: dict = field(default_factory=dict)
+
+
+def build_summary(records, targets, target_sections, categories_include, categories_exclude):
     """
-    Lines for the end-of-run summary printed by pytest_terminal_summary in tests/conftest.py.
+    Count the run for the end-of-run summary printed by pytest_terminal_summary in
+    tests/conftest.py.
 
     `records` are the raw per-phase dicts that conftest's pytest_runtest_logreport builds (the
     same shape --report-jsonl writes), so outcomes are worked out exactly as the dashboard's
@@ -75,67 +114,277 @@ def summarize_run(records, targets, target_sections, categories_include, categor
         if OUTCOME_SEVERITY[outcome] >= OUTCOME_SEVERITY[worst.get((key, target), "passed")]:
             worst[(key, target)] = outcome
 
-    counts = {}  # (component, target) -> {outcome: count}
-    by_key = {}  # test key -> {target: outcome}, for targeted tests only
+    counts = {}
+    test_keys = {}  # component -> {file path: set of test keys}
+    outcomes = {}
     for (key, target), outcome in worst.items():
         # The directory under tests/, or the file name for a file directly in tests/. Only the
         # path before "::" counts, since a parameter can itself contain a slash.
         path = key.split("::")[0]
         component = path.split("/")[0]
-        component_counts = counts.setdefault((component, target), dict.fromkeys(OUTCOME_SEVERITY, 0))
-        component_counts[outcome] += 1
+        counts.setdefault((component, target), dict.fromkeys(OUTCOME_SEVERITY, 0))[outcome] += 1
+        test_keys.setdefault(component, {}).setdefault(path, set()).add(key)
         if target != "?":
-            by_key.setdefault(key, {})[target] = outcome
+            outcomes.setdefault(key, {})[target] = outcome
 
-    lines = [
-        f"Targets: {', '.join(targets)}; "
-        f"included categories: {', '.join(sorted(categories_include)) or 'all'}; "
-        f"excluded categories: {', '.join(sorted(categories_exclude)) or 'none'}"
+    urls = {}
+    for component, target in counts:
+        if component in SUMMARY_SERVICES and target in target_sections:
+            url = target_sections[target].get(SUMMARY_SERVICES[component][1])
+            if url:
+                urls[(component, target)] = url
+
+    return RunSummary(
+        targets=list(targets),
+        categories_include=set(categories_include),
+        categories_exclude=set(categories_exclude),
+        counts=counts,
+        urls=urls,
+        files={c: {path: len(keys) for path, keys in paths.items()} for c, paths in test_keys.items()},
+        outcomes=outcomes,
+    )
+
+
+def _counted(c):
+    return sum(n for outcome, n in c.items() if outcome not in NOT_COUNTED)
+
+
+def _has_problem(c):
+    return any(c[o] for o in PROBLEM_OUTCOMES)
+
+
+def _rate_cell(c):
+    counted = _counted(c)
+    if not counted:
+        return "—", DIM
+    # Rounded down, so "100%" only ever means that everything counted passed.
+    text = f"{c['passed'] * 100 // counted}%"
+    if c["failed"] or c["error"]:
+        return text, {"red": True}
+    if c["xpassed"]:
+        return text, {"yellow": True}
+    return text, {"green": True}
+
+
+def _count_cell(n, markup):
+    # Zeroes are a dim dot, so the counts that matter stand out.
+    return (str(n), markup) if n else ("·", DIM)
+
+
+# Table columns after the label: (heading, right-aligned).
+_COLUMNS = ["rate", "passed", "failed", "error", "xpass", "│", "xfail", "skip"]
+
+
+def _row_cells(c):
+    return [
+        _rate_cell(c),
+        (f"{c['passed']}/{_counted(c)}", {}),
+        _count_cell(c["failed"], {"red": True}),
+        _count_cell(c["error"], {"red": True}),
+        _count_cell(c["xpassed"], {"yellow": True}),
+        ("│", DIM),
+        _count_cell(c["xfailed"], DIM),
+        _count_cell(c["skipped"], DIM),
     ]
 
-    component_order = list(SUMMARY_COMPONENTS)
-    target_order = list(targets) + ["?"]
 
-    def sort_key(item):
-        (component, target), _ = item
-        rank = component_order.index(component) if component in component_order else len(component_order)
-        return rank, component, target_order.index(target) if target in target_order else len(target_order)
+def _trim(segments):
+    """Drop trailing whitespace, so no line ends in padding."""
+    segments = [s for s in segments if s[0]]
+    while segments and not segments[-1][0].strip():
+        segments.pop()
+    if segments:
+        text, markup = segments[-1]
+        segments[-1] = (text.rstrip(), markup)
+    return segments
 
-    for (component, target), c in sorted(counts.items(), key=sort_key):
-        name, url_key = SUMMARY_COMPONENTS.get(component, (component, None))
-        label = name if target == "?" else f"{name} [{target}]"
-        url = target_sections[target].get(url_key) if url_key and target in target_sections else None
-        if url:
-            label += f" {url}"
-        # Expected failures (strict-xfail sheet rows) are left out of the rate, like skips:
-        # counting them as run-but-not-passed kept a target that behaved exactly as expected
-        # below 100%, which read as a regression. An unexpected pass (strict XPASS) is a failure.
-        not_counted = ("xfailed", "skipped")
-        counted = sum(n for outcome, n in c.items() if outcome not in not_counted)
-        if counted:
-            line = f"{label}: passed {c['passed']} of {counted} ({c['passed'] / counted:.0%})"
+
+def _target_order(summary):
+    return list(summary.targets) + ["?"]
+
+
+def _table(summary):
+    """The pass-rate table: services first, then everything else under "Other"."""
+    # Rows are ("heading", indent, label, markup, note) or ("row", indent, label, cells, tail),
+    # where tail is a service row's URL or an untargeted group's file list, after the columns.
+    rows = []
+
+    def add_target_rows(component, indent):
+        for target in _target_order(summary):
+            c = summary.counts.get((component, target))
+            if c is None:
+                continue
+            label = "—" if target == "?" else target
+            rows.append(("row", indent, label, _row_cells(c), summary.urls.get((component, target))))
+
+    for component, (name, _) in SUMMARY_SERVICES.items():
+        if any(comp == component for comp, _ in summary.counts):
+            rows.append(("heading", 0, name, BOLD, None))
+            add_target_rows(component, 1)
+
+    others = sorted({comp for comp, _ in summary.counts if comp not in SUMMARY_SERVICES})
+    if others:
+        rows.append(("heading", 0, "Other", BOLD, None))
+        for component in others:
+            # Which files the group holds, so tests that belong to no service are easy to see.
+            files = summary.files.get(component, {})
+            note = None
+            if not (len(files) == 1 and component in files):
+                listed = sorted(files.items())
+                note = ", ".join(
+                    f"{path.split('/', 1)[-1]}: {n}" for path, n in listed[:SUMMARY_MAX_FILES]
+                )
+                if len(listed) > SUMMARY_MAX_FILES:
+                    note += f", … {len(listed) - SUMMARY_MAX_FILES} more files"
+            if [t for comp, t in summary.counts if comp == component] == ["?"]:
+                # Only untargeted tests (unit tests, say): one row, named after the group.
+                c = summary.counts[(component, "?")]
+                rows.append(("row", 1, component, _row_cells(c), f"({note})" if note else None))
+            else:
+                rows.append(("heading", 1, component, {}, note))
+                add_target_rows(component, 2)
+
+    data_rows = [r for r in rows if r[0] == "row"]
+    label_width = max([2 * r[1] + len(r[2]) for r in data_rows] + [0])
+    widths = [
+        max([len(heading)] + [len(r[3][i][0]) for r in data_rows])
+        for i, heading in enumerate(_COLUMNS)
+    ]
+
+    def cells_line(label_segment, cells, tail):
+        segments = [label_segment]
+        for (text, markup), width in zip(cells, widths):
+            segments.append(("  ", {}))
+            segments.append((text.rjust(width), markup))
+        if tail:
+            segments.append(("  " + tail, DIM))
+        return _trim(segments)
+
+    header = cells_line((" " * label_width, {}), [(h, BOLD) for h in _COLUMNS], None)
+    if summary.urls:
+        header.append(("  URL", BOLD))
+    lines = [header]
+    for row in rows:
+        if row[0] == "heading":
+            _, indent, label, markup, note = row
+            segments = [("  " * indent + label, markup)]
+            if note:
+                segments.append((f"  ({note})", DIM))
+            lines.append(_trim(segments))
         else:
-            line = f"{label}: nothing passed or failed"
-        others = [f"{c[o]} {o}" for o in ("failed", "error", "xpassed") if c[o]]
-        if others:
-            line += " — " + ", ".join(others)
-        uncounted = [f"{c[o]} {o}" for o in not_counted if c[o]]
-        if uncounted:
-            line += "; not counted: " + ", ".join(uncounted)
-        lines.append(line)
+            _, indent, label, cells, tail = row
+            lines.append(cells_line((("  " * indent + label).ljust(label_width), {}), cells, tail))
+    return lines
 
-    if len(targets) > 1:
+
+def _result_line(summary):
+    """One verdict per service and for everything else, e.g. "NodeNorm ✗ ci, test · NameRes ✓"."""
+    groups = [(name, [comp]) for comp, (name, _) in SUMMARY_SERVICES.items()]
+    groups.append(("Other", sorted({c for c, _ in summary.counts if c not in SUMMARY_SERVICES})))
+    segments = [("Result:", BOLD)]
+    for name, components in groups:
+        cells = {k: c for k, c in summary.counts.items() if k[0] in components}
+        if not cells:
+            continue
+        segments.append((" " if len(segments) == 1 else " · ", {}))
+        failing = []
+        for target in _target_order(summary):
+            if any(_has_problem(c) for (_, t), c in cells.items() if t == target):
+                failing.append("untargeted" if target == "?" else target)
+        if failing:
+            segments.append((f"{name} ✗ {', '.join(failing)}", {"red": True}))
+        elif any(_counted(c) for c in cells.values()):
+            segments.append((f"{name} ✓", {"green": True}))
+        else:
+            segments.append((f"{name} — nothing passed or failed", DIM))
+    return segments
+
+
+def _difference_groups(summary):
+    """Tests whose outcome differs between targets, grouped by their pattern of outcomes."""
+    groups = {}
+    for key, outcomes in summary.outcomes.items():
         # Only targets the test actually ran on are compared: a test missing from one target
         # (because it wasn't parametrized there) isn't reported as a difference.
-        differing = sorted(key for key, outcomes in by_key.items() if len(set(outcomes.values())) > 1)
-        lines.append(f"Outcomes differing across targets: {len(differing)}")
-        for key in differing[:SUMMARY_MAX_DIFFERENCES]:
-            outcomes = by_key[key]
-            lines.append(
-                # !r: the key carries parametrize IDs built from sheet rows and issue bodies.
-                f"  {key!r}: " + ", ".join(f"{t}={outcomes[t]}" for t in targets if t in outcomes)
-            )
-        if len(differing) > SUMMARY_MAX_DIFFERENCES:
-            lines.append(f"  … and {len(differing) - SUMMARY_MAX_DIFFERENCES} more")
+        if len(set(outcomes.values())) < 2:
+            continue
+        pattern = tuple((t, outcomes[t]) for t in summary.targets if t in outcomes)
+        groups.setdefault(pattern, []).append(key)
 
+    def tier(pattern):
+        seen = {outcome for _, outcome in pattern}
+        if seen & {"failed", "error"}:
+            return 0
+        if seen & {"xpassed", "xfailed"}:
+            return 1
+        return 2  # Differs only by a skip, typically require_babel_release.
+
+    return sorted(groups.items(), key=lambda g: (tier(g[0]), -len(g[1]), g[0]))
+
+
+def _pattern_heading(pattern):
+    """E.g. "passed on ci; failed on test", with each outcome coloured."""
+    by_outcome = {}
+    for target, outcome in pattern:
+        by_outcome.setdefault(outcome, []).append(target)
+    segments = []
+    for outcome, targets in by_outcome.items():
+        if segments:
+            segments.append(("; ", {}))
+        segments.append((outcome, OUTCOME_MARKUP[outcome]))
+        segments.append((f" on {', '.join(targets)}", {}))
+    return segments
+
+
+def _differences(summary, max_differences):
+    groups = _difference_groups(summary)
+    total = sum(len(keys) for _, keys in groups)
+    lines = [[(f"Outcomes differing across targets: {total}", BOLD)]]
+    remaining = None if max_differences < 0 else max_differences
+    hidden = 0
+    for pattern, keys in groups:
+        lines.append([("  ", {})] + _pattern_heading(pattern) + [(f" ({len(keys)})", {})])
+        if remaining is None:
+            shown = len(keys)
+        else:
+            shown = min(len(keys), SUMMARY_MAX_PER_DIFFERENCE_GROUP, remaining)
+            remaining -= shown
+        # !r: the key carries parametrize IDs built from sheet rows and issue bodies.
+        lines.extend([[(f"    {key!r}", {})] for key in sorted(keys)[:shown]])
+        if shown < len(keys):
+            hidden += len(keys) - shown
+            if shown:
+                lines.append([(f"    … and {len(keys) - shown} more", DIM)])
+    if hidden:
+        lines.append([(f"  (--summary-max-differences -1 lists all {total})", DIM)])
     return lines
+
+
+def render_summary(summary, max_differences=SUMMARY_DEFAULT_MAX_DIFFERENCES):
+    """
+    Lay out a RunSummary as lines of (text, markup) segments, where markup is a dict of
+    pytest TerminalWriter markup ({"red": True}). conftest writes each segment with
+    terminalreporter.write(), which drops the colour for --color=no, NO_COLOR and a
+    non-terminal, so nothing here depends on whether colour is on.
+
+    :param max_differences: How many differing tests to list in all; 0 lists only the groups'
+        headings, and a negative number lists every one.
+    """
+    include = ", ".join(sorted(summary.categories_include)) or "all"
+    exclude = ", ".join(sorted(summary.categories_exclude)) or "none"
+    lines = [
+        [("Targets: ", BOLD), (", ".join(summary.targets), {})],
+        [("Sheet categories: ", BOLD), (f"{include} · excluded: {exclude}", {})],
+        _result_line(summary),
+        [],
+    ]
+    lines.extend(_table(summary))
+    if len(summary.targets) > 1:
+        lines.append([])
+        lines.extend(_differences(summary, max_differences))
+    return lines
+
+
+def plain_text(lines):
+    """The rendered summary without markup: one string per line."""
+    return ["".join(text for text, _ in line) for line in lines]
