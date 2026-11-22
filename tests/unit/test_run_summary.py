@@ -57,6 +57,9 @@ def test_summarize_run():
             target="ci-es",
             msg="[XPASS(strict)] known",
         ),
+        # A test name carrying a control character is printed escaped.
+        _record(f"{gsheet}[dev-gsheet:row=\x1b[2J]", target="dev"),
+        _record(f"{gsheet}[ci-es-gsheet:row=\x1b[2J]", "failed", target="ci-es"),
         _record(
             "tests/nameres/test_nameres_api.py::test_openapi_json[dev]", target="dev"
         ),
@@ -72,16 +75,18 @@ def test_summarize_run():
 
     assert lines == [
         "Targets: dev, ci-es; included categories: Unit Tests; excluded categories: none",
-        "NodeNorm [dev] https://nn.dev/: passed 1 of 3 (33%) — 1 failed, 1 error; not counted: 1 skipped",
-        "NodeNorm [ci-es] https://nn.ci-es/: passed 2 of 3 (67%) — 1 xpassed; "
+        "NodeNorm [dev] https://nn.dev/: passed 2 of 4 (50%) — 1 failed, 1 error; not counted: 1 skipped",
+        "NodeNorm [ci-es] https://nn.ci-es/: passed 2 of 4 (50%) — 1 failed, 1 xpassed; "
         "not counted: 1 xfailed, 1 skipped",
         "NameRes [dev] https://nr.dev/: passed 1 of 1 (100%)",
         "test_cache_dir.py: passed 1 of 1 (100%)",
         "test_environment: passed 1 of 1 (100%)",
         "unit: passed 1 of 1 (100%)",
-        "Outcomes differing across targets: 2",
-        "  nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=2]: dev=failed, ci-es=passed",
-        "  nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=4]: dev=error, ci-es=xfailed",
+        "Outcomes differing across targets: 3",
+        # Sorted by key, and ESC sorts before the digits.
+        "  'nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=\\x1b[2J]': dev=passed, ci-es=failed",
+        "  'nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=2]': dev=failed, ci-es=passed",
+        "  'nodenorm/test_nodenorm_from_gsheet.py::test_normalization[gsheet:row=4]': dev=error, ci-es=xfailed",
     ]
 
 

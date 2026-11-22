@@ -132,7 +132,8 @@ def summarize_run(records, targets, target_sections, categories_include, categor
         for key in differing[:SUMMARY_MAX_DIFFERENCES]:
             outcomes = by_key[key]
             lines.append(
-                f"  {key}: " + ", ".join(f"{t}={outcomes[t]}" for t in targets if t in outcomes)
+                # !r: the key carries parametrize IDs built from sheet rows and issue bodies.
+                f"  {key!r}: " + ", ".join(f"{t}={outcomes[t]}" for t in targets if t in outcomes)
             )
         if len(differing) > SUMMARY_MAX_DIFFERENCES:
             lines.append(f"  … and {len(differing) - SUMMARY_MAX_DIFFERENCES} more")
