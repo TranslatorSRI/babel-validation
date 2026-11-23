@@ -55,8 +55,10 @@ testpaths = ["tests"]
 # until `uv sync` was re-run. This also lets a bare `pytest` run with no install at all.
 pythonpath = ["src"]
 timeout = 300
+# Canonical marker definitions. Every test that talks to a live service or downloads the
+# Google Sheet is unmarked, so `pytest -m unit` is the offline subset CI can run on every PR.
 markers = [
-    "unit: unit tests that do not require network access",
+    "unit: fast offline tests with no external dependencies",
 ]
 
 # ruff is used only as a check that no `src.babel_validation` import comes back; black still
