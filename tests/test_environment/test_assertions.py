@@ -25,6 +25,8 @@ FAKE_NODENORM_DB = {
     'A:1': _node('A:1', 'alpha'),
     'B:1': _node('A:1', 'alpha'),
     'C:1': _node('C:1', 'gamma'),
+    # NodeNorm may leave out a node's label and its types.
+    'E:1': {'id': {'identifier': 'E:1'}},
 }
 
 
@@ -108,6 +110,25 @@ def test_search_by_name_validates_and_warms_before_calling_nodenorm(nodenorm):
     results = list(handler.test_with_nameres([['water', 'not a curie']], nodenorm, None, 5, 'test'))
     assert [status for status, _ in _messages(results)] == [TestStatus.Failed], _messages(results)
     assert nodenorm.post_calls == []
+
+
+@pytest.mark.unit
+def test_search_by_name_survives_node_without_label(nodenorm):
+    class FakeNameRes:
+        def lookup(self, query, **params):
+            return [{'curie': 'E:1'}]
+
+    handler = ASSERTION_HANDLERS['searchbyname']
+    results = list(handler.test_with_nameres([['something', 'E:1']], nodenorm, FakeNameRes(), 5, 'test'))
+    assert [status for status, _ in _messages(results)] == [TestStatus.Passed], _messages(results)
+
+
+@pytest.mark.unit
+def test_resolves_with_type_survives_node_without_type(nodenorm):
+    handler = ASSERTION_HANDLERS['resolveswithtype']
+    results = list(handler.test_with_nodenorm([['biolink:Gene', 'E:1']], nodenorm, 'test'))
+    assert [status for status, _ in _messages(results)] == [TestStatus.Failed], _messages(results)
+    assert 'biolink:Gene' in results[0].message
 
 
 class TempGroupingHandler(NodeNormTest):
