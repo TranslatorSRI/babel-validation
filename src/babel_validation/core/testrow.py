@@ -22,6 +22,7 @@ class TestRow:
     # (it stops at the first class that misses) and its request's prefix order depend on the hash
     # seed (#193).
     BiolinkClasses: list[str]
+    # Empty entries dropped, so an empty cell is [] and test_label sends no prefix filter.
     Prefixes: list[str]
     Source: str
     SourceURL: str
@@ -51,7 +52,7 @@ class TestRow:
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
             Conflations=set(row.get('Conflations', '').split('|')),
             BiolinkClasses=row.get('Biolink Classes', '').split('|'),
-            Prefixes=row.get('Prefixes', '').split('|'),
+            Prefixes=[p for p in row.get('Prefixes', '').split('|') if p],
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),
             Notes=row.get('Notes', '')

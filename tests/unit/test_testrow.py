@@ -24,3 +24,9 @@ def test_prefixes_keep_sheet_order():
     # from one process to the next (#193).
     prefixes = [f"PREFIX{i}" for i in range(20, 0, -1)] + ["^UMLS"]
     assert TestRow.from_data_row({"Prefixes": "|".join(prefixes)}).Prefixes == prefixes
+
+
+@pytest.mark.parametrize("cell,expected", [("", []), ("CHEBI|", ["CHEBI"]), ("|^UMLS", ["^UMLS"])])
+def test_prefixes_drop_empty_entries(cell, expected):
+    # An empty entry used to make test_label send only_prefixes='' for every row.
+    assert TestRow.from_data_row({"Prefixes": cell}).Prefixes == expected
