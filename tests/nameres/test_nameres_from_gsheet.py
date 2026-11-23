@@ -59,16 +59,17 @@ def test_label(target_info, test_row, test_category, record_property):
     # did anything (updating a set from '' adds nothing); #176 adds that query.
     biolink_classes = test_row.BiolinkClasses
 
-    # Query in sheet order, and don't deduplicate. The loop stops at the first label that misses,
-    # xfailing or failing by how far down the expected CURIE is, so a set's per-process iteration
-    # order made the outcome depend on the hash seed (#193). Only about 1% of rows repeat a label.
+    # Query in sheet order, dropping repeats (dict.fromkeys keeps the first). The loop stops at the
+    # first label that misses, xfailing or failing by how far down the expected CURIE is, so a
+    # set's per-process iteration order made the outcome depend on the hash seed (#193).
     expected_id = test_row.PreferredID
-    query_labels = [test_row.QueryLabel, test_row.PreferredLabel, *test_row.AdditionalLabels]
+    query_labels = list(dict.fromkeys(
+        label.strip() for label in [test_row.QueryLabel, test_row.PreferredLabel, *test_row.AdditionalLabels]
+    ))
 
     # Test these labels against NameRes
     count_tested_labels = 0
-    for query_label in query_labels:
-        label = query_label.strip()
+    for label in query_labels:
         if not label:
             continue
 

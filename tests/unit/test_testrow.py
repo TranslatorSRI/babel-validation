@@ -17,3 +17,10 @@ def test_biolink_classes_keep_sheet_order_and_repeats():
 def test_empty_biolink_classes_cell_is_one_empty_entry():
     # An empty cell is what makes test_label query without a Biolink class.
     assert TestRow.from_data_row({}).BiolinkClasses == [""]
+
+
+def test_prefixes_keep_sheet_order():
+    # test_label joins these into only_prefixes/exclude_prefixes, so a set reordered the request
+    # from one process to the next (#193).
+    prefixes = [f"PREFIX{i}" for i in range(20, 0, -1)] + ["^UMLS"]
+    assert TestRow.from_data_row({"Prefixes": "|".join(prefixes)}).Prefixes == prefixes

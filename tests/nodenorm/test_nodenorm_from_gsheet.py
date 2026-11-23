@@ -52,9 +52,9 @@ def test_normalization(target_info, test_row, test_category, record_property):
     preferred_label = test_row.PreferredLabel
 
     expected_id = test_row.PreferredID
-    # Query in sheet order, and don't deduplicate: with a set, which ID's failure message a row
-    # reported depended on the hash seed (#193). Only about 1% of rows repeat an ID.
-    query_ids = [test_row.QueryID, test_row.PreferredID, *test_row.AdditionalIDs]
+    # Query in sheet order, dropping repeats (dict.fromkeys keeps the first): with a set, which ID's
+    # failure message a row reported depended on the hash seed (#193).
+    query_ids = list(dict.fromkeys([test_row.QueryID, test_row.PreferredID, *test_row.AdditionalIDs]))
 
     # Test these labels against NameRes
     for query_id in query_ids:

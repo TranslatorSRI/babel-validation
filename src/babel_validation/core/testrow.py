@@ -18,10 +18,11 @@ class TestRow:
     PreferredID: str
     AdditionalIDs: list[str]
     Conflations: set[str]
-    # A list in sheet order, not a set: test_label stops at the first class that misses, so a set's
-    # per-process iteration order made its outcome depend on the hash seed (#193).
+    # Lists in sheet order, not sets: a set's per-process iteration order made test_label's outcome
+    # (it stops at the first class that misses) and its request's prefix order depend on the hash
+    # seed (#193).
     BiolinkClasses: list[str]
-    Prefixes: set[str]
+    Prefixes: list[str]
     Source: str
     SourceURL: str
     Notes: str
@@ -50,7 +51,7 @@ class TestRow:
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
             Conflations=set(row.get('Conflations', '').split('|')),
             BiolinkClasses=row.get('Biolink Classes', '').split('|'),
-            Prefixes=set(row.get('Prefixes', '').split('|')),
+            Prefixes=row.get('Prefixes', '').split('|'),
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),
             Notes=row.get('Notes', '')
