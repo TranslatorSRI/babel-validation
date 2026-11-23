@@ -90,6 +90,21 @@ Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* dir
 `lib`, anywhere in the tree, including `website/src/lib/` — a file there builds locally but
 never reaches CI. Check `git status` shows new files as tracked.
 
+### Open pull requests
+
+A dozen or more PRs are usually open, many stacked on one another, so before changing a file
+look for open PRs that touch it:
+
+```bash
+gh pr list --state open --limit 100 --json number,title,files \
+  --jq '.[] | select([.files[].path] | index("<path>")) | "#\(.number) \(.title)"'
+```
+
+A change that reshapes what another PR also edits (a field's type, a file both create) needs a
+note on both PRs saying how to reconcile them, whichever merges second. #194 changed
+`TestRow.BiolinkClasses` from a set to a list without this check, and found only afterwards
+that #175 and #176 both build on it as a set.
+
 ## Architecture
 
 ### Library (`src/babel_validation/`)
@@ -305,3 +320,10 @@ issue, so they stay here:
   `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
   mode reappears if a cache's TTL can expire *during* a run, which is why
   `pytest_configure` deletes `gsheet_*.csv` before collection starts.
+- **To tell what a branch changes from what the services did, run it and `main` back to back**
+  against the same target, each with `--report-jsonl`, and compare per-test outcomes: the
+  live services change between runs, so a result from an earlier day is not a baseline. Run
+  `main` from a worktree (`git worktree add <dir> origin/main`) with
+  `uv run --env-file <this checkout>/.env pytest tests ...`, because a worktree outside the
+  checkout has no `.env` of its own, and `--env-file` loads it without printing it. Give both
+  runs the same `PYTHONHASHSEED`: a test that iterates a set can change outcome with it (#193).
