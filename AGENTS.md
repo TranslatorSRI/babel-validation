@@ -102,8 +102,12 @@ counts as a namespace package, so a test using it passes. But it loads a second 
 module, so `from_url()` hands out a different instance with its own cache, and the same import
 fails with "No module named 'src'" from anywhere else, including `python -m` from outside the
 repository. `ruff check` rejects it (TID251, configured in `pyproject.toml`), and CI runs that on
-every pull request; a branch cut before the rename needs
-`git grep -l 'src\.babel_validation' | xargs sed -i '' 's/src\.babel_validation/babel_validation/g'`.
+every pull request. To fix a branch cut before the rename, run
+`git grep -l 'src\.babel_validation' -- '*.py' | xargs perl -pi -e 's/src\.babel_validation/babel_validation/g'`
+(Perl because `sed -i` takes different arguments on macOS and Linux), then fix by hand anything
+`git grep 'src\.babel_validation'` still finds outside the documentation of this rule, such as a
+`python -m src.babel_validation...` in a workflow, which ruff does not check. Limit the rewrite to
+`*.py`: this file, `pyproject.toml` and `tests.yaml` mention `src.babel_validation` on purpose.
 
 - `core/testrow.py` — `TestRow` dataclass (models a single Google Sheet test row), `TestStatus` enum, `TestResult` dataclass
 - `core/babel_release.py` — recognises Babel release names (`2026sep24`, `2026sep24-dev`) and orders them by date; standard library only, so usable outside the test suite
