@@ -55,9 +55,8 @@ def test_label(target_info, test_row, test_category, record_property):
     source_info = f"{source} ({source_url})"
 
     # A row is queried without a Biolink class only if its cell is empty or has an empty entry.
-    # This used to try `biolink_classes.update('')` to always add a class-less query, but that adds
-    # each character of '' (none), so it never did anything; making it work would add a query per
-    # row, and probably new failures (#193).
+    # The `biolink_classes.update('')` that was here to add a class-less query for every row never
+    # did anything (updating a set from '' adds nothing); #176 adds that query.
     biolink_classes = test_row.BiolinkClasses
 
     # Query in sheet order, and don't deduplicate. The loop stops at the first label that misses,
