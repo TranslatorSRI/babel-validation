@@ -2,6 +2,11 @@ name: Tests
 
 on:
   pull_request:
+  # A run on main itself catches a break from two PRs that each passed alone but
+  # conflict once both are merged; workflow_dispatch reruns it by hand.
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 # Only checkout needs the token. Declaring this at all matters: every scope not
 # listed here is set to none, so the job no longer inherits whatever the org's
