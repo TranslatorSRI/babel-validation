@@ -54,15 +54,17 @@ def test_label(target_info, test_row, test_category, record_property):
     source_url = test_row.SourceURL
     source_info = f"{source} ({source_url})"
 
+    # A row is queried without a Biolink class only if its cell is empty or has an empty entry.
+    # This used to try `biolink_classes.update('')` to always add a class-less query, but that adds
+    # each character of '' (none), so it never did anything; making it work would add a query per
+    # row, and probably new failures (#193).
     biolink_classes = test_row.BiolinkClasses
-    # Make sure we test this without Biolink classes as well
-    if '' not in biolink_classes:
-        biolink_classes.update('')
 
+    # Query in sheet order, and don't deduplicate. The loop stops at the first label that misses,
+    # xfailing or failing by how far down the expected CURIE is, so a set's per-process iteration
+    # order made the outcome depend on the hash seed (#193). Only about 1% of rows repeat a label.
     expected_id = test_row.PreferredID
-    query_labels = {test_row.QueryLabel}
-    query_labels.add(test_row.PreferredLabel)
-    query_labels.update(test_row.AdditionalLabels)
+    query_labels = [test_row.QueryLabel, test_row.PreferredLabel, *test_row.AdditionalLabels]
 
     # Test these labels against NameRes
     count_tested_labels = 0
