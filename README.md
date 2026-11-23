@@ -30,7 +30,8 @@ The marker, not the directory, is what decides whether a test is offline, so a n
 They are what GitHub Actions runs on every pull request.
 Everything else needs a live NodeNorm or NameRes, and is run on demand against a chosen target.
 
-To run those, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).
+To run those, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/) 0.4.27 or later
+(older versions cannot read `uv.lock`; `uv self update` upgrades a standalone install).
 You can then use `uv` to run the tests. The file [`tests/targets.ini`](./tests/targets.ini) allows you to
 control which NodeNorm instance is tested. The `[DEFAULT]` section applies defaults for all the environments.
 For example, to run all the tests on the `dev` instance, you can use `--target`:
