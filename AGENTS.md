@@ -45,6 +45,7 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Run from
 # With -n (xdist), always pass the tests path explicitly (`pytest tests -n 8 ...`):
 # without it, workers do not load tests/conftest.py early enough to know the
 # custom options, and every worker dies at argparse — or collects nothing.
+pytest -m unit                         # Offline unit tests only — no network, no live services (what CI runs)
 pytest --target dev                    # Run all tests against dev environment (default if no --target)
 pytest --target prod                   # Run against production
 pytest --target dev --target prod      # Run against multiple targets
@@ -56,6 +57,10 @@ pytest tests/nodenorm/test_nodenorm_from_gsheet.py  # Run a specific test file
 # (the target name's position in the parametrize id varies; ask pytest with --collect-only -q)
 pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nodenorm_from_gsheet.test_row:row=42-dev]"
 ```
+
+`-m unit` and `--category "Unit Tests"` are unrelated despite the names. `-m unit` selects the
+offline tests marked `unit`; `--category "Unit Tests"` selects Google Sheet rows whose Category
+column says "Unit Tests", and those still call a live NodeNorm or NameRes.
 
 ### Code Formatting
 
@@ -139,6 +144,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
 - `tests/nameres/` — NameRes tests (label lookup, autocomplete, Biolink type filtering, blocklist, taxon_specific flag)
+- `tests/unit/` (and `tests/github_issues/unit/`) — Offline tests for the library in `src/babel_validation/`: service caching, Google Sheet parsing and downloading, the report generator, the issue parser. Marked `unit`; these are the only tests that run without network access, so they are the ones CI runs on every PR
 - `tests/nodenorm/by_issue/` — Per-issue regression tests for NodeNorm, one or more GitHub issues each; `by_issue/biothings/` holds those for NodeNorm ES bugs filed in `biothings/NodeNormalizationAPI` and `biothings/pending.api`
 
 ### Dashboard Website
