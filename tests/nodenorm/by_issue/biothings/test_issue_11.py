@@ -61,14 +61,10 @@ def test_equivalent_identifiers(target_info, curie, drug_chemical_conflate):
     )
 
     result = response.json()
-    assert isinstance(result, dict), (
-        f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
-    )
+    assert isinstance(result, dict), f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
 
     node = result.get(curie)
-    assert isinstance(node, dict), (
-        f"{curie} returned null with drug_chemical_conflate={drug_chemical_conflate}"
-    )
+    assert isinstance(node, dict), f"{curie} returned null with drug_chemical_conflate={drug_chemical_conflate}"
 
     equiv = node.get("equivalent_identifiers", [])
     identifiers = [entry["identifier"] for entry in equiv]

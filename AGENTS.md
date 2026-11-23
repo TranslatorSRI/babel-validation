@@ -60,18 +60,14 @@ pytest "tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[test_nod
 ### Code Formatting
 
 ```bash
-black tests/    # Format Python test code
-ruff check .    # Only checks that nothing imports src.babel_validation (see "Library" below)
+ruff check .            # Lint (pycodestyle, pyflakes, import order, pyupgrade, banned imports)
+ruff check --fix .      # ...and fix what it can
+ruff format .           # Format
 ```
 
-Note that the repository is *not* currently black-clean — `black --check tests/ src/` reports
-~30 files it would reformat. Running `black` across the tree would bury a real change in
-unrelated churn, so format only the files you touch, or match the surrounding style.
-"Files you touch" means files that are already black-clean:
-`src/babel_validation/services/service_checks.py`, `src/babel_validation/core/babel_release.py`,
-`tests/unit/test_service_checks.py` and `tests/nodenorm/test_nodenorm_api.py` use single quotes,
-and running `black` on them after a ten-line edit rewrote every string in the file. Check
-`black --check <file>` on the committed version first; if it is not clean, edit by hand.
+CI fails a pull request on either `ruff check .` or `ruff format --check .`, and the whole tree
+is clean, so formatting a file touches only the lines you changed. The settings in
+`pyproject.toml` follow NCATSTranslator/Babel's, so the two repositories format alike.
 
 ### Dashboard Website (website/)
 
@@ -263,7 +259,7 @@ the two halves of the codebase disagreed about where the cache was.
 
 ## Key Dependencies
 
-- Python >=3.11, pytest, requests, pygithub, pyyaml (runtime); deepdiff, openapi-spec-validator, the pytest plugins, black, ruff (the `dev` dependency group, which `uv sync`/`uv run` install but the wheel does not)
+- Python >=3.11, pytest, requests, pygithub, pyyaml (runtime); deepdiff, openapi-spec-validator, the pytest plugins, ruff (the `dev` dependency group, which `uv sync`/`uv run` install but the wheel does not)
 - `uv` for Python dependency management (no requirements.txt — uses pyproject.toml)
 
 ## Testing Patterns

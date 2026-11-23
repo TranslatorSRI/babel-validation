@@ -90,9 +90,7 @@ def elasticsearch_discrepancy_applies(target_info, before=None):
 
 
 def conflations_500_expected(target_info):
-    return elasticsearch_discrepancy_applies(
-        target_info, before=NODENORM_ES_CONFLATIONS_FIX
-    )
+    return elasticsearch_discrepancy_applies(target_info, before=NODENORM_ES_CONFLATIONS_FIX)
 
 
 def expect_elasticsearch_discrepancy(request, target_info, reason, before=None):
@@ -101,19 +99,14 @@ def expect_elasticsearch_discrepancy(request, target_info, reason, before=None):
     elasticsearch_discrepancy_applies() picks out.
     """
     if elasticsearch_discrepancy_applies(target_info, before):
-        request.node.add_marker(
-            pytest.mark.xfail(
-                strict=True, raises=KnownElasticsearchDiscrepancy, reason=reason
-            )
-        )
+        request.node.add_marker(pytest.mark.xfail(strict=True, raises=KnownElasticsearchDiscrepancy, reason=reason))
 
 
 def test_get_allowed_conflations(request, target_info):
     expect_elasticsearch_discrepancy(
         request,
         target_info,
-        "/get_allowed_conflations returns HTTP 500 before NodeNorm ES 1.2.0 "
-        "(biothings/NodeNormalizationAPI#58)",
+        "/get_allowed_conflations returns HTTP 500 before NodeNorm ES 1.2.0 (biothings/NodeNormalizationAPI#58)",
         before=NODENORM_ES_CONFLATIONS_FIX,
     )
 
@@ -129,16 +122,12 @@ def test_get_allowed_conflations(request, target_info):
         )
         get_normalized_node(target_info, "MESH:D014867")
         raise KnownElasticsearchDiscrepancy(f"GET {url} returned HTTP 500")
-    assert (
-        response.ok
-    ), f"Could not GET {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
+    assert response.ok, f"Could not GET {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
     body = response.json()
-    assert isinstance(body, dict) and isinstance(
-        body.get("conflations"), list
-    ), f"{url} should return an object with a 'conflations' list, got {truncated_repr(body)}"
-    assert {"GeneProtein", "DrugChemical"} <= set(body["conflations"]), truncated_repr(
-        body
+    assert isinstance(body, dict) and isinstance(body.get("conflations"), list), (
+        f"{url} should return an object with a 'conflations' list, got {truncated_repr(body)}"
     )
+    assert {"GeneProtein", "DrugChemical"} <= set(body["conflations"]), truncated_repr(body)
 
 
 def test_get_semantic_types_are_biolink_classes(request, target_info):
@@ -155,38 +144,26 @@ def test_get_semantic_types_are_biolink_classes(request, target_info):
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_semantic_types")
     response = requests.get(url, timeout=REQUEST_TIMEOUT)
-    assert (
-        response.ok
-    ), f"Could not GET {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
+    assert response.ok, f"Could not GET {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
     body = response.json()
     semantic_types = body.get("semantic_types") if isinstance(body, dict) else None
     types = semantic_types.get("types") if isinstance(semantic_types, dict) else None
-    assert isinstance(
-        types, list
-    ), f"{url} should return {{'semantic_types': {{'types': [...]}}}}, got {truncated_repr(body)}"
+    assert isinstance(types, list), (
+        f"{url} should return {{'semantic_types': {{'types': [...]}}}}, got {truncated_repr(body)}"
+    )
     assert types, f"{url} returned no semantic types"
 
-    not_classes = [
-        t
-        for t in types
-        if not (isinstance(t, str) and re.fullmatch(r"biolink:[A-Z][A-Za-z]*", t))
-    ]
+    not_classes = [t for t in types if not (isinstance(t, str) and re.fullmatch(r"biolink:[A-Z][A-Za-z]*", t))]
     # Only an all-lower-case class name is the known bug; anything else that isn't a Biolink
     # class CURIE is a new failure, and must not be absorbed by the xfail.
-    lower_cased = [
-        t
-        for t in not_classes
-        if isinstance(t, str) and re.fullmatch(r"biolink:[a-z]+", t)
-    ]
+    lower_cased = [t for t in not_classes if isinstance(t, str) and re.fullmatch(r"biolink:[a-z]+", t)]
     malformed = [t for t in not_classes if t not in lower_cased]
     assert not malformed, (
-        f"{url} returned {len(malformed)} types that are not Biolink class CURIEs: "
-        f"{truncated_repr(malformed)}"
+        f"{url} returned {len(malformed)} types that are not Biolink class CURIEs: {truncated_repr(malformed)}"
     )
     if lower_cased:
         raise KnownElasticsearchDiscrepancy(
-            f"{url} returned {len(lower_cased)} lower-cased Biolink classes: "
-            f"{truncated_repr(lower_cased)}"
+            f"{url} returned {len(lower_cased)} lower-cased Biolink classes: {truncated_repr(lower_cased)}"
         )
 
 
@@ -200,8 +177,7 @@ def test_get_setid_post_returns_list(request, target_info):
     expect_elasticsearch_discrepancy(
         request,
         target_info,
-        "POST /get_setid returns an object keyed by input index "
-        "(biothings/NodeNormalizationAPI#48)",
+        "POST /get_setid returns an object keyed by input index (biothings/NodeNormalizationAPI#48)",
     )
 
     url = urllib.parse.urljoin(target_info["NodeNormURL"], "get_setid")
@@ -213,9 +189,7 @@ def test_get_setid_post_returns_list(request, target_info):
         },
     ]
     response = requests.post(url, json=sets, timeout=REQUEST_TIMEOUT)
-    assert (
-        response.ok
-    ), f"Could not POST to {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
+    assert response.ok, f"Could not POST to {url}: HTTP {response.status_code} {truncated_repr(response.text)}"
 
     body = response.json()
     # The known bug is the list we expect, keyed by index instead: '0', '1', ... with a set-ID
@@ -223,28 +197,23 @@ def test_get_setid_post_returns_list(request, target_info):
     if (
         isinstance(body, dict)
         and set(body) == {str(i) for i in range(len(sets))}
-        and all(
-            isinstance(r, dict) and isinstance(r.get("setid"), str)
-            for r in body.values()
-        )
+        and all(isinstance(r, dict) and isinstance(r.get("setid"), str) for r in body.values())
     ):
-        raise KnownElasticsearchDiscrepancy(
-            f"POST {url} should return a list, got an object: {truncated_repr(body)}"
-        )
-    assert isinstance(body, list) and len(body) == len(
-        sets
-    ), f"POST {url} should return one result per input set as a list, got {truncated_repr(body)}"
+        raise KnownElasticsearchDiscrepancy(f"POST {url} should return a list, got an object: {truncated_repr(body)}")
+    assert isinstance(body, list) and len(body) == len(sets), (
+        f"POST {url} should return one result per input set as a list, got {truncated_repr(body)}"
+    )
     for result in body:
-        assert isinstance(result, dict) and isinstance(
-            result.get("setid"), str
-        ), f"POST {url} returned a result with no set ID: {truncated_repr(result)}"
+        assert isinstance(result, dict) and isinstance(result.get("setid"), str), (
+            f"POST {url} returned a result with no set ID: {truncated_repr(result)}"
+        )
 
 
 def get_documented_paths(target_info):
     doc_url, document = get_openapi(target_info, "NodeNormURL", "NodeNormOpenAPIPath")
-    assert isinstance(document, dict) and isinstance(
-        document.get("paths"), dict
-    ), f"{doc_url} has no 'paths' object: {truncated_repr(document)}"
+    assert isinstance(document, dict) and isinstance(document.get("paths"), dict), (
+        f"{doc_url} has no 'paths' object: {truncated_repr(document)}"
+    )
     return doc_url, set(document["paths"])
 
 
@@ -252,9 +221,7 @@ def test_documents_every_shared_endpoint(target_info):
     """The published OpenAPI document lists every endpoint both backends are meant to serve."""
     doc_url, paths = get_documented_paths(target_info)
     missing = sorted(SHARED_PATHS - paths)
-    assert (
-        not missing
-    ), f"{doc_url} does not document endpoints every NodeNorm serves: {missing!r}"
+    assert not missing, f"{doc_url} does not document endpoints every NodeNorm serves: {missing!r}"
 
 
 def path_problem(url):
@@ -282,26 +249,16 @@ def test_every_documented_path_is_served(target_info):
     doc_url, paths = get_documented_paths(target_info)
 
     unsafe = sorted(p for p in paths if not SAFE_PATH.fullmatch(p))
-    assert (
-        not unsafe
-    ), f"{doc_url} documents paths we will not build a URL from: {truncated_repr(unsafe)}"
+    assert not unsafe, f"{doc_url} documents paths we will not build a URL from: {truncated_repr(unsafe)}"
     assert len(paths) <= MAX_DOCUMENTED_PATHS, (
-        f"{doc_url} documents {len(paths)} paths, more than the {MAX_DOCUMENTED_PATHS} "
-        f"this test will request"
+        f"{doc_url} documents {len(paths)} paths, more than the {MAX_DOCUMENTED_PATHS} this test will request"
     )
 
     if conflations_500_expected(target_info):
         paths = paths - {"/get_allowed_conflations"}
 
-    urls = {
-        path: urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/"))
-        for path in sorted(paths)
-    }
+    urls = {path: urllib.parse.urljoin(target_info["NodeNormURL"], path.lstrip("/")) for path in sorted(paths)}
     with ThreadPoolExecutor(max_workers=PATH_WORKERS) as pool:
         problems = dict(zip(urls, pool.map(path_problem, urls.values())))
-    not_served = [
-        f"{path} ({problem})" for path, problem in problems.items() if problem
-    ]
-    assert (
-        not not_served
-    ), f"{doc_url} documents paths this deployment does not serve: {truncated_repr(not_served)}"
+    not_served = [f"{path} ({problem})" for path, problem in problems.items() if problem]
+    assert not not_served, f"{doc_url} documents paths this deployment does not serve: {truncated_repr(not_served)}"

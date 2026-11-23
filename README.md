@@ -27,7 +27,7 @@ covering the library in `src/babel_validation/`, but others sit beside the code 
 [`./tests/github_issues/unit`](./tests/github_issues/unit/) and [`./tests/test_environment`](./tests/test_environment/).
 The marker, not the directory, is what decides whether a test is offline, so a new offline test needs
 `pytestmark = pytest.mark.unit` wherever you put it.
-They are what GitHub Actions runs on every pull request.
+They are what GitHub Actions runs on every pull request, alongside `ruff check` and `ruff format --check`.
 Everything else needs a live NodeNorm or NameRes, and is run on demand against a chosen target.
 
 To run those, you need to [install `uv`](https://docs.astral.sh/uv/getting-started/installation/).

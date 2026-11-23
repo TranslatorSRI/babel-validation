@@ -4,7 +4,6 @@
 # Fixed upstream (the issue is closed); kept as a regression test, so no xfail.
 import urllib.parse
 
-import pytest
 import requests
 
 from babel_validation.services.service_checks import truncated_repr
@@ -27,9 +26,7 @@ def _assert_ok(response, nodenorm_url, drug_chemical_conflate):
         f"(drug_chemical_conflate={drug_chemical_conflate}): {truncated_repr(response.text)}"
     )
     result = response.json()
-    assert isinstance(result, dict), (
-        f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
-    )
+    assert isinstance(result, dict), f"Expected a dict response, got {type(result).__name__}: {truncated_repr(result)}"
     assert CURIE in result, f"{CURIE} missing from response"
 
 

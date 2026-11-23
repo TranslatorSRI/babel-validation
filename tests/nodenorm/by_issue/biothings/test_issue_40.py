@@ -48,6 +48,6 @@ def test_compendium_is_loaded(request, target_info, curie):
     label, expected_type = CURIES[curie]
     node = get_normalized_node(target_info, curie)
     types = node.get("type")
-    assert (
-        isinstance(types, list) and types and types[0] == expected_type
-    ), f"{curie} ({label!r}) should be a {expected_type}, got {truncated_repr(types)}"
+    assert isinstance(types, list) and types and types[0] == expected_type, (
+        f"{curie} ({label!r}) should be a {expected_type}, got {truncated_repr(types)}"
+    )
