@@ -1,12 +1,12 @@
 """Generate assertions/README.md from handler class attributes.
 
 Run:
-    uv run python -m src.babel_validation.assertions.gen_docs
+    uv run python -m babel_validation.assertions.gen_docs
 """
 
 from pathlib import Path
 
-from src.babel_validation.assertions import (
+from babel_validation.assertions import (
     ASSERTION_HANDLERS, AssertionHandler, NodeNormTest, NameResTest,
 )
 
@@ -14,7 +14,7 @@ README_PATH = Path(__file__).parent / "README.md"
 
 INTRO = """\
 <!-- AUTO-GENERATED — do not edit by hand.
-     Regenerate with: uv run python -m src.babel_validation.assertions.gen_docs -->
+     Regenerate with: uv run python -m babel_validation.assertions.gen_docs -->
 
 # BabelTest Assertion Types
 
@@ -116,7 +116,7 @@ ADDING_NEW = """\
 5. Import it in `__init__.py` and add an instance to `ASSERTION_HANDLERS`. Order does not
    matter — this file groups handlers by the service they test.
 
-6. Run `uv run python -m src.babel_validation.assertions.gen_docs` to regenerate `README.md`,
+6. Run `uv run python -m babel_validation.assertions.gen_docs` to regenerate `README.md`,
    and `uv run pytest -m unit` to confirm the checked-in copy is in sync.
 """
 

@@ -3,7 +3,7 @@ import logging
 import requests
 import pytest
 
-from src.babel_validation.sources.google_sheets.blocklist import load_blocklist_from_gsheet
+from babel_validation.sources.google_sheets.blocklist import load_blocklist_from_gsheet
 from tests._pytest_helpers import deselected_by_markexpr
 
 # The blocklist Google Sheet is downloaded lazily in pytest_generate_tests so

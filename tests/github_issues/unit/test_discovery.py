@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from github import UnknownObjectException
 
-from src.babel_validation.sources.github.github_issues_test_cases import issue_id
+from babel_validation.sources.github.github_issues_test_cases import issue_id
 from tests.github_issues.unit._helpers import _mock_issue
 
 pytestmark = pytest.mark.unit

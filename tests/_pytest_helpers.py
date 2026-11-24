@@ -10,7 +10,7 @@ Also holds the GitHub issue cache paths, so the root conftest can clear the
 cache without duplicating the filenames the github_issues conftest owns.
 """
 
-from src.babel_validation.core import cache_dir
+from babel_validation.core import cache_dir
 
 # IDs of issues carrying BabelTest assertions, shared across xdist workers.
 GITHUB_ISSUES_CACHE_FILE = cache_dir() / "issues_cache.json"

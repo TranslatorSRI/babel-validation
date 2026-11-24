@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-import src.babel_validation.core as core
-from src.babel_validation.core import cache_dir
+import babel_validation.core as core
+from babel_validation.core import cache_dir
 from tests.conftest import unlink_if_exists
 from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE
 

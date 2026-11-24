@@ -9,7 +9,7 @@ import requests
 from openapi_spec_validator import validate
 from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
-from src.babel_validation.services.service_checks import (
+from babel_validation.services.service_checks import (
     assert_backend,
     assert_x_translator,
     get_openapi,

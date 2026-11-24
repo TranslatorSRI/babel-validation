@@ -5,19 +5,31 @@ description = "A set of programs for validating the output of the Babel pipeline
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
+# What `import babel_validation` needs. pytest stays here because the library imports it:
+# services/service_checks.py and sources/google_sheets/google_sheet_test_cases.py both do, so an
+# installed copy without it would fail on import.
 dependencies = [
-    "black>=25.9.0",
     "pyyaml>=6.0",
     "requests>=2.32.5",
     "filelock",
-    "deepdiff>=8.6.1",
     "python-dotenv>=0.9.9",
-    "openapi-spec-validator>=0.7.2",
     "pygithub>=2.8.1",
     "pytest>=9.0.2",
+]
+
+# Tools for working on this repository, not needed to use babel_validation, so they stay out of
+# the wheel's dependencies. `uv sync` and `uv run` install the dev group by default.
+# Nothing under src/ imports these: deepdiff, openapi-spec-validator and the pytest plugins are
+# used only by the suite under tests/.
+[dependency-groups]
+dev = [
+    "black>=25.9.0",
+    "deepdiff>=8.6.1",
+    "openapi-spec-validator>=0.7.2",
+    "pytest-subtests",
     "pytest-timeout>=2.4.0",
     "pytest-xdist[psutil]",
-    "pytest-subtests",
+    "ruff>=0.14.14",
 ]
 
 [project.urls]
@@ -28,15 +40,38 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# Package the entire `src/` directory so existing imports
-# (`from src.babel_validation.X import Y`) continue to work after install.
-packages = ["src"]
+# The usual src layout: the wheel installs one top-level package, `babel_validation`. It used to
+# package all of `src/`, which installed a top-level package named `src` that collides with any
+# other project's own `src` package (Babel has one).
+packages = ["src/babel_validation"]
 
 [tool.pytest.ini_options]
 # Without testpaths, a bare `pytest` would also scan the website directories
 # (including node_modules) during collection.
 testpaths = ["tests"]
+# Import babel_validation from the source tree, whatever is installed. The wheel packages only
+# src/babel_validation, so an editable install made when it packaged all of src/ still points
+# at the repository root, and collection failed with "No module named 'babel_validation'"
+# until `uv sync` was re-run. This also lets a bare `pytest` run with no install at all.
+pythonpath = ["src"]
 timeout = 300
 markers = [
     "unit: unit tests that do not require network access",
 ]
+
+# ruff is used only as a check that no `src.babel_validation` import comes back; black still
+# formats the code. Under pytest, `src.babel_validation` still resolves (tests/__init__.py puts
+# the repository root on sys.path, where src/ counts as a namespace package), so a test using it
+# passes. But it loads a second copy of every module, with its own from_url() singletons and
+# caches, and the same import fails with "No module named 'src'" anywhere outside pytest. Banning
+# `src` catches every form: `from src.babel_validation.x import y`, `import src.babel_validation.x`
+# and `from src import ...`.
+[tool.ruff]
+# log-analysis/ holds exploratory notebooks, not maintained code: one cell does not even parse.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"src" = { msg = "Import babel_validation, not src.babel_validation (see AGENTS.md, 'Library')" }

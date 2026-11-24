@@ -14,7 +14,7 @@ The one trusted input here is the URL we ask for, which comes from the checked-i
 
 These are test-facing: they fail (or skip) the calling test with ``assert`` and
 ``pytest.skip``. The release-name parsing they build on needs neither, and is in
-``src.babel_validation.core.babel_release`` for use outside the test suite.
+``babel_validation.core.babel_release`` for use outside the test suite.
 """
 
 import functools
@@ -24,7 +24,7 @@ import urllib.parse
 import pytest
 import requests
 
-from src.babel_validation.core.babel_release import babel_release_date, match_babel_version
+from babel_validation.core.babel_release import babel_release_date, match_babel_version
 
 # The longest repr() we will put into an assertion message, and the most keys we
 # will list from an object, so that a service returning something enormous or

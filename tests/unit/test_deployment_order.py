@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.babel_validation.tools.generate_report import read_targets
+from babel_validation.tools.generate_report import read_targets
 
 pytestmark = pytest.mark.unit
 
