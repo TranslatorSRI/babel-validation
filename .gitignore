@@ -1,3 +1,6 @@
+# Ignore worktrees
+/worktrees/
+
 # Ignore the root .env file.
 /.env
 
