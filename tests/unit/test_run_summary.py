@@ -132,17 +132,17 @@ def test_render_summary():
         "  unit               100%     1/1       ·      ·      ·  │      ·     ·  (test_babel_release.py: 1)",
         "",
         # Every test that went wrong anywhere, or differs between targets: failures, errors
-        # and xpasses first, then by size, then by pattern. Each is the node ID from the target
-        # where it went wrong, so it can be found in the log or rerun.
+        # and xpasses first, then by size, then in --target order. Each is the node ID from the
+        # target where it went wrong, so it can be found in the log or rerun.
         "Failures and differences between targets: 4",
-        "  xpassed on ci-es (1):",
-        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=5]'",
         "  error on dev; xfailed on ci-es (1):",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=4]'",
         "  failed on dev; passed on ci-es (1):",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=2]'",
         "  passed on dev; failed on ci-es (1):",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=\\x1b[2J]'",
+        "  xpassed on ci-es (1):",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=5]'",
     ]
 
 
@@ -316,4 +316,19 @@ def test_failures_on_one_target_and_their_links():
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=3]'",
         "  failed (1):",
         "    - 'tests/unit/test_x.py::test_it'",
+    ]
+
+
+@pytest.mark.parametrize("targets", [["dev", "ci-es"], ["ci-es", "dev"]])
+def test_equal_groups_follow_target_order(targets):
+    # Two tests that each ran on only one target and failed there: groups of the same tier and
+    # size, which are listed in --target order rather than by target name.
+    records = [
+        _record(f"{GSHEET}[{t}-gsheet:row={row}]", "failed", target=t)
+        for row, t in enumerate(targets)
+    ]
+    summary = build_summary(records, targets, _sections(), set(), set())
+    lines = plain_text(render_summary(summary))
+    assert [line for line in lines if line.endswith("(1):")] == [
+        f"  failed on {t} (1):" for t in targets
     ]

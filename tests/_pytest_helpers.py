@@ -369,7 +369,14 @@ def _listed_groups(summary):
             return 1
         return 2  # Differs only by a skip, typically require_babel_release.
 
-    return sorted(groups.items(), key=lambda g: (tier(g[0]), -len(g[1]), g[0]))
+    def in_target_order(pattern):
+        # Not the pattern itself, whose target names would sort alphabetically: ties follow
+        # --target order, like the table and everything else in the summary.
+        return tuple((order.index(target), outcome) for target, outcome in pattern)
+
+    return sorted(
+        groups.items(), key=lambda g: (tier(g[0]), -len(g[1]), in_target_order(g[0]))
+    )
 
 
 def _pattern_heading(pattern):
