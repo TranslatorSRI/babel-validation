@@ -147,6 +147,7 @@ class TestLinkValidation:
             "NCATSTranslator/Babel#notanumber",
             "NCATSTranslator/Babel/extra#1",
             "../etc#1",
+            "NCATSTranslator/Babel#12\n",
             "",
             None,
         ],
@@ -154,8 +155,15 @@ class TestLinkValidation:
     def test_issue_id_rejected(self, issue_id):
         assert validate_issue_id(issue_id, ALLOWLIST) is None
 
-    def test_source_url_allowlisted(self):
-        url = "https://github.com/NCATSTranslator/Babel/issues/12"
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://github.com/NCATSTranslator/Babel/issues/12",
+            "https://github.com/NCATSTranslator/Babel/issues/12#issuecomment-123",
+            "https://github.com/NCATSTranslator/Babel/blob/main/a%20b.md?plain=1#L5",
+        ],
+    )
+    def test_source_url_allowlisted(self, url):
         assert validate_source_url(url, ALLOWLIST) == url
 
     @pytest.mark.parametrize(
@@ -168,6 +176,19 @@ class TestLinkValidation:
             "javascript:alert(1)",
             "",
             None,
+            # Printed into public Actions logs by the end-of-run summary: a newline
+            # forges a workflow command, an ESC is a terminal escape.
+            "https://github.com/NCATSTranslator/Babel/issues/12\n::error::forged",
+            "https://github.com/NCATSTranslator/Babel/issues/12\n",
+            "https://github.com/NCATSTranslator/Babel/issues/12\r::error::forged",
+            "https://github.com/NCATSTranslator/Babel/issues/12\x1b[2J",
+            "https://github.com/NCATSTranslator/Babel/issues/12‮",
+            "https://github.com/NCATSTranslator/Babel/issues/12 trailing text",
+            "https://github.com/NCATSTranslator/Babel/issues/12\\",
+            pytest.param(
+                "https://github.com/NCATSTranslator/Babel/issues/" + "1" * 512,
+                id="too-long",
+            ),
         ],
     )
     def test_source_url_rejected(self, url):

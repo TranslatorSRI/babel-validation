@@ -416,6 +416,8 @@ def _listed_tests(summary, max_listed):
             # because it carries parametrize IDs built from sheet rows and issue bodies.
             line = [(f"    - {_example_nodeid(summary, key, pattern)!r}", {})]
             if key in summary.links:
+                # Printed as it is, so it stays clickable: _source_link's checks only pass
+                # URLs of printable, non-whitespace characters.
                 line.append((f" ({summary.links[key]})", {}))
             lines.append(line)
         if shown < len(keys):

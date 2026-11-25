@@ -160,12 +160,13 @@ def parse_nodeid(nodeid, targets):
 
 # Issue ids must look like org/repo#N *and* be in the checked-in allowlist
 # before we build a github.com link from them.
-ISSUE_ID_RE = re.compile(r"^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([0-9]+)$")
+ISSUE_ID_RE = re.compile(r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([0-9]+)")
 
 
 def validate_issue_id(issue_id, allowlist):
     """Return the validated 'org/repo#N' or None."""
-    match = ISSUE_ID_RE.match(issue_id or "")
+    # fullmatch, not match with "$", which also matches before a final newline.
+    match = ISSUE_ID_RE.fullmatch(issue_id or "")
     if not match:
         return None
     if match.group(1).lower() not in allowlist:
@@ -173,12 +174,29 @@ def validate_issue_id(issue_id, allowlist):
     return issue_id
 
 
+# The characters a Source URL may contain: RFC 3986's unreserved and reserved
+# characters and "%". No whitespace or control characters, because the end-of-run
+# summary prints the URL as it is into public Actions logs, where a newline
+# followed by "::error::" forges a workflow command and an ESC is a terminal
+# escape. No backslash either, which browsers read as "/" in an https URL.
+SOURCE_URL_RE = re.compile(
+    r"https://github\.com/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*"
+)
+SOURCE_URL_MAX_LENGTH = 512
+
+
 def validate_source_url(source_url, allowlist):
     """
     Return source_url only if it is a GitHub URL within an allowlisted
     org/repo; otherwise None. SourceURL is free text from the Google Sheet.
+
+    Callers may print or link the result without escaping it: it is at most
+    SOURCE_URL_MAX_LENGTH characters of SOURCE_URL_RE.
     """
-    if not source_url or not source_url.startswith("https://github.com/"):
+    if not source_url or len(source_url) > SOURCE_URL_MAX_LENGTH:
+        return None
+    # fullmatch, not match with "$", which also matches before a final newline.
+    if not SOURCE_URL_RE.fullmatch(source_url):
         return None
     parts = source_url[len("https://github.com/") :].split("/")
     if len(parts) < 2:

@@ -278,6 +278,14 @@ def test_failures_on_one_target_and_their_links():
             target="dev",
             source_url="https://example.org/TranslatorSRI/Babel/issues/12",
         ),
+        # Nor is one in an allowlisted repository that would write a line of its own into
+        # the Actions log.
+        _record(
+            f"{GSHEET}[dev-gsheet:row=3]",
+            "failed",
+            target="dev",
+            source_url="https://github.com/TranslatorSRI/Babel/issues/1\n::error::forged",
+        ),
         # A GitHub issue test links to its issue, if the repository is allowlisted.
         _record(f"{issue_test}[dev-TranslatorSRI/Babel#7]", "failed", target="dev"),
         _record(f"{issue_test}[dev-Someone/else#7]", "failed", target="dev"),
@@ -295,9 +303,9 @@ def test_failures_on_one_target_and_their_links():
         records, ["dev"], _sections(), set(), set(), allowlist=["translatorsri/babel"]
     )
     lines = plain_text(render_summary(summary))
-    assert lines[lines.index("Failures: 6") :] == [
-        "Failures: 6",
-        "  failed on dev (5):",
+    assert lines[lines.index("Failures: 7") :] == [
+        "Failures: 7",
+        "  failed on dev (6):",
         "    - 'tests/github_issues/test_github_issues.py::test_github_issue[dev-Someone/else#7]'",
         "    - 'tests/github_issues/test_github_issues.py::test_github_issue[dev-TranslatorSRI/Babel#7]'"
         " (https://github.com/TranslatorSRI/Babel/issues/7)",
@@ -305,6 +313,7 @@ def test_failures_on_one_target_and_their_links():
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=1]'"
         " (https://github.com/TranslatorSRI/Babel/issues/12)",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=2]'",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=3]'",
         "  failed (1):",
         "    - 'tests/unit/test_x.py::test_it'",
     ]
