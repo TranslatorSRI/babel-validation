@@ -49,6 +49,17 @@ SUMMARY_COMPONENTS = {"nodenorm": ("NodeNorm", "NodeNormURL"), "nameres": ("Name
 SUMMARY_MAX_DIFFERENCES = 50
 
 
+def pass_rate(passed, counted):
+    """A whole-number percentage that is 100% only if everything passed and 0% only if nothing
+    did. Plain rounding (`:.0%`) printed 199 of 200 as "(100%)" right next to "1 failed", so a
+    glance at the rate missed the regression; a single pass in 300 likewise read as "(0%)"."""
+    if passed == counted:
+        return "100%"
+    if passed == 0:
+        return "0%"
+    return f"{min(max(100 * passed // counted, 1), 99)}%"
+
+
 def summarize_run(records, targets, target_sections, categories_include, categories_exclude):
     """
     Lines for the end-of-run summary printed by pytest_terminal_summary in tests/conftest.py.
@@ -113,7 +124,7 @@ def summarize_run(records, targets, target_sections, categories_include, categor
         not_counted = ("xfailed", "skipped")
         counted = sum(n for outcome, n in c.items() if outcome not in not_counted)
         if counted:
-            line = f"{label}: passed {c['passed']} of {counted} ({c['passed'] / counted:.0%})"
+            line = f"{label}: passed {c['passed']} of {counted} ({pass_rate(c['passed'], counted)})"
         else:
             line = f"{label}: nothing passed or failed"
         others = [f"{c[o]} {o}" for o in ("failed", "error", "xpassed") if c[o]]

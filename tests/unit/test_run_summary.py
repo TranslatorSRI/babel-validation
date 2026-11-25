@@ -4,7 +4,7 @@ import configparser
 
 import pytest
 
-from tests._pytest_helpers import summarize_run
+from tests._pytest_helpers import pass_rate, summarize_run
 
 pytestmark = pytest.mark.unit
 
@@ -104,3 +104,19 @@ def test_summarize_run_single_target_has_no_comparison():
         "Targets: dev; included categories: all; excluded categories: Slow",
         "NameRes [dev] https://nr.dev/: nothing passed or failed; not counted: 1 skipped",
     ]
+
+
+@pytest.mark.parametrize(
+    "passed, counted, expected",
+    [
+        (200, 200, "100%"),
+        (0, 300, "0%"),
+        (1, 2, "50%"),
+        # Plain rounding gives 100% and 0% for these two, hiding a failure or a pass.
+        (199, 200, "99%"),
+        (1, 300, "1%"),
+        (2, 3, "66%"),
+    ],
+)
+def test_pass_rate_never_rounds_to_all_or_nothing(passed, counted, expected):
+    assert pass_rate(passed, counted) == expected
