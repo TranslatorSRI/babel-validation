@@ -160,9 +160,14 @@ def pytest_runtest_logreport(report):
 @pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_terminal_summary(terminalreporter, config):
     """
-    Print what was tested and per-component, per-target pass rates at the end of the run, so
-    nobody has to scroll back to the header through thousands of lines of output. With several
-    --target options, also list the tests whose outcome differs between targets.
+    Print a summary at the end of the run, so nobody has to scroll back through thousands of
+    lines of output: what was tested (targets and category filters), a one-line result per
+    service, and a pass-rate table with a row per service and target and one per remaining
+    directory of tests/. Then list every test that failed, errored or xpassed on any target
+    (even with a single --target) and, with several, every test whose outcome differs between
+    targets, grouped by their pattern of outcomes and each with an allowlisted link to its
+    issue or Source URL where there is one. --summary-max-listed caps how many are listed.
+    build_summary and render_summary in tests/_pytest_helpers.py do the work.
 
     This is a tryfirst wrapper so that it is the outermost one and prints after everything
     else, just above the final "N passed, M failed" line. A plain hook prints *before*
