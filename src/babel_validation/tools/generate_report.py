@@ -29,6 +29,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from urllib.parse import unquote
 
 import requests
 
@@ -198,7 +199,13 @@ def validate_source_url(source_url, allowlist):
     # fullmatch, not match with "$", which also matches before a final newline.
     if not SOURCE_URL_RE.fullmatch(source_url):
         return None
-    parts = source_url[len("https://github.com/") :].split("/")
+    path = re.split(r"[?#]", source_url[len("https://github.com/") :])[0]
+    # A browser resolves "." and ".." segments, and their percent-encoded forms
+    # such as "%2e%2e", before it requests the page, so ".../Babel/../../evil/x"
+    # passes the org/repo check below and opens github.com/evil/x.
+    if {".", ".."} & set(unquote(path).split("/")):
+        return None
+    parts = path.split("/")
     if len(parts) < 2:
         return None
     if f"{parts[0]}/{parts[1]}".lower() not in allowlist:

@@ -161,6 +161,9 @@ class TestLinkValidation:
             "https://github.com/NCATSTranslator/Babel/issues/12",
             "https://github.com/NCATSTranslator/Babel/issues/12#issuecomment-123",
             "https://github.com/NCATSTranslator/Babel/blob/main/a%20b.md?plain=1#L5",
+            # Dot segments only count in the path.
+            "https://github.com/NCATSTranslator/Babel/issues?q=../..#..",
+            "https://github.com/NCATSTranslator/Babel/blob/main/.github/x..y",
         ],
     )
     def test_source_url_allowlisted(self, url):
@@ -185,6 +188,11 @@ class TestLinkValidation:
             "https://github.com/NCATSTranslator/Babel/issues/12‮",
             "https://github.com/NCATSTranslator/Babel/issues/12 trailing text",
             "https://github.com/NCATSTranslator/Babel/issues/12\\",
+            # A browser resolves dot segments, leaving the allowlisted repository.
+            "https://github.com/NCATSTranslator/Babel/../../evil/phish",
+            "https://github.com/NCATSTranslator/Babel/%2e%2E/%2e./evil/phish",
+            "https://github.com/NCATSTranslator/Babel/./issues/12",
+            "https://github.com/NCATSTranslator/Babel/..",
             pytest.param(
                 "https://github.com/NCATSTranslator/Babel/issues/" + "1" * 512,
                 id="too-long",
