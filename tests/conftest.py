@@ -156,6 +156,16 @@ def _repositories_allowlist(config):
     return config.stash[_ALLOWLIST_KEY]
 
 
+@pytest.fixture
+def repositories_allowlist(request):
+    """
+    The targets.ini Repositories allowlist, for a test to pass anything it prints or records
+    through validate_source_url() (or validate_issue_id()) first: its output reaches public
+    Actions logs and the raw-jsonl artifact.
+    """
+    return _repositories_allowlist(request.config)
+
+
 def pytest_runtest_logreport(report):
     """
     Record one entry per test phase: every 'call' report, plus setup/teardown

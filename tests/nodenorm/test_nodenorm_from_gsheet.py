@@ -2,6 +2,7 @@ import urllib.parse
 import requests
 import pytest
 from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
+from src.babel_validation.tools.generate_report import validate_source_url
 from tests._pytest_helpers import deselected_by_markexpr
 
 # A stalled NodeNorm would otherwise hold each ID until pytest's --timeout.
@@ -33,24 +34,23 @@ def pytest_generate_tests(metafunc):
     )
 
 
-def test_normalization(target_info, test_row, test_category, record_property):
+def test_normalization(target_info, test_row, test_category, record_property, repositories_allowlist):
     nodenorm_url = target_info['NodeNormURL']
 
     # Structured metadata for the dashboard report (--report-jsonl); forwarded
     # to the controller by xdist as user_properties.
     record_property("category", test_row.Category)
     record_property("source", test_row.Source)
-    record_property("source_url", test_row.SourceURL)
+    # Only an allowlisted Source URL is recorded or printed: the cell is free text and could link
+    # to another Google Sheet, and the raw records and messages reach public logs and artifacts (#197).
+    source_url = validate_source_url(test_row.SourceURL, repositories_allowlist)
+    record_property("source_url", source_url)
     record_property("query_id", test_row.QueryID)
     record_property("query_label", test_row.QueryLabel)
 
     category = test_row.Category
     if not test_category(category):
         pytest.skip(f"Skipping category {category} because of the category filter.")
-
-    source = test_row.Source
-    source_url = test_row.SourceURL
-    source_info = f"{source} ({source_url})"
 
     preferred_label = test_row.PreferredLabel
 

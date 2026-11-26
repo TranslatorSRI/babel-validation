@@ -2,6 +2,7 @@ import urllib.parse
 import requests
 import pytest
 from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
+from src.babel_validation.tools.generate_report import validate_source_url
 from tests._pytest_helpers import deselected_by_markexpr
 
 # Configuration options
@@ -33,7 +34,7 @@ def pytest_generate_tests(metafunc):
     )
 
 
-def test_label(target_info, test_row, test_category, record_property):
+def test_label(target_info, test_row, test_category, record_property, repositories_allowlist):
     nameres_url = target_info['NameResURL']
     limit = target_info['NameResLimit']
     nameres_xfail_if_in_top = int(target_info['NameResXFailIfInTop'])
@@ -42,7 +43,10 @@ def test_label(target_info, test_row, test_category, record_property):
     # to the controller by xdist as user_properties.
     record_property("category", test_row.Category)
     record_property("source", test_row.Source)
-    record_property("source_url", test_row.SourceURL)
+    # Only an allowlisted Source URL is recorded or printed: the cell is free text and could link
+    # to another Google Sheet, and the raw records and messages reach public logs and artifacts (#197).
+    source_url = validate_source_url(test_row.SourceURL, repositories_allowlist)
+    record_property("source_url", source_url)
     record_property("query_id", test_row.QueryID)
     record_property("query_label", test_row.QueryLabel)
 
@@ -50,9 +54,7 @@ def test_label(target_info, test_row, test_category, record_property):
     if not test_category(category):
         pytest.skip(f"Skipping category {category} because of the category filter.")
 
-    source = test_row.Source
-    source_url = test_row.SourceURL
-    source_info = f"{source} ({source_url})"
+    source_info = f"{test_row.Source!r} ({source_url or 'no allowlisted Source URL'})"
 
     # A row is queried without a Biolink class only if its cell is empty or has an empty entry.
     # The `biolink_classes.update('')` that was here to add a class-less query for every row never

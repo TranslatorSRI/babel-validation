@@ -1,8 +1,11 @@
 """Unit tests for the "Google Sheet row" failure-report section (sheet_row_section in tests/_pytest_helpers.py). No network."""
 
+import types
+
 import pytest
 
 from tests._pytest_helpers import sheet_row_section
+from tests.conftest import _repositories_allowlist
 
 pytestmark = pytest.mark.unit
 
@@ -40,7 +43,7 @@ def test_sheet_row_section_hides_source_urls_off_the_allowlist(url):
         [("category", "Unit Tests"), ("source_url", url)], ["ncatstranslator/babel"]
     )
     assert url not in section
-    assert "Source URL:  (not shown" in section
+    assert "Source URL:  (none that links" in section
 
 
 def test_sheet_row_section_hides_every_source_url_without_an_allowlist():
@@ -133,3 +136,23 @@ def test_makereport_adds_the_section_only_to_real_failures(tmp_path, monkeypatch
     assert reports["test_known_failure"][0] == "skipped"
     for name in ("test_known_failure", "test_passes", "test_fails_without_a_row"):
         assert "Google Sheet row" not in reports[name][1], name
+
+
+def _config(rootpath):
+    return types.SimpleNamespace(rootpath=rootpath, stash=pytest.Stash())
+
+
+def test_repositories_allowlist_reads_targets_ini_once(tmp_path):
+    (tmp_path / "targets.ini").write_text(
+        "[DEFAULT]\nRepositories =\n    NCATSTranslator/Babel\n    Org/Repo\n"
+    )
+    config = _config(tmp_path)
+    assert _repositories_allowlist(config) == ["ncatstranslator/babel", "org/repo"]
+    # Read once per process: the sheet tests ask for it on every row.
+    (tmp_path / "targets.ini").unlink()
+    assert _repositories_allowlist(config) == ["ncatstranslator/babel", "org/repo"]
+
+
+def test_repositories_allowlist_is_empty_without_targets_ini(tmp_path):
+    # Empty hides every Source URL, rather than raising while a failure is being reported.
+    assert _repositories_allowlist(_config(tmp_path)) == []

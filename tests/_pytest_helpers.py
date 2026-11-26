@@ -72,24 +72,23 @@ def sheet_row_section(user_properties, allowlist=()):
     printed to the terminal and into public Actions logs: each is !r-escaped and truncated.
     The Source URL is free text and could link anywhere (another Google Sheet, whose URL is
     its capability), so like the end-of-run summary's links (annotate_result) it is shown
-    only if it points into a repository on the Repositories allowlist.
+    only if it points into a repository on the Repositories allowlist. The sheet tests already
+    record nothing else (#197), so an empty cell and a refused link look the same by the time
+    they get here; it is checked again because this sees whatever a test recorded.
 
     :param allowlist: The lower-cased org/repo names in targets.ini's Repositories list.
     """
     props = dict(user_properties)
     if "category" not in props:
         return None
-    url = props.get("source_url")
-    if url and not validate_source_url(url, allowlist):
-        props["source_url"] = None
-        hidden = "(not shown: not a link into a Repositories repo in targets.ini)"
-    else:
-        hidden = None
+    cells = {key: _sheet_cell(props.get(key)) for key in SHEET_ROW_FIELDS}
+    url = validate_source_url(props.get("source_url"), allowlist)
+    cells["source_url"] = (
+        _sheet_cell(url) if url else "(none that links into a Repositories repo in targets.ini)"
+    )
     width = max(len(label) for label in SHEET_ROW_FIELDS.values())
     return "\n".join(
-        f"{label + ':':<{width + 1}} "
-        + (hidden if key == "source_url" and hidden else _sheet_cell(props.get(key)))
-        for key, label in SHEET_ROW_FIELDS.items()
+        f"{label + ':':<{width + 1}} {cells[key]}" for key, label in SHEET_ROW_FIELDS.items()
     )
 
 
