@@ -131,10 +131,27 @@ def pytest_runtest_makereport(item, call):
     """
     report = yield
     if report.when == 'call' and report.failed:
-        section = sheet_row_section(item.user_properties)
+        section = sheet_row_section(item.user_properties, _repositories_allowlist(item.config))
         if section:
             report.sections.append(("Google Sheet row", section))
     return report
+
+
+_ALLOWLIST_KEY = pytest.StashKey[list]()
+
+
+def _repositories_allowlist(config):
+    """
+    The targets.ini Repositories allowlist, read once per process. Empty (so no Source URL is
+    shown) if targets.ini can't be found, rather than an error in the middle of reporting a
+    failure.
+    """
+    if _ALLOWLIST_KEY not in config.stash:
+        try:
+            config.stash[_ALLOWLIST_KEY] = read_report_targets(get_targets_ini_path(config))[1]
+        except RuntimeError:
+            config.stash[_ALLOWLIST_KEY] = []
+    return config.stash[_ALLOWLIST_KEY]
 
 
 def pytest_runtest_logreport(report):

@@ -17,13 +17,37 @@ def test_sheet_row_section():
         ("query_id", "MESH:D014867"),
         ("query_label", None),
     ]
-    assert sheet_row_section(props).splitlines() == [
+    assert sheet_row_section(props, ["ncatstranslator/babel"]).splitlines() == [
         "Category:    'Unit Tests'",
         "Source:      'NodeNorm issue'",
         "Source URL:  'https://github.com/NCATSTranslator/Babel/issues/1'",
         "Query ID:    'MESH:D014867'",
         "Query label: ''",
     ]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://docs.google.com/spreadsheets/d/SOME_OTHER_SHEET/edit",
+        "https://github.com/someone-else/repo/issues/1",
+        "http://github.com/NCATSTranslator/Babel/issues/1",
+    ],
+)
+def test_sheet_row_section_hides_source_urls_off_the_allowlist(url):
+    # The section reaches public Actions logs, and the Source URL is free text in the sheet.
+    section = sheet_row_section(
+        [("category", "Unit Tests"), ("source_url", url)], ["ncatstranslator/babel"]
+    )
+    assert url not in section
+    assert "Source URL:  (not shown" in section
+
+
+def test_sheet_row_section_hides_every_source_url_without_an_allowlist():
+    url = "https://github.com/NCATSTranslator/Babel/issues/1"
+    assert url not in sheet_row_section(
+        [("category", "Unit Tests"), ("source_url", url)]
+    )
 
 
 def test_sheet_row_section_only_for_sheet_tests():

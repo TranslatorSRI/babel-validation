@@ -61,7 +61,7 @@ SHEET_ROW_FIELDS = {
 }
 
 
-def sheet_row_section(user_properties):
+def sheet_row_section(user_properties, allowlist=()):
     """
     The text of a "Google Sheet row" report section for a failing sheet test, or None for any
     other test. Its assertion messages do include the row, but as one long TestRow repr, so
@@ -69,15 +69,31 @@ def sheet_row_section(user_properties):
 
     The values are sheet cells, which anyone with edit access can write, and the section is
     printed to the terminal and into public Actions logs: each is !r-escaped and truncated.
+    The Source URL is free text and could link anywhere (another Google Sheet, whose URL is
+    its capability), so like the end-of-run summary's links (_source_link) it is shown only
+    if it points into a repository on the Repositories allowlist.
+
+    :param allowlist: The lower-cased org/repo names in targets.ini's Repositories list.
     """
     props = dict(user_properties)
     if "category" not in props:
         return None
+    url = props.get("source_url")
+    if url and not validate_source_url(url, allowlist):
+        props["source_url"] = None
+        hidden = "(not shown: not a link into a Repositories repo in targets.ini)"
+    else:
+        hidden = None
     width = max(len(label) for label in SHEET_ROW_FIELDS.values())
     return "\n".join(
-        f"{label + ':':<{width + 1}} {str(props.get(key) or '')[:200]!r}"
+        f"{label + ':':<{width + 1}} "
+        + (hidden if key == "source_url" and hidden else _sheet_cell(props.get(key)))
         for key, label in SHEET_ROW_FIELDS.items()
     )
+
+
+def _sheet_cell(value, limit=200):
+    return repr(str(value or "")[:limit])
 
 
 # Services, with the targets.ini key holding each one's URL. They come first in the summary,
