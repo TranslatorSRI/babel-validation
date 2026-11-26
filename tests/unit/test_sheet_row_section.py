@@ -40,7 +40,7 @@ def test_sheet_row_section_hides_source_urls_off_the_allowlist(url):
         [("category", "Unit Tests"), ("source_url", url)], ["ncatstranslator/babel"]
     )
     assert url not in section
-    assert "Source URL:  (not shown" in section
+    assert "Source URL:  (none that links" in section
 
 
 def test_sheet_row_section_hides_every_source_url_without_an_allowlist():
