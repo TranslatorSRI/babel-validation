@@ -185,15 +185,16 @@ def pytest_terminal_summary(terminalreporter, config):
     targets = get_targets(config)
     # Not get_target(), which raises on an unknown --target: that run has already failed at
     # collection, and the summary shouldn't add a second traceback.
-    sections = read_targets(get_targets_ini_path(config))
+    # Read the way the dashboard's report generator reads it, for the Repositories allowlist;
+    # its ConfigParser holds every section, and build_summary skips targets that have none.
+    _, allowlist, sections = read_report_targets(get_targets_ini_path(config))
     summary = build_summary(
         _summary_records,
         targets,
-        {target: sections[target] for target in targets if target in sections},
+        sections,
         set(config.getoption('--category')),
         set(config.getoption('--category-exclude')),
-        # The Repositories allowlist, read the way the dashboard's report generator reads it.
-        read_report_targets(get_targets_ini_path(config))[1],
+        allowlist,
     )
     terminalreporter.write_sep("=", "Babel Validation summary")
     for line in render_summary(summary, config.getoption('--summary-max-listed')):
