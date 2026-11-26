@@ -29,6 +29,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from urllib.parse import unquote
 
 import requests
 
@@ -160,12 +161,13 @@ def parse_nodeid(nodeid, targets):
 
 # Issue ids must look like org/repo#N *and* be in the checked-in allowlist
 # before we build a github.com link from them.
-ISSUE_ID_RE = re.compile(r"^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([0-9]+)$")
+ISSUE_ID_RE = re.compile(r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([0-9]+)")
 
 
 def validate_issue_id(issue_id, allowlist):
     """Return the validated 'org/repo#N' or None."""
-    match = ISSUE_ID_RE.match(issue_id or "")
+    # fullmatch, not match with "$", which also matches before a final newline.
+    match = ISSUE_ID_RE.fullmatch(issue_id or "")
     if not match:
         return None
     if match.group(1).lower() not in allowlist:
@@ -173,14 +175,37 @@ def validate_issue_id(issue_id, allowlist):
     return issue_id
 
 
+# The characters a Source URL may contain: RFC 3986's unreserved and reserved
+# characters and "%". No whitespace or control characters, because the end-of-run
+# summary prints the URL as it is into public Actions logs, where a newline
+# followed by "::error::" forges a workflow command and an ESC is a terminal
+# escape. No backslash either, which browsers read as "/" in an https URL.
+SOURCE_URL_RE = re.compile(
+    r"https://github\.com/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*"
+)
+SOURCE_URL_MAX_LENGTH = 512
+
+
 def validate_source_url(source_url, allowlist):
     """
     Return source_url only if it is a GitHub URL within an allowlisted
     org/repo; otherwise None. SourceURL is free text from the Google Sheet.
+
+    Callers may print or link the result without escaping it: it is at most
+    SOURCE_URL_MAX_LENGTH characters of SOURCE_URL_RE.
     """
-    if not source_url or not source_url.startswith("https://github.com/"):
+    if not source_url or len(source_url) > SOURCE_URL_MAX_LENGTH:
         return None
-    parts = source_url[len("https://github.com/") :].split("/")
+    # fullmatch, not match with "$", which also matches before a final newline.
+    if not SOURCE_URL_RE.fullmatch(source_url):
+        return None
+    path = re.split(r"[?#]", source_url[len("https://github.com/") :])[0]
+    # A browser resolves "." and ".." segments, and their percent-encoded forms
+    # such as "%2e%2e", before it requests the page, so ".../Babel/../../evil/x"
+    # passes the org/repo check below and opens github.com/evil/x.
+    if {".", ".."} & set(unquote(path).split("/")):
+        return None
+    parts = path.split("/")
     if len(parts) < 2:
         return None
     if f"{parts[0]}/{parts[1]}".lower() not in allowlist:
@@ -478,7 +503,7 @@ def build_results(records, targets, allowlist):
         # Blocklist messages are withheld unconditionally, before any cell is
         # built — the blocklist sheet may not be public, and the messages
         # interpolate its entries.
-        if outcome in OUTCOMES_WITH_MESSAGES and "test_blocklist.py" not in key:
+        if outcome in OUTCOMES_WITH_MESSAGES and not is_blocklist(key):
             # str() for the same reason as in classify_record: join() raises
             # on a non-string, and that would sink every other result too.
             messages = [str(r["msg"]) for r in test_records if r.get("msg")]
@@ -487,44 +512,59 @@ def build_results(records, targets, allowlist):
         result["outcomes"][target] = cell
 
         if "kind" not in result:
-            _annotate_result(result, key, rest, by_key[key], allowlist)
+            props = {}
+            for record in by_key[key]:
+                props.update(record.get("props") or {})
+            result.update(annotate_result(key, rest, props, allowlist))
 
     return results, counts, github_issues_ran
 
 
-def _annotate_result(result, key, rest, test_records, allowlist):
-    """Attach kind and validated metadata/link parts to one result."""
-    if "test_blocklist.py" in key:
-        # The blocklist sheet may not be public: no metadata, no links.
+def is_blocklist(key):
+    """
+    Whether a test key belongs to the blocklist tests. The blocklist sheet may
+    not be public, so these get no messages, metadata or links anywhere: in
+    report.json and in the end-of-run summary alike.
+    """
+    return "test_blocklist.py" in key
+
+
+def issue_url(issue):
+    """The github.com URL of an 'org/repo#N' that validate_issue_id passed."""
+    repo, number = issue.split("#")
+    return f"https://github.com/{repo}/issues/{number}"
+
+
+def annotate_result(key, rest, props, allowlist):
+    """
+    A result's kind and its validated metadata and link parts: an allowlisted
+    "issue" for a GitHub issue test, a Google Sheet row's "row", metadata and
+    allowlisted "source_url". `props` are the test's user properties, merged
+    across its records. The end-of-run summary in tests/_pytest_helpers.py
+    takes its links from here too, so the two cannot disagree.
+    """
+    if is_blocklist(key):
         # Messages are already withheld in build_results.
-        result["kind"] = "blocklist"
-        return
+        return {"kind": "blocklist"}
 
     if key.startswith("github_issues/"):
         issue = validate_issue_id(rest, allowlist)
         if issue:
-            result["kind"] = "issue"
-            result["issue"] = issue
-            return
-        result["kind"] = "other"
-        return
+            return {"kind": "issue", "issue": issue}
+        return {"kind": "other"}
 
     row_match = re.search(r":row=([0-9]+)$", rest)
     if "_from_gsheet.py" in key and row_match:
-        result["kind"] = "gsheet"
-        result["row"] = int(row_match.group(1))
-        props = {}
-        for record in test_records:
-            props.update(record.get("props") or {})
+        result = {"kind": "gsheet", "row": int(row_match.group(1))}
         for prop in ("category", "source", "query_id", "query_label"):
             if props.get(prop):
                 result[prop] = sanitize(props[prop], 200)
         source_url = validate_source_url(props.get("source_url"), allowlist)
         if source_url:
             result["source_url"] = source_url
-        return
+        return result
 
-    result["kind"] = "other"
+    return {"kind": "other"}
 
 
 def side_branch_of(section, target, targets):

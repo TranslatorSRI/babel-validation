@@ -12,7 +12,13 @@ import pytest
 import configparser
 
 from src.babel_validation.core import cache_dir
-from tests._pytest_helpers import GITHUB_ISSUES_CACHE_FILE, summarize_run
+from src.babel_validation.tools.generate_report import read_targets as read_report_targets
+from tests._pytest_helpers import (
+    GITHUB_ISSUES_CACHE_FILE,
+    SUMMARY_DEFAULT_MAX_LISTED,
+    build_summary,
+    render_summary,
+)
 
 
 def get_targets_ini_path(config):
@@ -158,9 +164,14 @@ def pytest_runtest_logreport(report):
 @pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_terminal_summary(terminalreporter, config):
     """
-    Print what was tested and per-component, per-target pass rates at the end of the run, so
-    nobody has to scroll back to the header through thousands of lines of output. With several
-    --target options, also list the tests whose outcome differs between targets.
+    Print a summary at the end of the run, so nobody has to scroll back through thousands of
+    lines of output: what was tested (targets and category filters), a one-line result per
+    service, and a pass-rate table with a row per service and target and one per remaining
+    directory of tests/. Then list every test that failed, errored or xpassed on any target
+    (even with a single --target) and, with several, every test whose outcome differs between
+    targets, grouped by their pattern of outcomes and each with an allowlisted link to its
+    issue or Source URL where there is one. --summary-max-listed caps how many are listed.
+    build_summary and render_summary in tests/_pytest_helpers.py do the work.
 
     This is a tryfirst wrapper so that it is the outermost one and prints after everything
     else, just above the final "N passed, M failed" line. A plain hook prints *before*
@@ -174,17 +185,23 @@ def pytest_terminal_summary(terminalreporter, config):
     targets = get_targets(config)
     # Not get_target(), which raises on an unknown --target: that run has already failed at
     # collection, and the summary shouldn't add a second traceback.
-    sections = read_targets(get_targets_ini_path(config))
-    lines = summarize_run(
+    # Read the way the dashboard's report generator reads it, for the Repositories allowlist;
+    # its ConfigParser holds every section, and build_summary skips targets that have none.
+    _, allowlist, sections = read_report_targets(get_targets_ini_path(config))
+    summary = build_summary(
         _summary_records,
         targets,
-        {target: sections[target] for target in targets if target in sections},
+        sections,
         set(config.getoption('--category')),
         set(config.getoption('--category-exclude')),
+        allowlist,
     )
     terminalreporter.write_sep("=", "Babel Validation summary")
-    for line in lines:
-        terminalreporter.write_line(line)
+    for line in render_summary(summary, config.getoption('--summary-max-listed')):
+        # TerminalWriter drops the markup itself for --color=no, NO_COLOR or a non-terminal.
+        for text, markup in line:
+            terminalreporter.write(text, **markup)
+        terminalreporter.line("")
     return result
 
 
@@ -216,6 +233,15 @@ def pytest_addoption(parser):
         default=None,
         help="Append raw per-test outcome records (JSONL) to this file, for "
              "src.babel_validation.tools.generate_report."
+    )
+
+    parser.addoption(
+        '--summary-max-listed',
+        type=int,
+        default=SUMMARY_DEFAULT_MAX_LISTED,
+        help="How many failing tests, and tests whose outcome differs between targets, to list "
+             f"in the end-of-run summary (default {SUMMARY_DEFAULT_MAX_LISTED}); 0 lists only "
+             "how many there are of each kind, and -1 lists them all."
     )
 
     # Only test particular GitHub issues.
