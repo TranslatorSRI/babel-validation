@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -25,16 +25,22 @@ class TestRow:
     # Empty entries dropped, so an empty cell is [] and test_label sends no prefix filter.
     Prefixes: list[str]
     Source: str
-    SourceURL: str
+    # Free text in the sheet, so it could link anywhere, including to another Google Sheet, whose
+    # ID is its capability. Left out of repr() and str(): pytest prints a failing test's arguments
+    # (`test_row = TestRow(...)`) and its message into public Actions logs. A test that needs it
+    # passes it through validate_source_url() first (#197).
+    SourceURL: str = field(repr=False)
     Notes: str
 
     # Mark as not a test despite starting with Test*.
     __test__ = False
 
-    # A string representation of this test row.
+    # A string representation of this test row, for failure messages. Every cell is !r-escaped,
+    # since the sheet is untrusted and the message reaches terminals; see SourceURL for why it is
+    # not here.
     def __str__(self):
-        return f"TestRow of category {self.Category} for preferred {self.PreferredID} ({self.PreferredLabel}) with " + \
-            f"query {self.QueryID} ({self.QueryLabel}) from source {self.Source} ({self.SourceURL})"
+        return f"TestRow of category {self.Category!r} for preferred {self.PreferredID!r} ({self.PreferredLabel!r}) " + \
+            f"with query {self.QueryID!r} ({self.QueryLabel!r}) from source {self.Source!r}"
 
 
     @staticmethod

@@ -30,3 +30,22 @@ def test_prefixes_keep_sheet_order():
 def test_prefixes_drop_empty_entries(cell, expected):
     # An empty entry used to make test_label send only_prefixes='' for every row.
     assert TestRow.from_data_row({"Prefixes": cell}).Prefixes == expected
+
+
+SHEET_LINK = "https://docs.google.com/spreadsheets/d/ANOTHER_SHEET_ID/edit"
+
+
+def test_repr_and_str_leave_out_the_source_url():
+    # Pytest prints a failing test's arguments (test_row = TestRow(...)) and the sheet tests
+    # format {test_row} into their messages, both into public Actions logs. The Source URL is
+    # free text and could be a link to another sheet, whose ID is its capability (#197).
+    row = TestRow.from_data_row({"Source": "An issue", "Source URL": SHEET_LINK})
+    assert "ANOTHER_SHEET_ID" not in repr(row)
+    assert "ANOTHER_SHEET_ID" not in str(row)
+    assert "'An issue'" in str(row)
+
+
+def test_str_escapes_cells():
+    row = TestRow.from_data_row({"Category": "\x1b[2J‮evil"})
+    assert "\x1b" not in str(row) and "‮" not in str(row)
+    assert "'\\x1b[2J\\u202eevil'" in str(row)
