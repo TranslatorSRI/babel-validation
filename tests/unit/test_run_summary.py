@@ -4,7 +4,7 @@ import configparser
 
 import pytest
 
-from tests._pytest_helpers import build_summary, plain_text, render_summary
+from tests._pytest_helpers import build_summary, pass_rate, plain_text, render_summary
 
 pytestmark = pytest.mark.unit
 
@@ -132,17 +132,17 @@ def test_render_summary():
         "  unit               100%     1/1       ·      ·      ·  │      ·     ·  (test_babel_release.py: 1)",
         "",
         # Every test that went wrong anywhere, or differs between targets: failures, errors
-        # and xpasses first, then by size, then by pattern. Each is the node ID from the target
-        # where it went wrong, so it can be found in the log or rerun.
+        # and xpasses first, then by size, then in --target order. Each is the node ID from the
+        # target where it went wrong, so it can be found in the log or rerun.
         "Failures and differences between targets: 4",
-        "  xpassed on ci-es (1):",
-        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=5]'",
         "  error on dev; xfailed on ci-es (1):",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=4]'",
         "  failed on dev; passed on ci-es (1):",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=2]'",
         "  passed on dev; failed on ci-es (1):",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=\\x1b[2J]'",
+        "  xpassed on ci-es (1):",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[ci-es-gsheet:row=5]'",
     ]
 
 
@@ -161,8 +161,8 @@ def test_render_summary_markup():
     assert ("failed", RED) in heading and ("passed", GREEN) in heading
 
 
-def test_rate_rounds_down():
-    # 199 of 200 is 99.5%, which must not print as 100% while a test fails.
+def test_table_rate_is_not_100_while_a_test_fails():
+    # 199 of 200 is 99.5%, which must not print as 100% while a test fails (see pass_rate).
     records = [_record(f"{GSHEET}[dev-r{i}]", target="dev") for i in range(199)]
     records.append(_record(f"{GSHEET}[dev-r199]", "failed", target="dev"))
     lines = plain_text(render_summary(_summary(records, targets=["dev"])))
@@ -278,6 +278,14 @@ def test_failures_on_one_target_and_their_links():
             target="dev",
             source_url="https://example.org/TranslatorSRI/Babel/issues/12",
         ),
+        # Nor is one in an allowlisted repository that would write a line of its own into
+        # the Actions log.
+        _record(
+            f"{GSHEET}[dev-gsheet:row=3]",
+            "failed",
+            target="dev",
+            source_url="https://github.com/TranslatorSRI/Babel/issues/1\n::error::forged",
+        ),
         # A GitHub issue test links to its issue, if the repository is allowlisted.
         _record(f"{issue_test}[dev-TranslatorSRI/Babel#7]", "failed", target="dev"),
         _record(f"{issue_test}[dev-Someone/else#7]", "failed", target="dev"),
@@ -295,9 +303,9 @@ def test_failures_on_one_target_and_their_links():
         records, ["dev"], _sections(), set(), set(), allowlist=["translatorsri/babel"]
     )
     lines = plain_text(render_summary(summary))
-    assert lines[lines.index("Failures: 6") :] == [
-        "Failures: 6",
-        "  failed on dev (5):",
+    assert lines[lines.index("Failures: 7") :] == [
+        "Failures: 7",
+        "  failed on dev (6):",
         "    - 'tests/github_issues/test_github_issues.py::test_github_issue[dev-Someone/else#7]'",
         "    - 'tests/github_issues/test_github_issues.py::test_github_issue[dev-TranslatorSRI/Babel#7]'"
         " (https://github.com/TranslatorSRI/Babel/issues/7)",
@@ -305,6 +313,38 @@ def test_failures_on_one_target_and_their_links():
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=1]'"
         " (https://github.com/TranslatorSRI/Babel/issues/12)",
         "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=2]'",
+        "    - 'tests/nodenorm/test_nodenorm_from_gsheet.py::test_normalization[dev-gsheet:row=3]'",
         "  failed (1):",
         "    - 'tests/unit/test_x.py::test_it'",
     ]
+
+
+@pytest.mark.parametrize("targets", [["dev", "ci-es"], ["ci-es", "dev"]])
+def test_equal_groups_follow_target_order(targets):
+    # Two tests that each ran on only one target and failed there: groups of the same tier and
+    # size, which are listed in --target order rather than by target name.
+    records = [
+        _record(f"{GSHEET}[{t}-gsheet:row={row}]", "failed", target=t)
+        for row, t in enumerate(targets)
+    ]
+    summary = build_summary(records, targets, _sections(), set(), set())
+    lines = plain_text(render_summary(summary))
+    assert [line for line in lines if line.endswith("(1):")] == [
+        f"  failed on {t} (1):" for t in targets
+    ]
+
+
+@pytest.mark.parametrize(
+    "passed, counted, expected",
+    [
+        (200, 200, "100%"),
+        (0, 300, "0%"),
+        (1, 2, "50%"),
+        # Plain rounding gives 100% and 0% for these two, hiding a failure or a pass.
+        (199, 200, "99%"),
+        (1, 300, "1%"),
+        (2, 3, "66%"),
+    ],
+)
+def test_pass_rate_never_rounds_to_all_or_nothing(passed, counted, expected):
+    assert pass_rate(passed, counted) == expected

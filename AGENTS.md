@@ -90,6 +90,21 @@ Beware: the root `.gitignore`'s Python-template `lib/` pattern matches *any* dir
 `lib`, anywhere in the tree, including `website/src/lib/` — a file there builds locally but
 never reaches CI. Check `git status` shows new files as tracked.
 
+### Open pull requests
+
+A dozen or more PRs are usually open, many stacked on one another, so before changing a file
+look for open PRs that touch it:
+
+```bash
+gh pr list --state open --limit 100 --json number,title,files \
+  --jq '.[] | select([.files[].path] | index("<path>")) | "#\(.number) \(.title)"'
+```
+
+A change that reshapes what another PR also edits (a field's type, a file both create) needs a
+note on both PRs saying how to reconcile them, whichever merges second. #194 changed
+`TestRow.BiolinkClasses` from a set to a list without this check, and found only afterwards
+that #175 and #176 both build on it as a set.
+
 ## Architecture
 
 ### Library (`src/babel_validation/`)
@@ -123,7 +138,7 @@ the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wra
 
 **Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
 
-**End-of-run summary:** after pytest's own list of failed tests and just above its final counts line, `pytest_terminal_summary` in `conftest.py` (a `tryfirst` wrapper, so it prints last: a plain hook would land above that list) prints the targets and category filters, a one-line result per service (NodeNorm, NameRes, Other), and a table with a row per target under each service, then under "Other" one per remaining directory of `tests/` with the files it holds. Skipped and xfailed tests (category-filtered rows, known failures) are left out of the rate, which rounds down so 100% means nothing failed; a strict XPASS counts as a failure. It then lists every test that failed, errored or xpassed anywhere, and (with several `--target`s) every test whose outcome differs between targets, grouped by pattern ("failed on dev; passed on prod"), failures first, with each test's full node ID from the target where it went wrong (so it can be found in the log or rerun) and, when there is one, an allowlisted link to the GitHub issue or sheet Source URL behind it. A test can get a link by recording a `source_url` property pointing into a `Repositories` repo; anything else is dropped, because this output lands in public Actions logs. `--summary-max-listed` sets how many tests it lists (0 for counts only, -1 for all). `build_summary` in `tests/_pytest_helpers.py` does the counting, reusing `classify_record`/`parse_nodeid` from `generate_report.py` so outcomes are counted the way the dashboard counts them; `render_summary` returns lines of `(text, markup)` segments, which conftest writes through `terminalreporter.write()` so pytest drops the colour for `--color=no`, `NO_COLOR` and piped output. Unit tests compare `plain_text()` of the rendering.
+**End-of-run summary:** after pytest's own list of failed tests and just above its final counts line, `pytest_terminal_summary` in `conftest.py` (a `tryfirst` wrapper, so it prints last: a plain hook would land above that list) prints the targets and category filters, a one-line result per service (NodeNorm, NameRes, Other), and a table with a row per target under each service, then under "Other" one per remaining directory of `tests/` with the files it holds. Skipped and xfailed tests (category-filtered rows, known failures) are left out of the rate, which `pass_rate()` keeps to 1–99% unless everything or nothing passed, so 100% means nothing failed; a strict XPASS counts as a failure. It then lists every test that failed, errored or xpassed anywhere, and (with several `--target`s) every test whose outcome differs between targets, grouped by pattern ("failed on dev; passed on prod"), failures first, with each test's full node ID from the target where it went wrong (so it can be found in the log or rerun) and, when there is one, an allowlisted link to the GitHub issue or sheet Source URL behind it. Links come from the dashboard's `annotate_result` in `generate_report.py`, so the two agree: a GitHub issue test links to its issue and a Google Sheet row (`*_from_gsheet.py`, `:row=N`) to its recorded `source_url`, each only if it points into a `Repositories` repo, because this output lands in public Actions logs. `--summary-max-listed` sets how many tests it lists (0 for counts only, -1 for all). `build_summary` in `tests/_pytest_helpers.py` does the counting, reusing `classify_record`/`parse_nodeid` from `generate_report.py` so outcomes are counted the way the dashboard counts them; `render_summary` returns lines of `(text, markup)` segments, which conftest writes through `terminalreporter.write()` so pytest drops the colour for `--color=no`, `NO_COLOR` and piped output. Unit tests compare `plain_text()` of the rendering.
 
 **Test modules:**
 - `tests/nodenorm/` — NodeNorm tests (normalization accuracy, preferred IDs/labels, Biolink types, conflation, descriptions, OpenAPI spec, setid endpoint)
@@ -207,7 +222,7 @@ responses through a key whitelist, only emits issue ids and source URLs that mat
 `targets.ini` `Repositories` allowlist, and withholds blocklist test details entirely (that
 sheet may not be public — do not add `ids=` to the blocklist parametrize or link to it).
 Anything that aggregates over `results`, in Python or in the website, must exclude blocklist
-rows the same way. The Vue components that render the report have rules of their own, in
+rows the same way (in Python, with `is_blocklist()`). The Vue components that render the report have rules of their own, in
 `website/AGENTS.md`.
 
 **Never leak the Google Sheet ID or the GitHub token.** The report, the website, and any
@@ -307,3 +322,10 @@ issue, so they stay here:
   `FileLock`, rather than calling `requests.get` from a generate-tests hook. The same failure
   mode reappears if a cache's TTL can expire *during* a run, which is why
   `pytest_configure` deletes `gsheet_*.csv` before collection starts.
+- **To tell what a branch changes from what the services did, run it and `main` back to back**
+  against the same target, each with `--report-jsonl`, and compare per-test outcomes: the
+  live services change between runs, so a result from an earlier day is not a baseline. Run
+  `main` from a worktree (`git worktree add <dir> origin/main`) with
+  `uv run --env-file <this checkout>/.env pytest tests ...`, because a worktree outside the
+  checkout has no `.env` of its own, and `--env-file` loads it without printing it. Give both
+  runs the same `PYTHONHASHSEED`: a test that iterates a set can change outcome with it (#193).

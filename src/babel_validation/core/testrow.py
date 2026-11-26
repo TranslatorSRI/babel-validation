@@ -18,8 +18,12 @@ class TestRow:
     PreferredID: str
     AdditionalIDs: list[str]
     Conflations: set[str]
-    BiolinkClasses: set[str]
-    Prefixes: set[str]
+    # Lists in sheet order, not sets: a set's per-process iteration order made test_label's outcome
+    # (it stops at the first class that misses) and its request's prefix order depend on the hash
+    # seed (#193).
+    BiolinkClasses: list[str]
+    # Empty entries dropped, so an empty cell is [] and test_label sends no prefix filter.
+    Prefixes: list[str]
     Source: str
     SourceURL: str
     Notes: str
@@ -47,8 +51,8 @@ class TestRow:
             PreferredLabel=row.get('Preferred Label', ''),
             AdditionalLabels=row.get('Additional Labels', '').split('|'),
             Conflations=set(row.get('Conflations', '').split('|')),
-            BiolinkClasses=set(row.get('Biolink Classes', '').split('|')),
-            Prefixes=set(row.get('Prefixes', '').split('|')),
+            BiolinkClasses=row.get('Biolink Classes', '').split('|'),
+            Prefixes=[p for p in row.get('Prefixes', '').split('|') if p],
             Source=row.get('Source', ''),
             SourceURL=row.get('Source URL', ''),
             Notes=row.get('Notes', '')

@@ -54,20 +54,22 @@ def test_label(target_info, test_row, test_category, record_property):
     source_url = test_row.SourceURL
     source_info = f"{source} ({source_url})"
 
+    # A row is queried without a Biolink class only if its cell is empty or has an empty entry.
+    # The `biolink_classes.update('')` that was here to add a class-less query for every row never
+    # did anything (updating a set from '' adds nothing); #176 adds that query.
     biolink_classes = test_row.BiolinkClasses
-    # Make sure we test this without Biolink classes as well
-    if '' not in biolink_classes:
-        biolink_classes.update('')
 
+    # Query in sheet order, dropping repeats (dict.fromkeys keeps the first). The loop stops at the
+    # first label that misses, xfailing or failing by how far down the expected CURIE is, so a
+    # set's per-process iteration order made the outcome depend on the hash seed (#193).
     expected_id = test_row.PreferredID
-    query_labels = {test_row.QueryLabel}
-    query_labels.add(test_row.PreferredLabel)
-    query_labels.update(test_row.AdditionalLabels)
+    query_labels = list(dict.fromkeys(
+        label.strip() for label in [test_row.QueryLabel, test_row.PreferredLabel, *test_row.AdditionalLabels]
+    ))
 
     # Test these labels against NameRes
     count_tested_labels = 0
-    for query_label in query_labels:
-        label = query_label.strip()
+    for label in query_labels:
         if not label:
             continue
 
@@ -97,8 +99,10 @@ def test_label(target_info, test_row, test_category, record_property):
                         exclude_prefixes.append(prefix[1:])
                     else:
                         only_prefixes.append(prefix)
-                request['only_prefixes'] = "|".join(only_prefixes)
-                request['exclude_prefixes'] = "|".join(exclude_prefixes)
+                if only_prefixes:
+                    request['only_prefixes'] = "|".join(only_prefixes)
+                if exclude_prefixes:
+                    request['exclude_prefixes'] = "|".join(exclude_prefixes)
 
             test_summary = f"querying {nameres_url_lookup} with label '{label}' and biolink_type {biolink_class}"
             if not test_row.PreferredID:
