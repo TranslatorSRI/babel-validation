@@ -76,6 +76,17 @@ OUTCOME_MARKUP = {
 }
 
 
+def pass_rate(passed, counted):
+    """A whole-number percentage that is 100% only if everything passed and 0% only if nothing
+    did. Plain rounding (`:.0%`) printed 199 of 200 as "(100%)" right next to "1 failed", so a
+    glance at the rate missed the regression; a single pass in 300 likewise read as "(0%)"."""
+    if passed == counted:
+        return "100%"
+    if passed == 0:
+        return "0%"
+    return f"{min(max(100 * passed // counted, 1), 99)}%"
+
+
 @dataclass
 class RunSummary:
     """What build_summary() counted, for render_summary() to lay out."""
@@ -201,8 +212,7 @@ def _rate_cell(c):
     counted = _counted(c)
     if not counted:
         return "—", DIM
-    # Rounded down, so "100%" only ever means that everything counted passed.
-    text = f"{c['passed'] * 100 // counted}%"
+    text = pass_rate(c["passed"], counted)
     if c["failed"] or c["error"]:
         return text, {"red": True}
     if c["xpassed"]:

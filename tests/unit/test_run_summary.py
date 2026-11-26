@@ -4,7 +4,7 @@ import configparser
 
 import pytest
 
-from tests._pytest_helpers import build_summary, plain_text, render_summary
+from tests._pytest_helpers import build_summary, pass_rate, plain_text, render_summary
 
 pytestmark = pytest.mark.unit
 
@@ -161,8 +161,8 @@ def test_render_summary_markup():
     assert ("failed", RED) in heading and ("passed", GREEN) in heading
 
 
-def test_rate_rounds_down():
-    # 199 of 200 is 99.5%, which must not print as 100% while a test fails.
+def test_table_rate_is_not_100_while_a_test_fails():
+    # 199 of 200 is 99.5%, which must not print as 100% while a test fails (see pass_rate).
     records = [_record(f"{GSHEET}[dev-r{i}]", target="dev") for i in range(199)]
     records.append(_record(f"{GSHEET}[dev-r199]", "failed", target="dev"))
     lines = plain_text(render_summary(_summary(records, targets=["dev"])))
@@ -332,3 +332,19 @@ def test_equal_groups_follow_target_order(targets):
     assert [line for line in lines if line.endswith("(1):")] == [
         f"  failed on {t} (1):" for t in targets
     ]
+
+
+@pytest.mark.parametrize(
+    "passed, counted, expected",
+    [
+        (200, 200, "100%"),
+        (0, 300, "0%"),
+        (1, 2, "50%"),
+        # Plain rounding gives 100% and 0% for these two, hiding a failure or a pass.
+        (199, 200, "99%"),
+        (1, 300, "1%"),
+        (2, 3, "66%"),
+    ],
+)
+def test_pass_rate_never_rounds_to_all_or_nothing(passed, counted, expected):
+    assert pass_rate(passed, counted) == expected

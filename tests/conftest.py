@@ -76,7 +76,9 @@ def unlink_if_exists(path) -> None:
 _report_file = None
 
 # Every record pytest_runtest_logreport builds, kept in memory for the end-of-run summary
-# (pytest_terminal_summary). Only the controller prints it, for the same reason as above.
+# (pytest_terminal_summary). Only the controller keeps or prints them, for the same reason as
+# above: a worker's list would hold a record (message up to 2000 characters) for every phase
+# it ran, and nothing would ever read it.
 _summary_records = []
 
 
@@ -134,6 +136,8 @@ def pytest_runtest_logreport(report):
     before it is displayed anywhere.
     """
     if report.when != 'call' and report.outcome == 'passed':
+        return
+    if os.environ.get('PYTEST_XDIST_WORKER'):
         return
     # Prefer the one-line crash message ("AssertionError: ...") over the full
     # traceback with source and locals; skips have a (path, line, reason) tuple

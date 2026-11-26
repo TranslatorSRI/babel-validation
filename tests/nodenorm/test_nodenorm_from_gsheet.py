@@ -4,6 +4,9 @@ import pytest
 from src.babel_validation.sources.google_sheets.google_sheet_test_cases import GoogleSheetTestCases
 from tests._pytest_helpers import deselected_by_markexpr
 
+# A stalled NodeNorm would otherwise hold each ID until pytest's --timeout.
+NODENORM_TIMEOUT = 30
+
 # The Google Sheet is downloaded lazily in pytest_generate_tests so that runs
 # which deselect these tests (e.g. `pytest -m unit`) never hit the network.
 _gsheet = None
@@ -52,11 +55,11 @@ def test_normalization(target_info, test_row, test_category, record_property):
     preferred_label = test_row.PreferredLabel
 
     expected_id = test_row.PreferredID
-    query_ids = {test_row.QueryID}
-    query_ids.add(test_row.PreferredID)
-    query_ids.update(test_row.AdditionalIDs)
+    # Query in sheet order, dropping repeats (dict.fromkeys keeps the first): with a set, which ID's
+    # failure message a row reported depended on the hash seed (#193).
+    query_ids = list(dict.fromkeys([test_row.QueryID, test_row.PreferredID, *test_row.AdditionalIDs]))
 
-    # Test these labels against NameRes
+    # Test these IDs against NodeNorm
     for query_id in query_ids:
         if not query_id:
             continue
@@ -79,7 +82,7 @@ def test_normalization(target_info, test_row, test_category, record_property):
             assert leftover_conflations == set(), f"Unknown conflations in for {test_row}: {leftover_conflations}"
 
         test_summary = f"Queried {query_id} ({preferred_label}) on {nodenorm_url_lookup} with test_row {test_row}"
-        response = requests.get(nodenorm_url_lookup, request)
+        response = requests.get(nodenorm_url_lookup, request, timeout=NODENORM_TIMEOUT)
 
         assert response.ok, f"Could not send request {request} to GET {nodenorm_url_lookup}: {response}"
         results = response.json()
