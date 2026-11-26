@@ -16,10 +16,10 @@ from dataclasses import dataclass, field
 from src.babel_validation.core import cache_dir
 from src.babel_validation.tools.generate_report import (
     OUTCOME_SEVERITY,
+    annotate_result,
     classify_record,
+    issue_url,
     parse_nodeid,
-    validate_issue_id,
-    validate_source_url,
 )
 
 # IDs of issues carrying BabelTest assertions, shared across xdist workers.
@@ -125,7 +125,7 @@ def build_summary(
     :param targets: The target names this run tested, in --target order.
     :param target_sections: Mapping of target name to its targets.ini section (for the URLs).
     :param allowlist: The lower-cased org/repo names in targets.ini's Repositories list. Only
-        links into these are shown (see _source_link).
+        links into these are shown (see _link).
     """
     # (test key without target, target) -> worst outcome across its phases.
     worst = {}
@@ -177,27 +177,22 @@ def build_summary(
         links={
             key: link
             for key in props
-            if (link := _source_link(key, rests[key], props[key], allowlist))
+            if (link := _link(key, rests[key], props[key], allowlist))
         },
     )
 
 
-def _source_link(key, rest, props, allowlist):
+def _link(key, rest, props, allowlist):
     """
     A link to what a test is about, to list beside it when it fails: the GitHub issue a GitHub
-    issue test came from, or the Source URL of a Google Sheet row. Both are untrusted (anyone
-    can write an issue, and SourceURL is free text in the sheet), and this summary is printed
-    into public Actions logs, so they pass the same allowlist checks as the dashboard's links.
+    issue test came from, or the Source URL of a Google Sheet row. Both are untrusted, and this
+    summary is printed into public Actions logs, so the dashboard's annotate_result decides:
+    the same allowlist checks, and nothing for the blocklist tests.
     """
-    if "test_blocklist.py" in key:
-        return None  # The blocklist sheet may not be public: no metadata, no links.
-    if key.startswith("github_issues/"):
-        issue = validate_issue_id(rest, allowlist)
-        if not issue:
-            return None
-        repo, number = issue.split("#")
-        return f"https://github.com/{repo}/issues/{number}"
-    return validate_source_url(props.get("source_url"), allowlist)
+    annotation = annotate_result(key, rest, props, allowlist)
+    if "issue" in annotation:
+        return issue_url(annotation["issue"])
+    return annotation.get("source_url")
 
 
 def _counted(c):
@@ -433,7 +428,7 @@ def _listed_tests(summary, max_listed):
             # because it carries parametrize IDs built from sheet rows and issue bodies.
             line = [(f"    - {_example_nodeid(summary, key, pattern)!r}", {})]
             if key in summary.links:
-                # Printed as it is, so it stays clickable: _source_link's checks only pass
+                # Printed as it is, so it stays clickable: annotate_result's checks only pass
                 # URLs of printable, non-whitespace characters.
                 line.append((f" ({summary.links[key]})", {}))
             lines.append(line)
