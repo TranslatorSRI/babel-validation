@@ -2,6 +2,37 @@ from dataclasses import dataclass
 from enum import Enum
 
 
+# Repositories that most Source URLs in the Google Sheet still cite under their old TranslatorSRI
+# names. Only links into the targets.ini Repositories list are published (generate_report.py's
+# validate_source_url()), and that list has the NCATSTranslator names, so without this rewrite
+# about 1,300 of the sheet's 2,076 rows got no link. GitHub redirects both the rename and later
+# issue transfers (most NodeNormalization issues the sheet cites are now in Babel), so the
+# rewritten link still lands on the right issue. This is deliberately not an alias in the
+# allowlist: Repositories also decides which repos the GitHub issue tests scan, and the rewrite
+# goes away with the sheet (#184).
+RENAMED_SOURCE_REPOS = {
+    'translatorsri/babel': 'NCATSTranslator/Babel',
+    'translatorsri/nodenormalization': 'NCATSTranslator/NodeNormalization',
+    'translatorsri/nameresolution': 'NCATSTranslator/NameResolution',
+}
+
+
+def current_source_url(url):
+    """
+    Return a sheet Source URL with an old TranslatorSRI repository name replaced by its
+    NCATSTranslator one (RENAMED_SOURCE_REPOS); any other URL is returned unchanged.
+    """
+    prefix = 'https://github.com/'
+    if not url.startswith(prefix):
+        return url
+    org, _, rest = url[len(prefix):].partition('/')
+    repo, sep, path = rest.partition('/')
+    renamed = RENAMED_SOURCE_REPOS.get(f"{org}/{repo}".lower())
+    if renamed is None:
+        return url
+    return f"{prefix}{renamed}{sep}{path}"
+
+
 @dataclass(frozen=True)
 class TestRow:
     """
@@ -54,7 +85,7 @@ class TestRow:
             BiolinkClasses=row.get('Biolink Classes', '').split('|'),
             Prefixes=[p for p in row.get('Prefixes', '').split('|') if p],
             Source=row.get('Source', ''),
-            SourceURL=row.get('Source URL', ''),
+            SourceURL=current_source_url(row.get('Source URL', '')),
             Notes=row.get('Notes', '')
         )
 
