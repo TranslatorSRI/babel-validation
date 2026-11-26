@@ -20,6 +20,7 @@ from src.babel_validation.tools.generate_report import (
     classify_record,
     issue_url,
     parse_nodeid,
+    validate_source_url,
 )
 
 # IDs of issues carrying BabelTest assertions, shared across xdist workers.
@@ -70,8 +71,8 @@ def sheet_row_section(user_properties, allowlist=()):
     The values are sheet cells, which anyone with edit access can write, and the section is
     printed to the terminal and into public Actions logs: each is !r-escaped and truncated.
     The Source URL is free text and could link anywhere (another Google Sheet, whose URL is
-    its capability), so like the end-of-run summary's links (_source_link) it is shown only
-    if it points into a repository on the Repositories allowlist.
+    its capability), so like the end-of-run summary's links (annotate_result) it is shown
+    only if it points into a repository on the Repositories allowlist.
 
     :param allowlist: The lower-cased org/repo names in targets.ini's Repositories list.
     """
