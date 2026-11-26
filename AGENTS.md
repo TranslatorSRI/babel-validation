@@ -238,6 +238,12 @@ labels, category, source — often a GitHub issue link) is fine to publish once 
 generator's validation. The sheet is expected to be fully replaced by the GitHub issue
 system over the next few months, at which point it can be removed from this repo entirely.
 
+The exception is a row's **Source URL**, a free-text cell that could link to another sheet.
+A test's own output reaches public Actions logs and the `raw-jsonl` artifact without going
+through the generator, so a test uses it only after `validate_source_url()` with the
+`repositories_allowlist` fixture, and `TestRow` leaves it out of its repr and str: pytest's
+long traceback prints `test_row = TestRow(...)` for every failure (#197).
+
 **Do not read `.env`, and do not print the variables it sets.** Everything a coding agent
 reads goes into a transcript that is stored, replayed and pasted into issues, so `cat .env`,
 `Read`ing it, `grep`ping it, `echo $BABEL_VALIDATION_SHEET_ID` or printing a CSV export URL
