@@ -134,7 +134,7 @@ The core of this project. Tests validate NodeNorm and NameRes services across mu
 Google Sheet. Its ID comes from the `BABEL_VALIDATION_SHEET_ID` environment variable (`.env`
 locally, a repository secret in Actions) and is deliberately not checked in.
 `src/babel_validation/sources/google_sheets/google_sheet_test_cases.py` fetches and parses
-the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`.
+the rows into `TestRow` dataclasses. Rows marked as not expected to pass are wrapped with `pytest.mark.xfail(strict=True)`. Tests are parametrized by row, with IDs like `gsheet:row=42`. A failing row's report gets a "Google Sheet row" section with its category, source and query (`pytest_runtest_makereport` in `conftest.py`, from the properties the test records); the ID deliberately stays the row number, since the dashboard's history is keyed on it.
 
 **Category filtering:** Google Sheet rows have a Category column. The `test_category` fixture (from conftest.py) returns a callable that tests use to `pytest.skip()` rows not matching `--category`/`--category-exclude` filters.
 

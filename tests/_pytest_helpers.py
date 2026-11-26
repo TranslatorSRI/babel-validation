@@ -20,6 +20,7 @@ from src.babel_validation.tools.generate_report import (
     classify_record,
     issue_url,
     parse_nodeid,
+    validate_source_url,
 )
 
 # IDs of issues carrying BabelTest assertions, shared across xdist workers.
@@ -48,6 +49,55 @@ def deselected_by_markexpr(metafunc) -> bool:
     except Exception:
         # Unparseable expression — let pytest handle it; don't suppress tests.
         return False
+
+
+# The user properties a Google Sheet test records (tests/*/test_*_from_gsheet.py), with the
+# label each gets in the "Google Sheet row" section of a failure report.
+SHEET_ROW_FIELDS = {
+    "category": "Category",
+    "source": "Source",
+    "source_url": "Source URL",
+    "query_id": "Query ID",
+    "query_label": "Query label",
+}
+
+
+def sheet_row_section(user_properties, allowlist=()):
+    """
+    The text of a "Google Sheet row" report section for a failing sheet test, or None for any
+    other test. Its assertion messages do include the row, but as one long TestRow repr, so
+    which kind of test it was and where it came from were hard to find.
+
+    The values are sheet cells, which anyone with edit access can write, and the section is
+    printed to the terminal and into public Actions logs: each is !r-escaped and truncated.
+    The Source URL is free text and could link anywhere (another Google Sheet, whose URL is
+    its capability), so like the end-of-run summary's links (annotate_result) it is shown
+    only if it points into a repository on the Repositories allowlist.
+
+    :param allowlist: The lower-cased org/repo names in targets.ini's Repositories list.
+    """
+    props = dict(user_properties)
+    if "category" not in props:
+        return None
+    url = props.get("source_url")
+    if url and not validate_source_url(url, allowlist):
+        props["source_url"] = None
+        hidden = "(not shown: not a link into a Repositories repo in targets.ini)"
+    else:
+        hidden = None
+    width = max(len(label) for label in SHEET_ROW_FIELDS.values())
+    return "\n".join(
+        f"{label + ':':<{width + 1}} "
+        + (hidden if key == "source_url" and hidden else _sheet_cell(props.get(key)))
+        for key, label in SHEET_ROW_FIELDS.items()
+    )
+
+
+def _sheet_cell(value, limit=200):
+    # Truncated before repr(), so a huge cell is never escaped in full, and again after it,
+    # because repr() can turn one character into ten ('\U000e0001').
+    text = repr(str(value or "")[:limit])
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 # Services, with the targets.ini key holding each one's URL. They come first in the summary,

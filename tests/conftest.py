@@ -18,6 +18,7 @@ from tests._pytest_helpers import (
     SUMMARY_DEFAULT_MAX_LISTED,
     build_summary,
     render_summary,
+    sheet_row_section,
 )
 
 
@@ -120,6 +121,39 @@ def pytest_itemcollected(item):
     elif 'target_info' in params:
         # The parameter is the targets.ini section, whose name is the target.
         item.user_properties.append(('target', params['target_info'].name))
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Add a "Google Sheet row" section (category, source, query) to a failing Google Sheet
+    test's report, which pytest prints in that test's failure details. The test IDs stay
+    `gsheet:row=N`: the dashboard's history and the rerun command in AGENTS.md are keyed on
+    them, and a category edited in the sheet would otherwise turn into a new test.
+    """
+    report = yield
+    if report.when == 'call' and report.failed:
+        section = sheet_row_section(item.user_properties, _repositories_allowlist(item.config))
+        if section:
+            report.sections.append(("Google Sheet row", section))
+    return report
+
+
+_ALLOWLIST_KEY = pytest.StashKey[list]()
+
+
+def _repositories_allowlist(config):
+    """
+    The targets.ini Repositories allowlist, read once per process. Empty (so no Source URL is
+    shown) if targets.ini can't be found, rather than an error in the middle of reporting a
+    failure.
+    """
+    if _ALLOWLIST_KEY not in config.stash:
+        try:
+            config.stash[_ALLOWLIST_KEY] = read_report_targets(get_targets_ini_path(config))[1]
+        except RuntimeError:
+            config.stash[_ALLOWLIST_KEY] = []
+    return config.stash[_ALLOWLIST_KEY]
 
 
 def pytest_runtest_logreport(report):
