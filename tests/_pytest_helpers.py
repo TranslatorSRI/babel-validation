@@ -93,7 +93,10 @@ def sheet_row_section(user_properties, allowlist=()):
 
 
 def _sheet_cell(value, limit=200):
-    return repr(str(value or "")[:limit])
+    # Truncated before repr(), so a huge cell is never escaped in full, and again after it,
+    # because repr() can turn one character into ten ('\U000e0001').
+    text = repr(str(value or "")[:limit])
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 # Services, with the targets.ini key holding each one's URL. They come first in the summary,

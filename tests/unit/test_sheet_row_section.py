@@ -62,4 +62,13 @@ def test_sheet_row_section_escapes_and_truncates_cells():
     )
     assert "\x1b" not in section and "‮" not in section
     assert "'\\x1b[2J\\u202eevil'" in section
-    assert max(len(line) for line in section.splitlines()) < 250
+    assert max(len(line) for line in section.splitlines()) <= 213
+
+
+@pytest.mark.parametrize("char", ["x", "‮", "\U000e0001"])
+def test_sheet_row_section_bounds_lines_after_escaping(char):
+    # repr() turns one non-printable character into up to ten, so truncating only before it
+    # let a 200-character cell become a 2000-character line.
+    section = sheet_row_section([("category", char * 10_000)])
+    # A 12-character label column, a space, and at most 200 characters of cell.
+    assert max(len(line) for line in section.splitlines()) <= 213
