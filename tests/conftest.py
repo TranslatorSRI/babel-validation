@@ -77,7 +77,9 @@ def unlink_if_exists(path) -> None:
 _report_file = None
 
 # Every record pytest_runtest_logreport builds, kept in memory for the end-of-run summary
-# (pytest_terminal_summary). Only the controller prints it, for the same reason as above.
+# (pytest_terminal_summary). Only the controller keeps or prints them, for the same reason as
+# above: a worker's list would hold a record (message up to 2000 characters) for every phase
+# it ran, and nothing would ever read it.
 _summary_records = []
 
 
@@ -131,10 +133,27 @@ def pytest_runtest_makereport(item, call):
     """
     report = yield
     if report.when == 'call' and report.failed:
-        section = sheet_row_section(item.user_properties)
+        section = sheet_row_section(item.user_properties, _repositories_allowlist(item.config))
         if section:
             report.sections.append(("Google Sheet row", section))
     return report
+
+
+_ALLOWLIST_KEY = pytest.StashKey[list]()
+
+
+def _repositories_allowlist(config):
+    """
+    The targets.ini Repositories allowlist, read once per process. Empty (so no Source URL is
+    shown) if targets.ini can't be found, rather than an error in the middle of reporting a
+    failure.
+    """
+    if _ALLOWLIST_KEY not in config.stash:
+        try:
+            config.stash[_ALLOWLIST_KEY] = read_report_targets(get_targets_ini_path(config))[1]
+        except RuntimeError:
+            config.stash[_ALLOWLIST_KEY] = []
+    return config.stash[_ALLOWLIST_KEY]
 
 
 def pytest_runtest_logreport(report):
@@ -151,6 +170,8 @@ def pytest_runtest_logreport(report):
     before it is displayed anywhere.
     """
     if report.when != 'call' and report.outcome == 'passed':
+        return
+    if os.environ.get('PYTEST_XDIST_WORKER'):
         return
     # Prefer the one-line crash message ("AssertionError: ...") over the full
     # traceback with source and locals; skips have a (path, line, reason) tuple
@@ -177,9 +198,14 @@ def pytest_runtest_logreport(report):
 @pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_terminal_summary(terminalreporter, config):
     """
-    Print what was tested and per-component, per-target pass rates at the end of the run, so
-    nobody has to scroll back to the header through thousands of lines of output. With several
-    --target options, also list the tests whose outcome differs between targets.
+    Print a summary at the end of the run, so nobody has to scroll back through thousands of
+    lines of output: what was tested (targets and category filters), a one-line result per
+    service, and a pass-rate table with a row per service and target and one per remaining
+    directory of tests/. Then list every test that failed, errored or xpassed on any target
+    (even with a single --target) and, with several, every test whose outcome differs between
+    targets, grouped by their pattern of outcomes and each with an allowlisted link to its
+    issue or Source URL where there is one. --summary-max-listed caps how many are listed.
+    build_summary and render_summary in tests/_pytest_helpers.py do the work.
 
     This is a tryfirst wrapper so that it is the outermost one and prints after everything
     else, just above the final "N passed, M failed" line. A plain hook prints *before*
@@ -193,15 +219,16 @@ def pytest_terminal_summary(terminalreporter, config):
     targets = get_targets(config)
     # Not get_target(), which raises on an unknown --target: that run has already failed at
     # collection, and the summary shouldn't add a second traceback.
-    sections = read_targets(get_targets_ini_path(config))
+    # Read the way the dashboard's report generator reads it, for the Repositories allowlist;
+    # its ConfigParser holds every section, and build_summary skips targets that have none.
+    _, allowlist, sections = read_report_targets(get_targets_ini_path(config))
     summary = build_summary(
         _summary_records,
         targets,
-        {target: sections[target] for target in targets if target in sections},
+        sections,
         set(config.getoption('--category')),
         set(config.getoption('--category-exclude')),
-        # The Repositories allowlist, read the way the dashboard's report generator reads it.
-        read_report_targets(get_targets_ini_path(config))[1],
+        allowlist,
     )
     terminalreporter.write_sep("=", "Babel Validation summary")
     for line in render_summary(summary, config.getoption('--summary-max-listed')):
